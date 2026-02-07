@@ -1,11 +1,11 @@
-# @opensearch-dashboards/alarms
+# @anirudhaj/alarms
 
-Standalone Alarms service extracted from OpenSearch Dashboards. Run alert management without the full OSD stack.
+Standalone Alarms service for OpenSearch Dashboards. Run alert management without the full OSD stack.
 
 ## Quick Start
 
 ```bash
-npx @opensearch-dashboards/alarms
+npx @anirudhaj/alarms
 ```
 
 Open http://localhost:5603 in your browser.
@@ -13,8 +13,8 @@ Open http://localhost:5603 in your browser.
 ## Options
 
 ```bash
-npx @opensearch-dashboards/alarms --port 8080   # Custom port
-npx @opensearch-dashboards/alarms --help        # Show help
+npx @anirudhaj/alarms --port 8080   # Custom port
+npx @anirudhaj/alarms --help        # Show help
 ```
 
 ## API
@@ -49,14 +49,9 @@ curl http://localhost:5603/api/alarms
 - 🔌 **REST API** — Standard JSON API for integrations
 - 🔄 **Dual mode** — Same codebase runs as OSD plugin or standalone
 
-## Development
+## Repository
 
-```bash
-git clone https://github.com/opensearch-project/OpenSearch-Dashboards.git
-cd OpenSearch-Dashboards/plugins/alarms/standalone
-npm install --legacy-peer-deps
-npm run dev
-```
+https://github.com/anirudha/alert-manager
 
 ## License
 

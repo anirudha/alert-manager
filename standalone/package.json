@@ -1,6 +1,6 @@
 {
   "name": "@anirudhaj/alarms",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Standalone Alarms service for OpenSearch Dashboards",
   "bin": {
     "osd-alarms": "./bin/cli.js"
