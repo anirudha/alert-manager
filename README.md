@@ -1,13 +1,13 @@
 <img src="https://opensearch.org/wp-content/uploads/2025/01/opensearch_logo_default.svg" height="64px">
 
 - [Alert Manager](#alert-manager)
+  - [Tri-Mode Architecture](#tri-mode-architecture)
   - [Features](#features)
   - [Quick Start](#quick-start)
-    - [Standalone Mode (npx)](#standalone-mode-npx)
-    - [OSD Plugin Mode](#osd-plugin-mode)
+    - [1. OSD Plugin Mode](#1-osd-plugin-mode)
+    - [2. Standalone Mode (npx)](#2-standalone-mode-npx)
+    - [3. VS Code Extension](#3-vs-code-extension)
   - [Code Summary](#code-summary)
-    - [Repository Checks](#repository-checks)
-    - [Issues](#issues)
   - [API Reference](#api-reference)
   - [Architecture](#architecture)
   - [Contributing](#contributing)
@@ -19,35 +19,58 @@
 
 # Alert Manager
 
-Alert Manager is a plugin for OpenSearch Dashboards that provides alert rule management and monitoring capabilities. It supports **dual distribution modes** — run as an OSD plugin or as a standalone service.
+Alert Manager is a plugin for OpenSearch Dashboards that provides alert rule management and monitoring for **OpenSearch Alerting** and **Amazon Managed Prometheus (AMP)** backends. It supports three distribution modes — run as an OSD plugin, a standalone npx service, or a VS Code extension.
+
+## Tri-Mode Architecture
+
+A single codebase, three ways to run it:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Shared Core Layer                            │
+│   core/types.ts · core/alert_service.ts · core/mock_backend.ts      │
+│   core/datasource_service.ts · server/routes/handlers.ts            │
+└──────────┬──────────────────────┬──────────────────────┬────────────┘
+           │                      │                      │
+     ┌─────▼──────┐        ┌─────▼──────┐        ┌──────▼─────┐
+     │  OSD Plugin │        │  Standalone │        │  VS Code   │
+     │    Mode     │        │  npx Mode   │        │  Extension │
+     ├────────────┤        ├────────────┤        ├────────────┤
+     │ Hapi server │        │ Express    │        │ Express    │
+     │ OSD IRouter │        │ server.ts  │        │ in-process │
+     │ Full OSD UI │        │ Webpack UI │        │ Webview    │
+     ├────────────┤        ├────────────┤        ├────────────┤
+     │ Cloud / SaaS│        │ Dev / Light│        │ IDE-native │
+     │ Production  │        │ Prototyping│        │ Debugging  │
+     └────────────┘        └────────────┘        └────────────┘
+          ▲                      ▲                      ▲
+          │                      │                      │
+    OSD + Browser          npx + Browser          VS Code Panel
+```
+
+| Mode | Use Case | How to Run | Port |
+|------|----------|-----------|------|
+| OSD Plugin | Production / Cloud / SaaS | `yarn start` inside OSD | 5601 |
+| Standalone (npx) | Quick dev, demos, lightweight serving | `npx @anirudhaj/alarms` | 5603 |
+| VS Code Extension | IDE-integrated alerting during development | Install `.vsix`, Cmd+Shift+P → "Alert Manager: Open" | 5603 |
+
+All three modes share the same **core services**, **route handlers**, and **API shape**. The only difference is the hosting layer.
 
 ## Features
 
-- 🚀 **Dual Mode** — Run as OSD plugin or standalone service
-- ⚡ **Instant Startup** — Standalone mode starts in ~1 second
+- 🚀 **Tri-Mode** — OSD plugin, standalone npx, or VS Code extension
+- ⚡ **Instant Startup** — Standalone and VS Code modes start in ~1 second
 - 📦 **Lightweight** — Standalone build is ~4MB vs ~1GB for full OSD
-- 🎨 **Full UI** — OUI-based interface in both modes
-- 🔌 **REST API** — Standard JSON API for integrations
+- 🎨 **Full UI** — OUI-based interface in all modes
+- 🔌 **REST API** — OpenSearch Alerting and Prometheus-native API shapes
 - 🔄 **Hot Reload** — Development mode with live updates
+- 🧪 **Mock Mode** — Seeded OpenSearch and Prometheus data out of the box
 
 ## Quick Start
 
-### Standalone Mode (npx)
+### 1. OSD Plugin Mode
 
-```bash
-# Run with default port 5603
-npx @anirudhaj/alarms
-
-# Custom port
-npx @anirudhaj/alarms --port 8080
-
-# Show help
-npx @anirudhaj/alarms --help
-```
-
-Open http://localhost:5603 in your browser.
-
-### OSD Plugin Mode
+For production / cloud / SaaS deployments:
 
 ```bash
 # Clone OpenSearch Dashboards
@@ -63,6 +86,40 @@ yarn start
 ```
 
 Navigate to http://localhost:5601/app/alarms
+
+### 2. Standalone Mode (npx)
+
+For quick dev, demos, and lightweight serving:
+
+```bash
+# Run with default port 5603
+npx @anirudhaj/alarms
+
+# Custom port
+npx @anirudhaj/alarms --port 8080
+
+# Disable mock mode (connect to real backends)
+MOCK_MODE=false npx @anirudhaj/alarms
+```
+
+Open http://localhost:5603 in your browser.
+
+### 3. VS Code Extension
+
+For IDE-integrated alert management:
+
+```bash
+# Install the extension
+code --install-extension vscode-extension/alert-manager-vscode-1.1.1.vsix
+```
+
+Then open the command palette (Cmd+Shift+P) and run **Alert Manager: Open**. The UI opens in a webview panel. You can drag it to the bottom pane next to the terminal.
+
+Commands:
+- `Alert Manager: Open` — Start server and open the UI
+- `Alert Manager: Stop Server` — Stop the background server
+
+Configure the port in VS Code settings: `alertManager.port` (default: 5603)
 
 ## Code Summary
 
@@ -109,43 +166,56 @@ Navigate to http://localhost:5601/app/alarms
 
 ## API Reference
 
+### Datasource Routes
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/alarms` | List all alarms |
-| GET | `/api/alarms/:id` | Get alarm by ID |
-| POST | `/api/alarms` | Create alarm |
-| DELETE | `/api/alarms/:id` | Delete alarm |
-| POST | `/api/alarms/:id/toggle` | Toggle enabled state |
+| GET | `/api/datasources` | List all datasources |
+| GET | `/api/datasources/:id` | Get datasource by ID |
+| POST | `/api/datasources` | Create datasource |
+| PUT | `/api/datasources/:id` | Update datasource |
+| DELETE | `/api/datasources/:id` | Delete datasource |
+| POST | `/api/datasources/:id/test` | Test datasource connection |
 
-### Examples
+### OpenSearch Alerting Routes
 
-```bash
-# Create an alarm
-curl -X POST http://localhost:5603/api/alarms \
-  -H "Content-Type: application/json" \
-  -d '{"name":"CPU High","severity":"critical","condition":"cpu > 90%"}'
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/datasources/:dsId/monitors` | List monitors |
+| GET | `/api/datasources/:dsId/monitors/:id` | Get monitor |
+| POST | `/api/datasources/:dsId/monitors` | Create monitor |
+| PUT | `/api/datasources/:dsId/monitors/:id` | Update monitor |
+| DELETE | `/api/datasources/:dsId/monitors/:id` | Delete monitor |
+| GET | `/api/datasources/:dsId/alerts` | List alerts |
+| POST | `/api/datasources/:dsId/monitors/:id/acknowledge` | Acknowledge alerts |
 
-# List alarms
-curl http://localhost:5603/api/alarms
+### Prometheus / AMP Routes
 
-# Toggle alarm
-curl -X POST http://localhost:5603/api/alarms/alarm-1/toggle
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/datasources/:dsId/rules` | List rule groups |
+| GET | `/api/datasources/:dsId/prom-alerts` | List active alerts |
 
-# Delete alarm
-curl -X DELETE http://localhost:5603/api/alarms/alarm-1
-```
+### Unified Routes (cross-backend)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/alerts` | Unified alerts across all backends |
+| GET | `/api/rules` | Unified rules across all backends |
 
 ## Architecture
 
 ```
 alert-manager/
-├── core/                    # Pure business logic (no platform deps)
-│   ├── types.ts             # Shared interfaces
-│   ├── alarm_service.ts     # In-memory alarm service
+├── core/                    # Shared business logic (no platform deps)
+│   ├── types.ts             # OpenSearch + Prometheus types, unified views
+│   ├── alert_service.ts     # Multi-backend alert service
+│   ├── datasource_service.ts# In-memory datasource registry
+│   ├── mock_backend.ts      # Mock OpenSearch & Prometheus backends
 │   └── index.ts
 ├── server/                  # Server-side code
 │   ├── routes/
-│   │   ├── handlers.ts      # Framework-agnostic handlers
+│   │   ├── handlers.ts      # Framework-agnostic route handlers
 │   │   └── index.ts         # OSD IRouter adapter
 │   ├── plugin.ts            # OSD server plugin
 │   └── types.ts
@@ -153,11 +223,15 @@ alert-manager/
 │   ├── components/
 │   ├── services/
 │   └── plugin.ts
-├── standalone/              # Standalone distribution
+├── standalone/              # Standalone distribution (npx)
 │   ├── bin/cli.js           # npx entry point
 │   ├── server.ts            # Express server
 │   ├── client.tsx           # React entry
 │   └── components/          # Standalone UI
+├── vscode-extension/        # VS Code extension
+│   ├── src/extension.ts     # Extension activation, webview panel
+│   ├── src/server-manager.ts# In-process Express server
+│   └── esbuild.js           # Bundles extension into single file
 └── common/                  # Shared constants
 ```
 
@@ -178,6 +252,12 @@ npm run dev
 # OSD plugin development
 cd /path/to/OpenSearch-Dashboards
 yarn start
+
+# VS Code extension development
+cd vscode-extension
+npm install
+npm run build
+# Then press F5 in VS Code to launch Extension Development Host
 ```
 
 ### Publishing
