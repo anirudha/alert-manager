@@ -1,0 +1,54 @@
+{
+  "name": "alert-manager-vscode",
+  "displayName": "Alert Manager",
+  "description": "OpenSearch Alerting & Prometheus alert management inside VS Code",
+  "version": "1.1.1",
+  "publisher": "anirudhaj",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "alertManager.open",
+        "title": "Alert Manager: Open"
+      },
+      {
+        "command": "alertManager.stop",
+        "title": "Alert Manager: Stop Server"
+      }
+    ],
+    "configuration": {
+      "title": "Alert Manager",
+      "properties": {
+        "alertManager.port": {
+          "type": "number",
+          "default": 5603,
+          "description": "Port for the Alert Manager server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:ext && npm run copy:ui",
+    "build:ext": "node esbuild.js",
+    "copy:ui": "cp -r ../standalone/dist/public dist/public",
+    "package": "npm run build && npx vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.80.0",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.3.0"
+  }
+}

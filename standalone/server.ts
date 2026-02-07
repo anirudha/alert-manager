@@ -70,7 +70,12 @@ const app = express();
 app.use(express.json());
 
 // Serve static React build
-const publicPath = path.join(__dirname, 'dist', 'public');
+// npm (compiled): __dirname = dist/standalone/ → ../public = dist/public/ ✓
+// dev (ts-node):  __dirname = standalone/     → dist/public              ✓
+import fs from 'fs';
+const npmPublicPath = path.join(__dirname, '..', 'public');
+const devPublicPath = path.join(__dirname, 'dist', 'public');
+const publicPath = fs.existsSync(npmPublicPath + '/index.html') ? npmPublicPath : devPublicPath;
 app.use(express.static(publicPath));
 
 // ============================================================================
