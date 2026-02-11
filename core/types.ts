@@ -223,6 +223,33 @@ export interface UnifiedAlert {
   raw: OSAlert | PromAlert;
 }
 
+export type MonitorType = 'metric' | 'log' | 'apm' | 'composite' | 'infrastructure' | 'synthetics';
+export type MonitorStatus = 'active' | 'pending' | 'muted' | 'disabled';
+export type MonitorHealthStatus = 'healthy' | 'failing' | 'no_data';
+
+export interface SuppressionRule {
+  id: string;
+  name: string;
+  reason: string;
+  schedule?: string; // e.g. "Sat 02:00-06:00 UTC"
+  matchLabels?: Record<string, string>;
+  active: boolean;
+}
+
+export interface AlertHistoryEntry {
+  timestamp: string;
+  state: UnifiedAlertState;
+  value?: string;
+  message?: string;
+}
+
+export interface NotificationRouting {
+  channel: string; // e.g. "Slack", "Email", "PagerDuty"
+  destination: string; // e.g. "#ops-alerts", "oncall@example.com"
+  severity?: UnifiedAlertSeverity[];
+  throttle?: string; // e.g. "10 minutes"
+}
+
 export interface UnifiedRule {
   id: string;
   datasourceId: string;
@@ -235,6 +262,27 @@ export interface UnifiedRule {
   group?: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
+  // Extended fields for monitor management
+  monitorType: MonitorType;
+  status: MonitorStatus;
+  healthStatus: MonitorHealthStatus;
+  createdBy: string;
+  createdAt: string;
+  lastModified: string;
+  lastTriggered?: string;
+  notificationDestinations: string[];
+  // Detail view fields
+  description: string;
+  aiSummary: string;
+  evaluationInterval: string;
+  pendingPeriod: string;
+  firingPeriod?: string;
+  lookbackPeriod?: string;
+  threshold?: { operator: string; value: number; unit?: string };
+  alertHistory: AlertHistoryEntry[];
+  conditionPreviewData: Array<{ timestamp: number; value: number }>;
+  notificationRouting: NotificationRouting[];
+  suppressionRules: SuppressionRule[];
   // Original backend-specific data
   raw: OSMonitor | PromAlertingRule;
 }

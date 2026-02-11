@@ -54,5 +54,18 @@ module.exports = {
       '/api': 'http://localhost:5603',
     },
     historyApiFallback: true,
+    client: {
+      overlay: {
+        runtimeErrors: (error) => {
+          if (error.message === 'ResizeObserver loop completed with undelivered notifications.') {
+            return false;
+          }
+          if (error.message === 'ResizeObserver loop limit exceeded') {
+            return false;
+          }
+          return true;
+        },
+      },
+    },
   },
 };
