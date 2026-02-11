@@ -147,42 +147,89 @@ Open http://localhost:5603 in your browser.
 
 ## API Reference
 
+Both modes expose the same operations. The route prefixes differ by mode:
+
+| Mode | Prefix |
+|------|--------|
+| Standalone (npx) | `/api/` |
+| OSD Plugin | `/api/alerting/` |
+
 ### Datasource Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/datasources` | List all datasources |
-| GET | `/api/datasources/:id` | Get datasource by ID |
-| POST | `/api/datasources` | Create datasource |
-| PUT | `/api/datasources/:id` | Update datasource |
-| DELETE | `/api/datasources/:id` | Delete datasource |
-| POST | `/api/datasources/:id/test` | Test datasource connection |
+| Method | Standalone | OSD Plugin | Description |
+|--------|-----------|------------|-------------|
+| GET | `/api/datasources` | `/api/alerting/datasources` | List all datasources |
+| GET | `/api/datasources/:id` | `/api/alerting/datasources/:id` | Get datasource by ID |
+| POST | `/api/datasources` | `/api/alerting/datasources` | Create datasource |
+| PUT | `/api/datasources/:id` | `/api/alerting/datasources/:id` | Update datasource |
+| DELETE | `/api/datasources/:id` | `/api/alerting/datasources/:id` | Delete datasource |
+| POST | `/api/datasources/:id/test` | `/api/alerting/datasources/:id/test` | Test datasource connection |
 
 ### OpenSearch Alerting Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/datasources/:dsId/monitors` | List monitors |
-| GET | `/api/datasources/:dsId/monitors/:id` | Get monitor |
-| POST | `/api/datasources/:dsId/monitors` | Create monitor |
-| PUT | `/api/datasources/:dsId/monitors/:id` | Update monitor |
-| DELETE | `/api/datasources/:dsId/monitors/:id` | Delete monitor |
-| GET | `/api/datasources/:dsId/alerts` | List alerts |
-| POST | `/api/datasources/:dsId/monitors/:id/acknowledge` | Acknowledge alerts |
+| Method | Standalone | OSD Plugin | Description |
+|--------|-----------|------------|-------------|
+| GET | `/api/datasources/:dsId/monitors` | `/api/alerting/opensearch/:dsId/monitors` | List monitors |
+| GET | `/api/datasources/:dsId/monitors/:id` | `/api/alerting/opensearch/:dsId/monitors/:id` | Get monitor by ID |
+| POST | `/api/datasources/:dsId/monitors` | `/api/alerting/opensearch/:dsId/monitors` | Create monitor |
+| PUT | `/api/datasources/:dsId/monitors/:id` | `/api/alerting/opensearch/:dsId/monitors/:id` | Update monitor |
+| DELETE | `/api/datasources/:dsId/monitors/:id` | `/api/alerting/opensearch/:dsId/monitors/:id` | Delete monitor |
+| GET | `/api/datasources/:dsId/alerts` | `/api/alerting/opensearch/:dsId/alerts` | List alerts for datasource |
+| POST | `/api/datasources/:dsId/monitors/:id/acknowledge` | `/api/alerting/opensearch/:dsId/monitors/:id/acknowledge` | Acknowledge alerts |
 
 ### Prometheus / AMP Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/datasources/:dsId/rules` | List rule groups |
-| GET | `/api/datasources/:dsId/prom-alerts` | List active alerts |
+| Method | Standalone | OSD Plugin | Description |
+|--------|-----------|------------|-------------|
+| GET | `/api/datasources/:dsId/rules` | `/api/alerting/prometheus/:dsId/rules` | List Prometheus rule groups |
+| GET | `/api/datasources/:dsId/prom-alerts` | `/api/alerting/prometheus/:dsId/alerts` | List active Prometheus alerts |
 
 ### Unified Routes (cross-backend)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/alerts` | Unified alerts across all backends |
-| GET | `/api/rules` | Unified rules across all backends |
+These aggregate data across all enabled datasources for the UI.
+
+| Method | Standalone | OSD Plugin | Description |
+|--------|-----------|------------|-------------|
+| GET | `/api/alerts` | `/api/alerting/unified/alerts` | Unified alerts across all backends |
+| GET | `/api/rules` | `/api/alerting/unified/rules` | Unified rules across all backends |
+
+### Example Requests (Standalone)
+
+```bash
+# List datasources
+curl http://localhost:5603/api/datasources
+
+# Create a datasource
+curl -X POST http://localhost:5603/api/datasources \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My OpenSearch","type":"opensearch","url":"https://localhost:9200","enabled":true}'
+
+# Test datasource connection
+curl -X POST http://localhost:5603/api/datasources/ds-1/test
+
+# List unified alerts (all backends)
+curl http://localhost:5603/api/alerts
+
+# List unified rules (all backends)
+curl http://localhost:5603/api/rules
+
+# List OpenSearch monitors for a datasource
+curl http://localhost:5603/api/datasources/ds-1/monitors
+
+# List OpenSearch alerts for a datasource
+curl http://localhost:5603/api/datasources/ds-1/alerts
+
+# Acknowledge OpenSearch alerts
+curl -X POST http://localhost:5603/api/datasources/ds-1/monitors/mon-1/acknowledge \
+  -H "Content-Type: application/json" \
+  -d '{"alerts":["alert-1","alert-2"]}'
+
+# List Prometheus rule groups
+curl http://localhost:5603/api/datasources/ds-2/rules
+
+# List Prometheus alerts
+curl http://localhost:5603/api/datasources/ds-2/prom-alerts
+```
 
 ## Architecture
 
