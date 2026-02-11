@@ -24,6 +24,15 @@ import {
   EuiSelectable,
   EuiButtonIcon,
   EuiButtonGroup,
+  EuiFlyout,
+  EuiFlyoutHeader,
+  EuiFlyoutBody,
+  EuiDescriptionList,
+  EuiText,
+  EuiCallOut,
+  EuiPanel,
+  EuiLink,
+  EuiButton,
 } from '@opensearch-project/oui';
 import { Datasource, UnifiedAlert, UnifiedRule } from '../../core';
 
@@ -91,6 +100,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [isBackendPopoverOpen, setIsBackendPopoverOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
 
   const groupByEnabled = viewMode === 'grouped';
 
@@ -227,7 +237,16 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   // --- Alert columns ---
   const alertColumns = [
-    { field: 'name', name: 'Name', sortable: true },
+    { 
+      field: 'name', 
+      name: 'Name', 
+      sortable: true,
+      render: (name: string, alert: UnifiedAlert) => (
+        <EuiLink onClick={() => setSelectedAlert(alert)} color="primary">
+          {name}
+        </EuiLink>
+      ),
+    },
     {
       field: 'state', name: 'State',
       render: (state: string) => <EuiHealth color={STATE_COLORS[state] || 'subdued'}>{state}</EuiHealth>,
@@ -248,6 +267,16 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     {
       field: 'startTime', name: 'Started',
       render: (ts: string) => ts ? new Date(ts).toLocaleString() : '-',
+    },
+    {
+      name: 'Actions',
+      render: (alert: UnifiedAlert) => (
+        <EuiButtonIcon
+          iconType="eye"
+          aria-label="View alert details"
+          onClick={() => setSelectedAlert(alert)}
+        />
+      ),
     },
   ];
 
@@ -556,6 +585,344 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         {renderSearchAndFilters()}
         {renderTable()}
       </EuiPageBody>
+
+      {selectedAlert && (
+        <EuiFlyout onClose={() => setSelectedAlert(null)} size="m" aria-labelledby="alert-details-title">
+          <EuiFlyoutHeader hasBorder>
+            <EuiFlexGroup alignItems="center" justifyContent="spaceBetween">
+              <EuiFlexItem>
+                <EuiTitle size="m">
+                  <h2 id="alert-details-title">{selectedAlert.name}</h2>
+                </EuiTitle>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiBadge color={SEVERITY_COLORS[selectedAlert.severity] || 'default'}>
+                  {selectedAlert.severity}
+                </EuiBadge>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+            <EuiSpacer size="s" />
+            <EuiFlexGroup gutterSize="l" responsive={false}>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s" color="subdued">
+                  <strong>Start time:</strong> {selectedAlert.startTime ? new Date(selectedAlert.startTime).toLocaleTimeString() : '-'}
+                </EuiText>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s" color="subdued">
+                  <strong>Decrease rate:</strong> <span style={{ color: '#F5A700' }}>4.87%</span>
+                </EuiText>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s" color="subdued">
+                  <strong>Baseline:</strong> 0.8%
+                </EuiText>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s" color="subdued">
+                  <strong>Threshold:</strong> 1.2%
+                </EuiText>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          </EuiFlyoutHeader>
+          <EuiFlyoutBody>
+            {/* Summary Section */}
+            <section>
+              <EuiTitle size="s">
+                <h3>Summary</h3>
+              </EuiTitle>
+              <EuiSpacer size="m" />
+              <EuiText size="s">
+                <p>
+                  Your {selectedAlert.datasourceType} service is experiencing increased error rates that coincide with database billing-service-python memory usage reaching 85% on three pods. Historical data shows this pattern typically leads to service degradation within 20 minutes.
+                </p>
+              </EuiText>
+              <EuiSpacer size="m" />
+              <EuiText size="s">
+                <p>
+                  <strong>Likely root cause:</strong> High CPU/memory usage triggers resource limits
+                </p>
+              </EuiText>
+              <EuiSpacer size="m" />
+              
+              {/* Metric Chart */}
+              <EuiPanel hasBorder paddingSize="m">
+                <div style={{ position: 'relative', height: '180px' }}>
+                  <svg width="100%" height="100%" viewBox="0 0 600 160" preserveAspectRatio="none">
+                    {/* Grid lines */}
+                    <line x1="0" y1="40" x2="600" y2="40" stroke="#D3DAE6" strokeWidth="1" strokeDasharray="4" />
+                    <line x1="0" y1="80" x2="600" y2="80" stroke="#D3DAE6" strokeWidth="1" strokeDasharray="4" />
+                    <line x1="0" y1="120" x2="600" y2="120" stroke="#D3DAE6" strokeWidth="1" strokeDasharray="4" />
+                    
+                    {/* Metric line */}
+                    <polyline
+                      points="0,100 50,95 100,90 150,85 200,95 250,100 300,90 350,85 400,95 450,90 500,85 550,95 600,90"
+                      fill="none"
+                      stroke="#006BB4"
+                      strokeWidth="2"
+                    />
+                    
+                    {/* Spike area */}
+                    <polyline
+                      points="400,95 420,80 440,60 460,45 480,50 500,55 520,60"
+                      fill="none"
+                      stroke="#006BB4"
+                      strokeWidth="2"
+                    />
+                    
+                    {/* Labels */}
+                    <text x="5" y="15" fill="#69707D" fontSize="11">2.280</text>
+                    <text x="5" y="85" fill="#69707D" fontSize="11">2.203</text>
+                    <text x="5" y="155" fill="#69707D" fontSize="11">2.126</text>
+                    <text x="5" y="165" fill="#69707D" fontSize="10">Oct 31 20:41</text>
+                    <text x="550" y="165" fill="#69707D" fontSize="10">Oct 3 23:41</text>
+                  </svg>
+                  <EuiText size="xs" color="subdued" style={{ marginTop: '4px' }}>
+                    <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                      <EuiFlexItem grow={false}>
+                        <div style={{ width: '12px', height: '12px', backgroundColor: '#006BB4', borderRadius: '2px' }} />
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>
+                        pod_memory_utilization
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                  </EuiText>
+                </div>
+              </EuiPanel>
+            </section>
+
+            <EuiSpacer size="l" />
+
+            {/* Impact Section */}
+            <section>
+              <EuiTitle size="s">
+                <h3>Impact</h3>
+              </EuiTitle>
+              <EuiSpacer size="m" />
+              <EuiPanel hasBorder paddingSize="m" style={{ backgroundColor: '#FEF6F6' }}>
+                <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
+                  {/* Service 1 */}
+                  <EuiFlexItem grow={false}>
+                    <div style={{ 
+                      border: '2px solid #BD271E', 
+                      borderRadius: '8px', 
+                      padding: '12px 16px',
+                      backgroundColor: '#FFFFFF',
+                      minWidth: '160px'
+                    }}>
+                      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                        <EuiFlexItem grow={false}>
+                          <div style={{ 
+                            width: '32px', 
+                            height: '32px', 
+                            borderRadius: '50%', 
+                            backgroundColor: '#FEF6F6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <span style={{ fontSize: '16px' }}>⚠️</span>
+                          </div>
+                        </EuiFlexItem>
+                        <EuiFlexItem>
+                          <EuiText size="xs">
+                            <strong>PetClinicMonitor</strong>
+                          </EuiText>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </div>
+                  </EuiFlexItem>
+
+                  {/* Arrow */}
+                  <EuiFlexItem grow={false}>
+                    <span style={{ fontSize: '20px', color: '#BD271E' }}>→</span>
+                  </EuiFlexItem>
+
+                  {/* Service 2 */}
+                  <EuiFlexItem grow={false}>
+                    <div style={{ 
+                      border: '2px solid #BD271E', 
+                      borderRadius: '8px', 
+                      padding: '12px 16px',
+                      backgroundColor: '#FFFFFF',
+                      minWidth: '160px'
+                    }}>
+                      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                        <EuiFlexItem grow={false}>
+                          <div style={{ 
+                            width: '32px', 
+                            height: '32px', 
+                            borderRadius: '50%', 
+                            backgroundColor: '#FEF6F6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <span style={{ fontSize: '16px' }}>⚠️</span>
+                          </div>
+                        </EuiFlexItem>
+                        <EuiFlexItem>
+                          <EuiText size="xs">
+                            <strong>payment-gateway</strong>
+                          </EuiText>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </div>
+                  </EuiFlexItem>
+
+                  {/* Arrow */}
+                  <EuiFlexItem grow={false}>
+                    <span style={{ fontSize: '20px', color: '#BD271E' }}>→</span>
+                  </EuiFlexItem>
+
+                  {/* Service 3 */}
+                  <EuiFlexItem grow={false}>
+                    <div style={{ 
+                      border: '2px solid #BD271E', 
+                      borderRadius: '8px', 
+                      padding: '12px 16px',
+                      backgroundColor: '#FFFFFF',
+                      minWidth: '160px'
+                    }}>
+                      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                        <EuiFlexItem grow={false}>
+                          <div style={{ 
+                            width: '32px', 
+                            height: '32px', 
+                            borderRadius: '50%', 
+                            backgroundColor: '#FEF6F6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <span style={{ fontSize: '16px' }}>⚠️</span>
+                          </div>
+                        </EuiFlexItem>
+                        <EuiFlexItem>
+                          <EuiText size="xs">
+                            <strong>billing-service-python</strong>
+                          </EuiText>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </div>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              </EuiPanel>
+            </section>
+
+            <EuiSpacer size="l" />
+
+            {/* Recommendation Section */}
+            <section>
+              <EuiTitle size="s">
+                <h3>Recommendation</h3>
+              </EuiTitle>
+              <EuiSpacer size="m" />
+              <EuiText size="s">
+                <p>
+                  Consider adding composite index on (user_id, transaction_date) for performance improvement.
+                </p>
+              </EuiText>
+              <EuiSpacer size="m" />
+              <EuiFlexGroup gutterSize="s">
+                <EuiFlexItem grow={false}>
+                  <EuiButtonIcon
+                    iconType="wrench"
+                    aria-label="Make changes"
+                    display="base"
+                    size="s"
+                  />
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiText size="s" color="subdued">
+                    Make changes in Kiro
+                  </EuiText>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </section>
+
+            <EuiSpacer size="l" />
+
+            {/* Dive Deeper Section */}
+            <section>
+              <EuiTitle size="s">
+                <h3>Dive deeper</h3>
+              </EuiTitle>
+              <EuiSpacer size="m" />
+              <EuiText size="s">
+                <p>
+                  70% of execution time spent in database operations, with the payment_transactions query as the primary bottleneck.
+                </p>
+              </EuiText>
+              <EuiSpacer size="m" />
+              <EuiFlexGroup gutterSize="s">
+                <EuiFlexItem grow={false}>
+                  <EuiButtonIcon
+                    iconType="inspect"
+                    aria-label="Look into traces"
+                    display="base"
+                    size="s"
+                  />
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiText size="s" color="subdued">
+                    Look into traces from payments-db
+                  </EuiText>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+              <EuiSpacer size="l" />
+              <EuiFlexGroup gutterSize="s">
+                <EuiFlexItem grow={false}>
+                  <EuiButton
+                    iconType="discoverApp"
+                    size="s"
+                    color="primary"
+                    fill={false}
+                  >
+                    Dive deeper
+                  </EuiButton>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiButton
+                    iconType="search"
+                    size="s"
+                    color="primary"
+                    fill={false}
+                  >
+                    Start investigation
+                  </EuiButton>
+                </EuiFlexItem>
+                <EuiFlexItem>
+                  <EuiFlexGroup justifyContent="flexEnd" gutterSize="s">
+                    <EuiFlexItem grow={false}>
+                      <EuiButtonIcon
+                        iconType="thumbsUp"
+                        aria-label="Helpful"
+                        color="text"
+                      />
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      <EuiButtonIcon
+                        iconType="thumbsDown"
+                        aria-label="Not helpful"
+                        color="text"
+                      />
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      <EuiButtonIcon
+                        iconType="cross"
+                        aria-label="Dismiss"
+                        color="text"
+                        onClick={() => setSelectedAlert(null)}
+                      />
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </section>
+          </EuiFlyoutBody>
+        </EuiFlyout>
+      )}
     </EuiPage>
   );
 };
