@@ -23,6 +23,7 @@ import { Datasource, UnifiedAlert, UnifiedRule, MonitorStatus } from '../../core
 import { MonitorsTable } from './monitors_table';
 import { CreateMonitor } from './create_monitor';
 import { AiMonitorWizard, AlertTemplate } from './ai_monitor_wizard';
+import { AlertDetailFlyout } from './alert_detail_flyout';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'danger',
@@ -80,6 +81,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [loading, setLoading] = useState(true);
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
   const [showAiWizard, setShowAiWizard] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
 
   const dsNameMap = new Map(datasources.map(d => [d.id, d.name]));
 
@@ -108,7 +110,23 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   // --- Alert columns ---
   const alertColumns = [
-    { field: 'name', name: 'Name', sortable: true },
+    {
+      field: 'name',
+      name: 'Name',
+      sortable: true,
+      render: (name: string, alert: UnifiedAlert) => (
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            setSelectedAlert(alert);
+          }}
+          style={{ textDecoration: 'none' }}
+        >
+          {name}
+        </a>
+      ),
+    },
     {
       field: 'state', name: 'State',
       render: (state: string) => <EuiHealth color={STATE_COLORS[state] || 'subdued'}>{state}</EuiHealth>,
@@ -342,6 +360,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         )}
         {showAiWizard && (
           <AiMonitorWizard onClose={() => setShowAiWizard(false)} onCreateMonitors={handleAiCreateMonitors} />
+        )}
+        {selectedAlert && (
+          <AlertDetailFlyout alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
         )}
       </EuiPageBody>
     </EuiPage>
