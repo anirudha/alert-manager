@@ -1,0 +1,17 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd standalone
+        - npm ci --legacy-peer-deps
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: standalone/dist/public
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - standalone/node_modules/**/*
