@@ -27,7 +27,7 @@ import {
   EuiTabs,
   EuiTab,
 } from '@opensearch-project/oui';
-import { UnifiedAlert } from '../../core';
+import { UnifiedAlert, UnifiedAlertState, UnifiedAlertSeverity } from '../../core';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'danger',
@@ -81,6 +81,56 @@ const generateDiveDeeper = (alert: UnifiedAlert) => {
   };
 };
 
+const generateRelatedAlerts = (alert: UnifiedAlert): UnifiedAlert[] => {
+  // Mock related alerts that are correlated with the current alert
+  const baseTime = new Date(alert.startTime).getTime();
+  
+  return [
+    {
+      id: 'related-1',
+      datasourceId: alert.datasourceId,
+      datasourceType: alert.datasourceType,
+      name: 'High Database Connection Pool Usage',
+      state: 'active' as UnifiedAlertState,
+      severity: 'high' as UnifiedAlertSeverity,
+      message: 'Database connection pool at 92% capacity',
+      startTime: new Date(baseTime - 15 * 60 * 1000).toISOString(),
+      lastUpdated: new Date(baseTime - 5 * 60 * 1000).toISOString(),
+      labels: { service: 'billing-service-python', metric: 'db_connections' },
+      annotations: { correlation: '0.87' },
+      raw: {} as any,
+    },
+    {
+      id: 'related-2',
+      datasourceId: alert.datasourceId,
+      datasourceType: alert.datasourceType,
+      name: 'Increased API Response Time',
+      state: 'active' as UnifiedAlertState,
+      severity: 'medium' as UnifiedAlertSeverity,
+      message: 'API response time increased by 45%',
+      startTime: new Date(baseTime - 10 * 60 * 1000).toISOString(),
+      lastUpdated: new Date(baseTime - 2 * 60 * 1000).toISOString(),
+      labels: { service: 'payment-gateway', metric: 'response_time' },
+      annotations: { correlation: '0.76' },
+      raw: {} as any,
+    },
+    {
+      id: 'related-3',
+      datasourceId: alert.datasourceId,
+      datasourceType: alert.datasourceType,
+      name: 'Pod Restart Detected',
+      state: 'resolved' as UnifiedAlertState,
+      severity: 'low' as UnifiedAlertSeverity,
+      message: 'billing-service-python pod restarted',
+      startTime: new Date(baseTime - 25 * 60 * 1000).toISOString(),
+      lastUpdated: new Date(baseTime - 20 * 60 * 1000).toISOString(),
+      labels: { service: 'billing-service-python', metric: 'pod_restarts' },
+      annotations: { correlation: '0.65' },
+      raw: {} as any,
+    },
+  ];
+};
+
 // Generate mock time series data for the chart
 const generateChartData = () => {
   const now = Date.now();
@@ -106,6 +156,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({ alert, onC
   const impactServices = generateImpactServices(alert);
   const recommendation = generateRecommendation(alert);
   const diveDeeper = generateDiveDeeper(alert);
+  const relatedAlerts = generateRelatedAlerts(alert);
   const chartData = generateChartData();
 
   // Calculate metrics from alert data
@@ -373,10 +424,70 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({ alert, onC
               <EuiButton size="s" color="text" iconType="search">
                 {diveDeeper.traceLink}
               </EuiButton>
+            </section>
+
+            <EuiSpacer size="l" />
+            <EuiHorizontalRule margin="none" />
+            <EuiSpacer size="l" />
+
+            {/* Related Alerts Section */}
+            <section>
+              <EuiTitle size="s">
+                <h3>Related alerts ({relatedAlerts.length})</h3>
+              </EuiTitle>
+              <EuiSpacer size="s" />
+              <EuiText size="s" color="subdued">
+                <p>Alerts that are correlated with this alert based on timing and service dependencies</p>
+              </EuiText>
               <EuiSpacer size="m" />
-              <EuiButton size="s" iconType="search" color="primary">
-                Start investigation
-              </EuiButton>
+              {relatedAlerts.length > 0 ? (
+                <EuiFlexGroup direction="column" gutterSize="s">
+                  {relatedAlerts.map((relatedAlert) => (
+                    <EuiFlexItem key={relatedAlert.id}>
+                      <EuiPanel paddingSize="m" hasBorder>
+                        <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
+                          <EuiFlexItem grow={false}>
+                            <EuiBadge color={STATE_COLORS[relatedAlert.state]}>
+                              {relatedAlert.state}
+                            </EuiBadge>
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiBadge color={SEVERITY_COLORS[relatedAlert.severity]}>
+                              {relatedAlert.severity}
+                            </EuiBadge>
+                          </EuiFlexItem>
+                          <EuiFlexItem>
+                            <EuiText size="s">
+                              <strong>{relatedAlert.name}</strong>
+                            </EuiText>
+                            <EuiSpacer size="xs" />
+                            <EuiText size="xs" color="subdued">
+                              {relatedAlert.labels.service && `Service: ${relatedAlert.labels.service}`}
+                              {relatedAlert.annotations.correlation && 
+                                ` • Correlation: ${(parseFloat(relatedAlert.annotations.correlation) * 100).toFixed(0)}%`
+                              }
+                            </EuiText>
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiText size="xs" color="subdued">
+                              {new Date(relatedAlert.startTime).toLocaleTimeString()}
+                            </EuiText>
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiButtonEmpty size="xs" iconType="eye">
+                              View
+                            </EuiButtonEmpty>
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      </EuiPanel>
+                    </EuiFlexItem>
+                  ))}
+                </EuiFlexGroup>
+              ) : (
+                <EuiText size="s" color="subdued">
+                  No related alerts found
+                </EuiText>
+              )}
             </section>
           </>
         )}
@@ -470,7 +581,12 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({ alert, onC
       </EuiFlyoutBody>
 
       <EuiFlyoutFooter>
-        <EuiFlexGroup justifyContent="flexEnd" responsive={false}>
+        <EuiFlexGroup justifyContent="spaceBetween" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiButton iconType="search" color="primary">
+              Start investigation
+            </EuiButton>
+          </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiButton fill>
               Acknowledge
