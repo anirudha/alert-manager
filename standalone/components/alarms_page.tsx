@@ -23,6 +23,7 @@ import {
   EuiSuperDatePicker,
   EuiResizableContainer,
   EuiButtonIcon,
+  EuiText,
 } from '@opensearch-project/oui';
 import { Datasource, UnifiedAlert, UnifiedRule, MonitorStatus } from '../../core';
 import { MonitorsTable } from './monitors_table';
@@ -97,6 +98,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [timeRange, setTimeRange] = useState({ start: 'now-15m', end: 'now' });
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
   const [isAlertFilterPanelCollapsed, setIsAlertFilterPanelCollapsed] = useState(false);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
 
   const dsNameMap = new Map(datasources.map(d => [d.id, d.name]));
 
@@ -378,6 +380,45 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     return result;
   }, [alerts, alertSearchQuery, alertFilters]);
 
+  // Group alerts based on groupBy selection
+  const groupedAlerts = React.useMemo(() => {
+    if (alertFilters.groupBy === 'none') {
+      return null;
+    }
+
+    const groups = new Map<string, UnifiedAlert[]>();
+    
+    filteredAlerts.forEach(alert => {
+      let groupKey: string;
+      if (alertFilters.groupBy === 'datasource') {
+        groupKey = alert.datasourceId;
+      } else if (alertFilters.groupBy === 'state') {
+        groupKey = alert.state;
+      } else {
+        groupKey = 'ungrouped';
+      }
+      
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
+      }
+      groups.get(groupKey)!.push(alert);
+    });
+
+    return groups;
+  }, [filteredAlerts, alertFilters.groupBy]);
+
+  const toggleGroupExpansion = (groupId: string) => {
+    setExpandedGroupIds(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
   const renderTable = () => {
     if (activeTab === 'alerts') {
       return (
@@ -451,6 +492,119 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
                       <EuiEmptyPrompt 
                         title={<h2>{alerts.length === 0 ? 'No Active Alerts' : 'No Matching Alerts'}</h2>} 
                         body={<p>{alerts.length === 0 ? 'All systems operating normally.' : 'Try adjusting your search or filters.'}</p>} 
+                      />
+                    ) : groupedAlerts ? (
+                      <EuiBasicTable
+                        items={Array.from(groupedAlerts.entries()).map(([groupKey, groupAlerts]) => {
+                          // Calculate state breakdown
+                          const stateBreakdown = groupAlerts.reduce((acc, alert) => {
+                            acc[alert.state] = (acc[alert.state] || 0) + 1;
+                            return acc;
+                          }, {} as Record<string, number>);
+                          
+                          // Calculate severity breakdown
+                          const severityBreakdown = groupAlerts.reduce((acc, alert) => {
+                            acc[alert.severity] = (acc[alert.severity] || 0) + 1;
+                            return acc;
+                          }, {} as Record<string, number>);
+                          
+                          return {
+                            id: groupKey,
+                            groupKey,
+                            count: groupAlerts.length,
+                            alerts: groupAlerts,
+                            stateBreakdown,
+                            severityBreakdown,
+                          };
+                        })}
+                        columns={[
+                          {
+                            align: 'left' as const,
+                            width: '40px',
+                            isExpander: true,
+                            name: '',
+                            render: (item: any) => (
+                              <EuiButtonIcon
+                                onClick={() => toggleGroupExpansion(item.id)}
+                                aria-label={expandedGroupIds.has(item.id) ? 'Collapse' : 'Expand'}
+                                iconType={expandedGroupIds.has(item.id) ? 'arrowDown' : 'arrowRight'}
+                              />
+                            ),
+                          },
+                          {
+                            field: 'groupKey',
+                            name: alertFilters.groupBy === 'datasource' ? 'Data Source' : 'State',
+                            width: '30%',
+                            render: (groupKey: string, item: any) => {
+                              const displayName = alertFilters.groupBy === 'datasource' 
+                                ? (dsNameMap.get(groupKey) || groupKey)
+                                : groupKey;
+                              
+                              return (
+                                <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                                  <EuiFlexItem grow={false}>
+                                    {alertFilters.groupBy === 'state' ? (
+                                      <EuiHealth color={STATE_COLORS[groupKey] || 'subdued'}>{displayName}</EuiHealth>
+                                    ) : (
+                                      <EuiText size="s"><strong>{displayName}</strong></EuiText>
+                                    )}
+                                  </EuiFlexItem>
+                                  <EuiFlexItem grow={false}>
+                                    <EuiText size="s" color="subdued">({item.count})</EuiText>
+                                  </EuiFlexItem>
+                                </EuiFlexGroup>
+                              );
+                            },
+                          },
+                          {
+                            field: 'stateBreakdown',
+                            name: 'State',
+                            render: (stateBreakdown: Record<string, number>) => (
+                              <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
+                                {Object.entries(stateBreakdown)
+                                  .sort(([a], [b]) => a.localeCompare(b))
+                                  .map(([state, count]) => (
+                                    <EuiFlexItem grow={false} key={state}>
+                                      <EuiBadge color={STATE_COLORS[state] || 'default'}>
+                                        {count} {state}
+                                      </EuiBadge>
+                                    </EuiFlexItem>
+                                  ))}
+                              </EuiFlexGroup>
+                            ),
+                          },
+                          {
+                            field: 'severityBreakdown',
+                            name: 'Severity',
+                            render: (severityBreakdown: Record<string, number>) => (
+                              <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
+                                {Object.entries(severityBreakdown)
+                                  .sort(([a], [b]) => a.localeCompare(b))
+                                  .map(([severity, count]) => (
+                                    <EuiFlexItem grow={false} key={severity}>
+                                      <EuiBadge color={SEVERITY_COLORS[severity] || 'default'}>
+                                        {count} {severity}
+                                      </EuiBadge>
+                                    </EuiFlexItem>
+                                  ))}
+                              </EuiFlexGroup>
+                            ),
+                          },
+                        ]}
+                        itemId="id"
+                        itemIdToExpandedRowMap={Object.fromEntries(
+                          Array.from(expandedGroupIds).map(groupId => [
+                            groupId,
+                            <div style={{ padding: '16px' }}>
+                              <EuiBasicTable
+                                items={groupedAlerts.get(groupId) || []}
+                                columns={alertColumns}
+                                loading={false}
+                              />
+                            </div>,
+                          ])
+                        )}
+                        loading={loading}
                       />
                     ) : (
                       <EuiBasicTable items={filteredAlerts} columns={alertColumns} loading={loading} />
