@@ -98,7 +98,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   if (!loading && alarms.length === 0) {
     return (
-      <EuiPage restrictWidth="1000px">
+      <EuiPage>
         <EuiPageBody component="main">
           <EuiEmptyPrompt
             title={<h2>Welcome to Alarms</h2>}
@@ -120,7 +120,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   }
 
   return (
-    <EuiPage restrictWidth="1200px">
+    <EuiPage>
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>

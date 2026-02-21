@@ -18,9 +18,15 @@ import {
   EuiButton,
   EuiFlexGroup,
   EuiFlexItem,
+  EuiPanel,
+  EuiFieldSearch,
+  EuiSuperDatePicker,
+  EuiResizableContainer,
+  EuiButtonIcon,
 } from '@opensearch-project/oui';
 import { Datasource, UnifiedAlert, UnifiedRule, MonitorStatus } from '../../core';
 import { MonitorsTable } from './monitors_table';
+import { MonitorsFiltersPanel, FilterState, emptyFilters, SavedSearch } from './monitors_filters_panel';
 import { CreateMonitor } from './create_monitor';
 import { AiMonitorWizard, AlertTemplate } from './ai_monitor_wizard';
 import { AlertDetailFlyout } from './alert_detail_flyout';
@@ -82,6 +88,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
   const [showAiWizard, setShowAiWizard] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>(emptyFilters());
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [alertSearchQuery, setAlertSearchQuery] = useState('');
+  const [timeRange, setTimeRange] = useState({ start: 'now-15m', end: 'now' });
+  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
 
   const dsNameMap = new Map(datasources.map(d => [d.id, d.name]));
 
@@ -303,44 +315,179 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     { id: 'datasources' as TabId, name: `Datasources (${datasources.length})` },
   ];
 
+  const saveCurrentSearch = () => {
+    const name = prompt('Name this search:');
+    if (!name) return;
+    setSavedSearches(prev => [...prev, {
+      id: `ss-${Date.now()}`, name, query: searchQuery, filters: { ...filters },
+    }]);
+  };
+
+  const loadSavedSearch = (ss: SavedSearch) => {
+    setSearchQuery(ss.query);
+    setFilters(ss.filters);
+  };
+
+  const deleteSavedSearch = (id: string) => {
+    setSavedSearches(prev => prev.filter(s => s.id !== id));
+  };
+
+  // Filter alerts by search query and time range
+  const filteredAlerts = React.useMemo(() => {
+    let result = alerts;
+    
+    // Filter by search query
+    if (alertSearchQuery) {
+      const query = alertSearchQuery.toLowerCase();
+      result = result.filter(alert => 
+        alert.name.toLowerCase().includes(query) ||
+        alert.message?.toLowerCase().includes(query) ||
+        alert.state.toLowerCase().includes(query) ||
+        alert.severity.toLowerCase().includes(query)
+      );
+    }
+    
+    // Filter by time range (if startTime exists)
+    // Note: In a real implementation, you'd parse the time range properly
+    // For now, we'll just show all alerts as the time filtering would need backend support
+    
+    return result;
+  }, [alerts, alertSearchQuery]);
+
   const renderTable = () => {
     if (activeTab === 'alerts') {
-      if (!loading && alerts.length === 0) return <EuiEmptyPrompt title={<h2>No Active Alerts</h2>} body={<p>All systems operating normally.</p>} />;
-      return <EuiBasicTable items={alerts} columns={alertColumns} loading={loading} />;
+      return (
+        <EuiPanel paddingSize="m" hasBorder>
+          <EuiFlexGroup gutterSize="m" alignItems="center">
+            <EuiFlexItem>
+              <EuiFieldSearch
+                placeholder="Search alerts by name, message, state, or severity..."
+                value={alertSearchQuery}
+                onChange={(e) => setAlertSearchQuery(e.target.value)}
+                isClearable
+                fullWidth
+                aria-label="Search alerts"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false} style={{ minWidth: 400 }}>
+              <EuiSuperDatePicker
+                start={timeRange.start}
+                end={timeRange.end}
+                onTimeChange={({ start, end }) => setTimeRange({ start, end })}
+                showUpdateButton={false}
+              />
+            </EuiFlexItem>
+          </EuiFlexGroup>
+          <EuiSpacer size="m" />
+          {!loading && filteredAlerts.length === 0 ? (
+            <EuiEmptyPrompt 
+              title={<h2>{alerts.length === 0 ? 'No Active Alerts' : 'No Matching Alerts'}</h2>} 
+              body={<p>{alerts.length === 0 ? 'All systems operating normally.' : 'Try adjusting your search or time range.'}</p>} 
+            />
+          ) : (
+            <EuiBasicTable items={filteredAlerts} columns={alertColumns} loading={loading} />
+          )}
+        </EuiPanel>
+      );
     }
     if (activeTab === 'rules') {
       return (
-        <>
-          <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
-            <EuiFlexItem grow={false}>
-              <EuiButton iconType="sparkles" size="s" color="secondary" onClick={() => setShowAiWizard(true)}>
-                AI Monitor
-              </EuiButton>
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <EuiButton fill iconType="plusInCircle" size="s" onClick={() => setShowCreateMonitor(true)}>
-                Create Monitor
-              </EuiButton>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-          <EuiSpacer size="s" />
-          <MonitorsTable
-            rules={visibleRules}
-            datasources={datasources}
-            loading={loading}
-            onDelete={handleDeleteRules}
-            onSilence={handleSilenceRule}
-            onClone={handleCloneRule}
-          />
-        </>
+        <EuiResizableContainer style={{ height: 'calc(100vh - 250px)' }}>
+          {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
+            return (
+              <>
+                <EuiResizablePanel
+                  id="filters-panel"
+                  initialSize={20}
+                  minSize="200px"
+                  mode={['collapsible', { position: 'top' }]}
+                  onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+                  paddingSize="none"
+                  style={{ overflow: 'hidden', paddingRight: '4px' }}
+                >
+                  <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <EuiButtonIcon
+                      iconType={isFilterPanelCollapsed ? 'menuRight' : 'menuLeft'}
+                      onClick={() => togglePanel?.('filters-panel', { direction: 'left' })}
+                      aria-label={isFilterPanelCollapsed ? 'Expand filters' : 'Collapse filters'}
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 10,
+                      }}
+                    />
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <MonitorsFiltersPanel
+                        rules={rules}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        searchQuery={searchQuery}
+                        savedSearches={savedSearches}
+                        onSaveSearch={saveCurrentSearch}
+                        onLoadSearch={loadSavedSearch}
+                        onDeleteSearch={deleteSavedSearch}
+                      />
+                    </div>
+                  </div>
+                </EuiResizablePanel>
+
+                <EuiResizableButton />
+
+                <EuiResizablePanel
+                  initialSize={80}
+                  minSize="400px"
+                  mode="main"
+                  paddingSize="none"
+                  style={{ paddingLeft: '4px' }}
+                >
+                  <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', overflow: 'auto' }}>
+                    <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
+                      <EuiFlexItem grow={false}>
+                        <EuiButton iconType="sparkles" size="s" color="secondary" onClick={() => setShowAiWizard(true)}>
+                          AI Monitor
+                        </EuiButton>
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>
+                        <EuiButton fill iconType="plusInCircle" size="s" onClick={() => setShowCreateMonitor(true)}>
+                          Create Monitor
+                        </EuiButton>
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                    <EuiSpacer size="m" />
+                    <MonitorsTable
+                      rules={visibleRules}
+                      datasources={datasources}
+                      loading={loading}
+                      searchQuery={searchQuery}
+                      onSearchChange={setSearchQuery}
+                      filters={filters}
+                      onDelete={handleDeleteRules}
+                      onSilence={handleSilenceRule}
+                      onClone={handleCloneRule}
+                    />
+                  </EuiPanel>
+                </EuiResizablePanel>
+              </>
+            );
+          }}
+        </EuiResizableContainer>
       );
     }
-    if (!loading && datasources.length === 0) return <EuiEmptyPrompt title={<h2>No Datasources</h2>} body={<p>Add a datasource to get started.</p>} />;
-    return <EuiBasicTable items={datasources} columns={datasourceColumns} loading={loading} />;
+    if (!loading && datasources.length === 0) return (
+      <EuiPanel paddingSize="m" hasBorder>
+        <EuiEmptyPrompt title={<h2>No Datasources</h2>} body={<p>Add a datasource to get started.</p>} />
+      </EuiPanel>
+    );
+    return (
+      <EuiPanel paddingSize="m" hasBorder>
+        <EuiBasicTable items={datasources} columns={datasourceColumns} loading={loading} />
+      </EuiPanel>
+    );
   };
 
   return (
-    <EuiPage restrictWidth="1200px">
+    <EuiPage>
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>

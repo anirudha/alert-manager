@@ -87,10 +87,15 @@ interface MonitorsTableProps {
   rules: UnifiedRule[];
   datasources: Datasource[];
   loading: boolean;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  filters: FilterState;
   onDelete: (ids: string[]) => void;
   onClone?: (monitor: UnifiedRule) => void;
   onSilence?: (id: string) => void;
 }
+
+export { FilterState, emptyFilters, SavedSearch };
 
 // ============================================================================
 // Suggestion Engine
@@ -397,17 +402,23 @@ function useResizableColumns(
 // Main Component
 // ============================================================================
 
-export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources, loading, onDelete, onClone, onSilence }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<FilterState>(emptyFilters());
+export const MonitorsTable: React.FC<MonitorsTableProps> = ({ 
+  rules, 
+  datasources, 
+  loading, 
+  searchQuery,
+  onSearchChange,
+  filters,
+  onDelete, 
+  onClone, 
+  onSilence 
+}) => {
   const [sortField, setSortField] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(new Set(DEFAULT_VISIBLE));
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [showSavedSearches, setShowSavedSearches] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
@@ -499,23 +510,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const toggleSelectAll = () => {
     if (selectedIds.size === filtered.length) setSelectedIds(new Set());
     else setSelectedIds(new Set(filtered.map(r => r.id)));
-  };
-
-  // Saved searches
-  const saveCurrentSearch = () => {
-    const name = prompt('Name this search:');
-    if (!name) return;
-    setSavedSearches(prev => [...prev, {
-      id: `ss-${Date.now()}`, name, query: searchQuery, filters: { ...filters },
-    }]);
-  };
-  const loadSavedSearch = (ss: SavedSearch) => {
-    setSearchQuery(ss.query);
-    setFilters(ss.filters);
-    setShowSavedSearches(false);
-  };
-  const deleteSavedSearch = (id: string) => {
-    setSavedSearches(prev => prev.filter(s => s.id !== id));
   };
 
   // Export
@@ -690,31 +684,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     }
   };
 
-  // Unique values for filter dropdowns
-  const uniqueStatuses = useMemo(() => collectUniqueValues(rules, r => r.status), [rules]);
-  const uniqueSeverities = useMemo(() => collectUniqueValues(rules, r => r.severity), [rules]);
-  const uniqueTypes = useMemo(() => collectUniqueValues(rules, r => r.monitorType), [rules]);
-  const uniqueHealth = useMemo(() => collectUniqueValues(rules, r => r.healthStatus), [rules]);
-  const uniqueCreators = useMemo(() => collectUniqueValues(rules, r => r.createdBy), [rules]);
-  const uniqueBackends = useMemo(() => collectUniqueValues(rules, r => r.datasourceType), [rules]);
-  const uniqueDestinations = useMemo(() => collectUniqueValues(rules, r => r.notificationDestinations), [rules]);
-
-  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const updateLabelFilter = (key: string, values: string[]) => {
-    setFilters(prev => ({
-      ...prev,
-      labels: { ...prev.labels, [key]: values },
-    }));
-  };
-
-  const clearAllFilters = () => {
-    setFilters(emptyFilters());
-    setSearchQuery('');
-  };
-
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -724,7 +693,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
       setActiveSuggestion(prev => Math.max(prev - 1, -1));
     } else if (e.key === 'Enter' && activeSuggestion >= 0 && suggestions[activeSuggestion]) {
       e.preventDefault();
-      setSearchQuery(suggestions[activeSuggestion]);
+      onSearchChange(suggestions[activeSuggestion]);
       setShowSuggestions(false);
       setActiveSuggestion(-1);
     } else if (e.key === 'Escape') {
@@ -732,247 +701,47 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     }
   };
 
-  // Facet helper: count items per value for a given field
-  const facetCounts = useMemo(() => {
-    // Count against the search-matched (but not filter-matched) rules so counts update with search
-    const searchMatched = rules.filter(r => matchesSearch(r, searchQuery));
-    const counts: Record<string, Record<string, number>> = {
-      status: {}, severity: {}, monitorType: {}, healthStatus: {}, backend: {}, createdBy: {},
-    };
-    for (const r of searchMatched) {
-      counts.status[r.status] = (counts.status[r.status] || 0) + 1;
-      counts.severity[r.severity] = (counts.severity[r.severity] || 0) + 1;
-      counts.monitorType[r.monitorType] = (counts.monitorType[r.monitorType] || 0) + 1;
-      counts.healthStatus[r.healthStatus] = (counts.healthStatus[r.healthStatus] || 0) + 1;
-      counts.backend[r.datasourceType] = (counts.backend[r.datasourceType] || 0) + 1;
-      counts.createdBy[r.createdBy] = (counts.createdBy[r.createdBy] || 0) + 1;
-    }
-    // Label counts
-    const labelCounts: Record<string, Record<string, number>> = {};
-    for (const key of labelKeys) {
-      labelCounts[key] = {};
-      for (const r of searchMatched) {
-        const v = r.labels[key];
-        if (v) labelCounts[key][v] = (labelCounts[key][v] || 0) + 1;
-      }
-    }
-    return { counts, labelCounts };
-  }, [rules, searchQuery, labelKeys]);
-
-  // Collapsible facet sections state
-  const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
-  const toggleFacetCollapse = (id: string) => {
-    setCollapsedFacets(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  // Render a single facet group
-  const renderFacetGroup = (
-    id: string,
-    label: string,
-    options: string[],
-    selected: string[],
-    onChange: (v: string[]) => void,
-    counts: Record<string, number>,
-    displayMap?: Record<string, string>,
-    colorMap?: Record<string, string>,
-  ) => {
-    const isCollapsed = collapsedFacets.has(id);
-    const activeCount = selected.length;
-    return (
-      <div key={id} style={{ marginBottom: 12 }}>
-        <EuiFlexGroup
-          gutterSize="xs" alignItems="center" responsive={false}
-          style={{ cursor: 'pointer', marginBottom: 4 }}
-          onClick={() => toggleFacetCollapse(id)}
-        >
-          <EuiFlexItem grow={false}>
-            <EuiIcon type={isCollapsed ? 'arrowRight' : 'arrowDown'} size="s" />
-          </EuiFlexItem>
-          <EuiFlexItem>
-            <EuiText size="xs"><strong>{label}</strong></EuiText>
-          </EuiFlexItem>
-          {activeCount > 0 && (
-            <EuiFlexItem grow={false}>
-              <EuiBadge color="primary">{activeCount}</EuiBadge>
-            </EuiFlexItem>
-          )}
-        </EuiFlexGroup>
-        {!isCollapsed && (
-          <div style={{ paddingLeft: 4 }}>
-            {options.map(opt => {
-              const isActive = selected.includes(opt);
-              const count = counts[opt] || 0;
-              const displayLabel = displayMap?.[opt] || opt;
-              return (
-                <div
-                  key={opt}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (isActive) onChange(selected.filter(s => s !== opt));
-                    else onChange([...selected, opt]);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      if (isActive) onChange(selected.filter(s => s !== opt));
-                      else onChange([...selected, opt]);
-                    }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '3px 6px', borderRadius: 4, cursor: 'pointer', marginBottom: 1,
-                    backgroundColor: isActive ? '#E6F0FF' : 'transparent',
-                    fontWeight: isActive ? 600 : 400,
-                  }}
-                  aria-label={`Filter by ${label}: ${displayLabel}`}
-                  aria-pressed={isActive}
-                >
-                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-                    {colorMap && (
-                      <EuiFlexItem grow={false}>
-                        <EuiHealth color={colorMap[opt] || 'subdued'} />
-                      </EuiFlexItem>
-                    )}
-                    <EuiFlexItem grow={false}>
-                      <EuiText size="xs" style={{ lineHeight: '18px' }}>{displayLabel}</EuiText>
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
-                  <EuiText size="xs" color="subdued" style={{ lineHeight: '18px' }}>{count}</EuiText>
-                </div>
-              );
-            })}
-          </div>
+  return (
+    <>
+      {/* Search bar with suggestions */}
+      <div ref={searchRef} style={{ position: 'relative' }}>
+        <EuiFieldSearch
+          placeholder="Search monitors by name, labels (team:infra), annotations..."
+          value={searchQuery}
+          onChange={(e) => { onSearchChange(e.target.value); setShowSuggestions(true); setActiveSuggestion(-1); }}
+          onFocus={() => searchQuery && setShowSuggestions(true)}
+          onKeyDown={handleSearchKeyDown}
+          isClearable
+          fullWidth
+          aria-label="Search monitors"
+        />
+        {showSuggestions && suggestions.length > 0 && (
+          <EuiPanel
+            paddingSize="none"
+            style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              zIndex: 1000, maxHeight: 250, overflow: 'auto',
+              border: '1px solid #D3DAE6', borderTop: 'none',
+            }}
+          >
+            {suggestions.map((s, i) => (
+              <div
+                key={s}
+                style={{
+                  padding: '6px 12px', cursor: 'pointer',
+                  background: i === activeSuggestion ? '#E6F0FF' : 'white',
+                }}
+                onMouseDown={() => { onSearchChange(s); setShowSuggestions(false); }}
+                onMouseEnter={() => setActiveSuggestion(i)}
+              >
+                <EuiText size="s">{s}</EuiText>
+              </div>
+            ))}
+          </EuiPanel>
         )}
       </div>
-    );
-  };
 
-  return (
-    <EuiFlexGroup gutterSize="m" responsive={false}>
-      {/* ===== Left Facet Sidebar ===== */}
-      <EuiFlexItem grow={false} style={{ width: 220, minWidth: 220 }}>
-        <EuiPanel paddingSize="s" hasBorder style={{ position: 'sticky', top: 8, maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
-          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
-            <EuiFlexItem>
-              <EuiText size="xs"><strong>Filters</strong></EuiText>
-            </EuiFlexItem>
-            {activeFilterCount > 0 && (
-              <EuiFlexItem grow={false}>
-                <EuiButtonEmpty size="xs" onClick={clearAllFilters} flush="right">
-                  Clear ({activeFilterCount})
-                </EuiButtonEmpty>
-              </EuiFlexItem>
-            )}
-          </EuiFlexGroup>
-          <EuiSpacer size="s" />
-
-          {renderFacetGroup('status', 'Status', uniqueStatuses, filters.status,
-            (v) => updateFilter('status', v as MonitorStatus[]), facetCounts.counts.status, undefined, STATUS_COLORS)}
-          {renderFacetGroup('severity', 'Severity', uniqueSeverities, filters.severity,
-            (v) => updateFilter('severity', v as UnifiedAlertSeverity[]), facetCounts.counts.severity, undefined, SEVERITY_COLORS)}
-          {renderFacetGroup('monitorType', 'Type', uniqueTypes, filters.monitorType,
-            (v) => updateFilter('monitorType', v as MonitorType[]), facetCounts.counts.monitorType, TYPE_LABELS)}
-          {renderFacetGroup('healthStatus', 'Health', uniqueHealth, filters.healthStatus,
-            (v) => updateFilter('healthStatus', v as MonitorHealthStatus[]), facetCounts.counts.healthStatus, undefined, HEALTH_COLORS)}
-          {renderFacetGroup('backend', 'Backend', uniqueBackends, filters.backend,
-            (v) => updateFilter('backend', v), facetCounts.counts.backend)}
-          {renderFacetGroup('createdBy', 'Created By', uniqueCreators, filters.createdBy,
-            (v) => updateFilter('createdBy', v), facetCounts.counts.createdBy)}
-
-          {/* Label facets */}
-          {labelKeys.length > 0 && (
-            <>
-              <EuiSpacer size="xs" />
-              <EuiText size="xs" color="subdued" style={{ marginBottom: 6 }}><strong>Labels</strong></EuiText>
-              {labelKeys.map(key => renderFacetGroup(
-                `label:${key}`, key, collectLabelValues(rules, key),
-                filters.labels[key] || [],
-                (v) => updateLabelFilter(key, v),
-                facetCounts.labelCounts[key] || {},
-              ))}
-            </>
-          )}
-
-          {/* Saved searches */}
-          <EuiSpacer size="s" />
-          <EuiText size="xs"><strong>Saved Searches</strong></EuiText>
-          <EuiSpacer size="xs" />
-          {savedSearches.length === 0 ? (
-            <EuiText size="xs" color="subdued">None yet</EuiText>
-          ) : (
-            savedSearches.map(ss => (
-              <EuiFlexGroup key={ss.id} gutterSize="xs" alignItems="center" responsive={false} style={{ marginBottom: 2 }}>
-                <EuiFlexItem>
-                  <EuiText size="xs">
-                    <span
-                      role="button" tabIndex={0} style={{ cursor: 'pointer', color: '#006BB4' }}
-                      onClick={() => loadSavedSearch(ss)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') loadSavedSearch(ss); }}
-                    >
-                      {ss.name}
-                    </span>
-                  </EuiText>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiButtonIcon iconType="cross" size="s" aria-label={`Delete ${ss.name}`}
-                    onClick={() => deleteSavedSearch(ss.id)} color="text" />
-                </EuiFlexItem>
-              </EuiFlexGroup>
-            ))
-          )}
-          <EuiButtonEmpty size="xs" iconType="plusInCircle" onClick={saveCurrentSearch}
-            disabled={!searchQuery && activeFilterCount === 0} flush="left">
-            Save current
-          </EuiButtonEmpty>
-        </EuiPanel>
-      </EuiFlexItem>
-
-      {/* ===== Right Content Area ===== */}
-      <EuiFlexItem>
-        {/* Search bar with suggestions */}
-        <div ref={searchRef} style={{ position: 'relative' }}>
-          <EuiFieldSearch
-            placeholder="Search monitors by name, labels (team:infra), annotations..."
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); setActiveSuggestion(-1); }}
-            onFocus={() => searchQuery && setShowSuggestions(true)}
-            onKeyDown={handleSearchKeyDown}
-            isClearable
-            fullWidth
-            aria-label="Search monitors"
-          />
-          {showSuggestions && suggestions.length > 0 && (
-            <EuiPanel
-              paddingSize="none"
-              style={{
-                position: 'absolute', top: '100%', left: 0, right: 0,
-                zIndex: 1000, maxHeight: 250, overflow: 'auto',
-                border: '1px solid #D3DAE6', borderTop: 'none',
-              }}
-            >
-              {suggestions.map((s, i) => (
-                <div
-                  key={s}
-                  style={{
-                    padding: '6px 12px', cursor: 'pointer',
-                    background: i === activeSuggestion ? '#E6F0FF' : 'white',
-                  }}
-                  onMouseDown={() => { setSearchQuery(s); setShowSuggestions(false); }}
-                  onMouseEnter={() => setActiveSuggestion(i)}
-                >
-                  <EuiText size="s">{s}</EuiText>
-                </div>
-              ))}
-            </EuiPanel>
-          )}
-        </div>
-
-        <EuiSpacer size="s" />
+      <EuiSpacer size="s" />
 
         {/* Action bar */}
         <EuiFlexGroup gutterSize="s" alignItems="center" justifyContent="spaceBetween">
@@ -1052,11 +821,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                 : 'No monitors match your current search and filters.'}
             </p>
           }
-          actions={
-            activeFilterCount > 0 || searchQuery ? (
-              <EuiButton onClick={clearAllFilters}>Clear filters</EuiButton>
-            ) : undefined
-          }
         />
       ) : (
         <EuiBasicTable
@@ -1110,7 +874,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
             }}
           />
         )}
-      </EuiFlexItem>
-    </EuiFlexGroup>
-  );
-};
+      </>
+    );
+  };
+
