@@ -27,6 +27,7 @@ import {
 import { Datasource, UnifiedAlert, UnifiedRule, MonitorStatus } from '../../core';
 import { MonitorsTable } from './monitors_table';
 import { MonitorsFiltersPanel, FilterState, emptyFilters, SavedSearch } from './monitors_filters_panel';
+import { AlertsFiltersPanel, AlertFilterState, emptyAlertFilters } from './alerts_filters_panel';
 import { CreateMonitor } from './create_monitor';
 import { AiMonitorWizard, AlertTemplate } from './ai_monitor_wizard';
 import { AlertDetailFlyout } from './alert_detail_flyout';
@@ -92,8 +93,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [alertSearchQuery, setAlertSearchQuery] = useState('');
+  const [alertFilters, setAlertFilters] = useState<AlertFilterState>(emptyAlertFilters());
   const [timeRange, setTimeRange] = useState({ start: 'now-15m', end: 'now' });
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
+  const [isAlertFilterPanelCollapsed, setIsAlertFilterPanelCollapsed] = useState(false);
 
   const dsNameMap = new Map(datasources.map(d => [d.id, d.name]));
 
@@ -332,7 +335,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     setSavedSearches(prev => prev.filter(s => s.id !== id));
   };
 
-  // Filter alerts by search query and time range
+  // Filter alerts by search query, time range, and filters
   const filteredAlerts = React.useMemo(() => {
     let result = alerts;
     
@@ -347,47 +350,117 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       );
     }
     
-    // Filter by time range (if startTime exists)
-    // Note: In a real implementation, you'd parse the time range properly
-    // For now, we'll just show all alerts as the time filtering would need backend support
+    // Filter by state
+    if (alertFilters.state.length > 0) {
+      result = result.filter(alert => alertFilters.state.includes(alert.state));
+    }
+    
+    // Filter by severity
+    if (alertFilters.severity.length > 0) {
+      result = result.filter(alert => alertFilters.severity.includes(alert.severity));
+    }
+    
+    // Filter by datasource type
+    if (alertFilters.datasourceType.length > 0) {
+      result = result.filter(alert => alertFilters.datasourceType.includes(alert.datasourceType));
+    }
+    
+    // Filter by labels
+    for (const [key, values] of Object.entries(alertFilters.labels)) {
+      if (values.length > 0) {
+        result = result.filter(alert => {
+          const labelVal = alert.labels[key];
+          return labelVal && values.includes(labelVal);
+        });
+      }
+    }
     
     return result;
-  }, [alerts, alertSearchQuery]);
+  }, [alerts, alertSearchQuery, alertFilters]);
 
   const renderTable = () => {
     if (activeTab === 'alerts') {
       return (
-        <EuiPanel paddingSize="m" hasBorder>
-          <EuiFlexGroup gutterSize="m" alignItems="center">
-            <EuiFlexItem>
-              <EuiFieldSearch
-                placeholder="Search alerts by name, message, state, or severity..."
-                value={alertSearchQuery}
-                onChange={(e) => setAlertSearchQuery(e.target.value)}
-                isClearable
-                fullWidth
-                aria-label="Search alerts"
-              />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false} style={{ minWidth: 400 }}>
-              <EuiSuperDatePicker
-                start={timeRange.start}
-                end={timeRange.end}
-                onTimeChange={({ start, end }) => setTimeRange({ start, end })}
-                showUpdateButton={false}
-              />
-            </EuiFlexItem>
-          </EuiFlexGroup>
-          <EuiSpacer size="m" />
-          {!loading && filteredAlerts.length === 0 ? (
-            <EuiEmptyPrompt 
-              title={<h2>{alerts.length === 0 ? 'No Active Alerts' : 'No Matching Alerts'}</h2>} 
-              body={<p>{alerts.length === 0 ? 'All systems operating normally.' : 'Try adjusting your search or time range.'}</p>} 
-            />
-          ) : (
-            <EuiBasicTable items={filteredAlerts} columns={alertColumns} loading={loading} />
-          )}
-        </EuiPanel>
+        <EuiResizableContainer style={{ height: 'calc(100vh - 250px)' }}>
+          {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
+            return (
+              <>
+                <EuiResizablePanel
+                  id="alert-filters-panel"
+                  initialSize={20}
+                  minSize="200px"
+                  mode={['collapsible', { position: 'top' }]}
+                  onToggleCollapsed={() => setIsAlertFilterPanelCollapsed(!isAlertFilterPanelCollapsed)}
+                  paddingSize="none"
+                  style={{ overflow: 'hidden', paddingRight: '4px' }}
+                >
+                  <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <EuiButtonIcon
+                      iconType={isAlertFilterPanelCollapsed ? 'menuRight' : 'menuLeft'}
+                      onClick={() => togglePanel?.('alert-filters-panel', { direction: 'left' })}
+                      aria-label={isAlertFilterPanelCollapsed ? 'Expand filters' : 'Collapse filters'}
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 10,
+                      }}
+                    />
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <AlertsFiltersPanel
+                        alerts={alerts}
+                        filters={alertFilters}
+                        onFiltersChange={setAlertFilters}
+                      />
+                    </div>
+                  </div>
+                </EuiResizablePanel>
+
+                <EuiResizableButton />
+
+                <EuiResizablePanel
+                  initialSize={80}
+                  minSize="400px"
+                  mode="main"
+                  paddingSize="none"
+                  style={{ paddingLeft: '4px' }}
+                >
+                  <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', overflow: 'auto' }}>
+                    <EuiFlexGroup gutterSize="m" alignItems="center">
+                      <EuiFlexItem>
+                        <EuiFieldSearch
+                          placeholder="Search alerts by name, message, state, or severity..."
+                          value={alertSearchQuery}
+                          onChange={(e) => setAlertSearchQuery(e.target.value)}
+                          isClearable
+                          fullWidth
+                          aria-label="Search alerts"
+                        />
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false} style={{ minWidth: 400 }}>
+                        <EuiSuperDatePicker
+                          start={timeRange.start}
+                          end={timeRange.end}
+                          onTimeChange={({ start, end }) => setTimeRange({ start, end })}
+                          showUpdateButton={false}
+                        />
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                    <EuiSpacer size="m" />
+                    {!loading && filteredAlerts.length === 0 ? (
+                      <EuiEmptyPrompt 
+                        title={<h2>{alerts.length === 0 ? 'No Active Alerts' : 'No Matching Alerts'}</h2>} 
+                        body={<p>{alerts.length === 0 ? 'All systems operating normally.' : 'Try adjusting your search or filters.'}</p>} 
+                      />
+                    ) : (
+                      <EuiBasicTable items={filteredAlerts} columns={alertColumns} loading={loading} />
+                    )}
+                  </EuiPanel>
+                </EuiResizablePanel>
+              </>
+            );
+          }}
+        </EuiResizableContainer>
       );
     }
     if (activeTab === 'rules') {
@@ -444,8 +517,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
                   <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', overflow: 'auto' }}>
                     <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
                       <EuiFlexItem grow={false}>
-                        <EuiButton iconType="sparkles" size="s" color="secondary" onClick={() => setShowAiWizard(true)}>
-                          AI Monitor
+                        <EuiButton iconType="sparkleFilled" size="s" color="secondary" onClick={() => setShowAiWizard(true)}>
+                          Generate monitors
                         </EuiButton>
                       </EuiFlexItem>
                       <EuiFlexItem grow={false}>

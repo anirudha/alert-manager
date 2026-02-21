@@ -766,16 +766,16 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                 </EuiFlexItem>
               )}
               <EuiFlexItem grow={false}>
-                <EuiButton size="s" iconType="exportAction" onClick={exportJson} isDisabled={filtered.length === 0}>
+                <EuiButtonEmpty size="s" iconType="exportAction" onClick={exportJson} isDisabled={filtered.length === 0}>
                   Export
-                </EuiButton>
+                </EuiButtonEmpty>
               </EuiFlexItem>
               <EuiFlexItem grow={false}>
                 <EuiPopover
                   button={
-                    <EuiButton size="s" iconType="listAdd" onClick={() => setShowColumnPicker(!showColumnPicker)}>
+                    <EuiButtonEmpty size="s" iconType="listAdd" onClick={() => setShowColumnPicker(!showColumnPicker)}>
                       Columns
-                    </EuiButton>
+                    </EuiButtonEmpty>
                   }
                   isOpen={showColumnPicker}
                   closePopover={() => setShowColumnPicker(false)}
