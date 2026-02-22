@@ -9,6 +9,8 @@ import {
   MultiBackendAlertService,
   MockOpenSearchBackend,
   MockPrometheusBackend,
+  NotificationRoutingService,
+  SuppressionRuleService,
   Logger,
 } from '../core';
 import {
@@ -30,6 +32,23 @@ import {
   handleGetUnifiedAlerts,
   handleGetUnifiedRules,
 } from '../server/routes/handlers';
+import {
+  handleCreateMonitor,
+  handleUpdateMonitor,
+  handleDeleteMonitor,
+  handleImportMonitors,
+  handleExportMonitors,
+  handleListRoutingRules,
+  handleCreateRoutingRule,
+  handleUpdateRoutingRule,
+  handleDeleteRoutingRule,
+  handleListSuppressionRules,
+  handleCreateSuppressionRule,
+  handleUpdateSuppressionRule,
+  handleDeleteSuppressionRule,
+  handleAcknowledgeAlert,
+  handleSilenceAlert,
+} from '../server/routes/monitor_handlers';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE !== 'false';
@@ -50,6 +69,11 @@ const osBackend = new MockOpenSearchBackend(logger);
 const promBackend = new MockPrometheusBackend(logger);
 alertService.registerOpenSearch(osBackend);
 alertService.registerPrometheus(promBackend);
+datasourceService.setPrometheusBackend(promBackend);
+
+// Routing and suppression services
+const routingService = new NotificationRoutingService();
+const suppressionService = new SuppressionRuleService();
 
 // Seed mock data
 if (MOCK_MODE) {
@@ -157,12 +181,133 @@ app.get('/api/datasources/:dsId/prom-alerts', async (req, res) => {
 // Unified Views (cross-backend, for the UI)
 // ============================================================================
 
-app.get('/api/alerts', async (_req, res) => {
-  const r = await handleGetUnifiedAlerts(alertService);
+app.get('/api/alerts', async (req, res) => {
+  const r = await handleGetUnifiedAlerts(alertService, req.query as any);
   res.status(r.status).json(r.body);
 });
-app.get('/api/rules', async (_req, res) => {
-  const r = await handleGetUnifiedRules(alertService);
+app.get('/api/rules', async (req, res) => {
+  const r = await handleGetUnifiedRules(alertService, req.query as any);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Paginated Unified Views (single-datasource selection)
+// ============================================================================
+
+app.get('/api/paginated/rules', async (req, res) => {
+  try {
+    const dsIds = req.query.dsIds ? String(req.query.dsIds).split(',') : undefined;
+    const page = req.query.page ? parseInt(String(req.query.page), 10) : 1;
+    const pageSize = req.query.pageSize ? parseInt(String(req.query.pageSize), 10) : 20;
+    const result = await alertService.getPaginatedRules({ dsIds, page, pageSize });
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/paginated/alerts', async (req, res) => {
+  try {
+    const dsIds = req.query.dsIds ? String(req.query.dsIds).split(',') : undefined;
+    const page = req.query.page ? parseInt(String(req.query.page), 10) : 1;
+    const pageSize = req.query.pageSize ? parseInt(String(req.query.pageSize), 10) : 20;
+    const result = await alertService.getPaginatedAlerts({ dsIds, page, pageSize });
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================================
+// Workspace Discovery
+// ============================================================================
+
+app.get('/api/datasources/:dsId/workspaces', async (req, res) => {
+  try {
+    const workspaces = await datasourceService.listWorkspaces(req.params.dsId);
+    res.json({ workspaces });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================================
+// Monitor CRUD Routes
+// ============================================================================
+
+app.post('/api/monitors', async (req, res) => {
+  const r = await handleCreateMonitor(alertService, req.body);
+  res.status(r.status).json(r.body);
+});
+app.put('/api/monitors/:id', async (req, res) => {
+  const r = await handleUpdateMonitor(alertService, req.params.id, req.body);
+  res.status(r.status).json(r.body);
+});
+app.delete('/api/monitors/:id', async (req, res) => {
+  const r = await handleDeleteMonitor(alertService, req.params.id, req.query.dsId as string);
+  res.status(r.status).json(r.body);
+});
+app.post('/api/monitors/import', async (req, res) => {
+  const r = await handleImportMonitors(alertService, req.body);
+  res.status(r.status).json(r.body);
+});
+app.get('/api/monitors/export', async (_req, res) => {
+  const r = await handleExportMonitors(alertService);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Routing Rules Routes
+// ============================================================================
+
+app.get('/api/routing-rules', (_req, res) => {
+  const r = handleListRoutingRules(routingService);
+  res.status(r.status).json(r.body);
+});
+app.post('/api/routing-rules', (req, res) => {
+  const r = handleCreateRoutingRule(routingService, req.body);
+  res.status(r.status).json(r.body);
+});
+app.put('/api/routing-rules/:id', (req, res) => {
+  const r = handleUpdateRoutingRule(routingService, req.params.id, req.body);
+  res.status(r.status).json(r.body);
+});
+app.delete('/api/routing-rules/:id', (req, res) => {
+  const r = handleDeleteRoutingRule(routingService, req.params.id);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Suppression Rules Routes
+// ============================================================================
+
+app.get('/api/suppression-rules', (_req, res) => {
+  const r = handleListSuppressionRules(suppressionService);
+  res.status(r.status).json(r.body);
+});
+app.post('/api/suppression-rules', (req, res) => {
+  const r = handleCreateSuppressionRule(suppressionService, req.body);
+  res.status(r.status).json(r.body);
+});
+app.put('/api/suppression-rules/:id', (req, res) => {
+  const r = handleUpdateSuppressionRule(suppressionService, req.params.id, req.body);
+  res.status(r.status).json(r.body);
+});
+app.delete('/api/suppression-rules/:id', (req, res) => {
+  const r = handleDeleteSuppressionRule(suppressionService, req.params.id);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Alert Actions Routes
+// ============================================================================
+
+app.post('/api/alerts/:id/acknowledge', async (req, res) => {
+  const r = await handleAcknowledgeAlert(alertService, req.params.id);
+  res.status(r.status).json(r.body);
+});
+app.post('/api/alerts/:id/silence', async (req, res) => {
+  const r = await handleSilenceAlert(suppressionService, req.params.id, req.body);
   res.status(r.status).json(r.body);
 });
 

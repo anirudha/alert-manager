@@ -1,13 +1,18 @@
 /**
  * Datasource service — manages alert datasource configurations
  */
-import { Datasource, DatasourceService, Logger } from './types';
+import { Datasource, DatasourceService, PrometheusBackend, Logger } from './types';
 
 export class InMemoryDatasourceService implements DatasourceService {
   private datasources: Map<string, Datasource> = new Map();
   private counter = 0;
+  private promBackend?: PrometheusBackend;
 
   constructor(private readonly logger: Logger) {}
+
+  setPrometheusBackend(backend: PrometheusBackend): void {
+    this.promBackend = backend;
+  }
 
   async list(): Promise<Datasource[]> {
     return Array.from(this.datasources.values());
@@ -47,6 +52,23 @@ export class InMemoryDatasourceService implements DatasourceService {
     }
     // In mock mode, always succeed
     return { success: true, message: 'Connection successful' };
+  }
+
+  async listWorkspaces(dsId: string): Promise<Datasource[]> {
+    const ds = this.datasources.get(dsId);
+    if (!ds || ds.type !== 'prometheus' || !this.promBackend) return [];
+
+    const workspaces = await this.promBackend.listWorkspaces(ds);
+    return workspaces.map(ws => ({
+      id: `${dsId}::${ws.id}`,
+      name: `${ds.name} / ${ws.alias || ws.name}`,
+      type: ds.type,
+      url: ds.url,
+      enabled: ws.status === 'active',
+      workspaceId: ws.id,
+      workspaceName: ws.name,
+      parentDatasourceId: dsId,
+    }));
   }
 
   // Helper to seed initial datasources

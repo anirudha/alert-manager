@@ -17,10 +17,44 @@ export interface Datasource {
   type: DatasourceType;
   url: string;
   enabled: boolean;
+  /** For Prometheus datasources decomposed into workspaces */
+  workspaceId?: string;
+  workspaceName?: string;
+  /** The parent datasource ID if this is a workspace-derived entry */
+  parentDatasourceId?: string;
   auth?: {
     type: 'basic' | 'apikey' | 'sigv4';
     credentials?: Record<string, string>;
   };
+}
+
+// ============================================================================
+// Prometheus Workspace
+// ============================================================================
+
+export interface PrometheusWorkspace {
+  id: string;
+  name: string;
+  alias?: string;
+  region?: string;
+  status: 'active' | 'inactive';
+}
+
+// ============================================================================
+// Pagination
+// ============================================================================
+
+export interface PaginatedResponse<T> {
+  results: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export interface PaginationParams {
+  page?: number;
+  pageSize?: number;
 }
 
 // ============================================================================
@@ -189,6 +223,9 @@ export interface PrometheusBackend {
 
   // Active alerts
   getAlerts(ds: Datasource): Promise<PromAlert[]>;
+
+  // Workspace discovery
+  listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]>;
 }
 
 export interface DatasourceService {
@@ -198,6 +235,8 @@ export interface DatasourceService {
   update(id: string, input: Partial<Datasource>): Promise<Datasource | null>;
   delete(id: string): Promise<boolean>;
   testConnection(id: string): Promise<{ success: boolean; message: string }>;
+  /** List workspaces for a Prometheus datasource, returning them as selectable datasource entries */
+  listWorkspaces(dsId: string): Promise<Datasource[]>;
 }
 
 // ============================================================================
@@ -223,6 +262,33 @@ export interface UnifiedAlert {
   raw: OSAlert | PromAlert;
 }
 
+export type MonitorType = 'metric' | 'log' | 'apm' | 'composite' | 'infrastructure' | 'synthetics';
+export type MonitorStatus = 'active' | 'pending' | 'muted' | 'disabled';
+export type MonitorHealthStatus = 'healthy' | 'failing' | 'no_data';
+
+export interface SuppressionRule {
+  id: string;
+  name: string;
+  reason: string;
+  schedule?: string; // e.g. "Sat 02:00-06:00 UTC"
+  matchLabels?: Record<string, string>;
+  active: boolean;
+}
+
+export interface AlertHistoryEntry {
+  timestamp: string;
+  state: UnifiedAlertState;
+  value?: string;
+  message?: string;
+}
+
+export interface NotificationRouting {
+  channel: string; // e.g. "Slack", "Email", "PagerDuty"
+  destination: string; // e.g. "#ops-alerts", "oncall@example.com"
+  severity?: UnifiedAlertSeverity[];
+  throttle?: string; // e.g. "10 minutes"
+}
+
 export interface UnifiedRule {
   id: string;
   datasourceId: string;
@@ -235,8 +301,65 @@ export interface UnifiedRule {
   group?: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
+  // Extended fields for monitor management
+  monitorType: MonitorType;
+  status: MonitorStatus;
+  healthStatus: MonitorHealthStatus;
+  createdBy: string;
+  createdAt: string;
+  lastModified: string;
+  lastTriggered?: string;
+  notificationDestinations: string[];
+  // Detail view fields
+  description: string;
+  aiSummary: string;
+  evaluationInterval: string;
+  pendingPeriod: string;
+  firingPeriod?: string;
+  lookbackPeriod?: string;
+  threshold?: { operator: string; value: number; unit?: string };
+  alertHistory: AlertHistoryEntry[];
+  conditionPreviewData: Array<{ timestamp: number; value: number }>;
+  notificationRouting: NotificationRouting[];
+  suppressionRules: SuppressionRule[];
   // Original backend-specific data
   raw: OSMonitor | PromAlertingRule;
+}
+
+// ============================================================================
+// Progressive Loading Types
+// ============================================================================
+
+export type DatasourceFetchStatus = 'pending' | 'loading' | 'success' | 'error' | 'timeout';
+
+export interface DatasourceFetchResult<T> {
+  datasourceId: string;
+  datasourceName: string;
+  datasourceType: DatasourceType;
+  status: DatasourceFetchStatus;
+  data: T[];
+  error?: string;
+  durationMs: number;
+}
+
+export interface ProgressiveResponse<T> {
+  results: T[];
+  datasourceStatus: DatasourceFetchResult<T>[];
+  totalDatasources: number;
+  completedDatasources: number;
+  fetchedAt: string;
+}
+
+export interface UnifiedFetchOptions {
+  /** Only fetch from these datasource IDs. If empty/undefined, fetch from all enabled. */
+  dsIds?: string[];
+  /** Per-datasource timeout in ms. Defaults to 10000. */
+  timeoutMs?: number;
+  /** Called as each datasource completes, for progressive UI updates. */
+  onProgress?: (result: DatasourceFetchResult<any>) => void;
+  /** Pagination params for server-side pagination. */
+  page?: number;
+  pageSize?: number;
 }
 
 // ============================================================================
