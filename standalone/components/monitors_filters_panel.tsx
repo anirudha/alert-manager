@@ -45,11 +45,12 @@ export interface FilterState {
   createdBy: string[];
   destinations: string[];
   backend: string[];
+  datasourceId: string[];
 }
 
 export const emptyFilters = (): FilterState => ({
   status: [], severity: [], monitorType: [], healthStatus: [],
-  labels: {}, createdBy: [], destinations: [], backend: [],
+  labels: {}, createdBy: [], destinations: [], backend: [], datasourceId: [],
 });
 
 export interface SavedSearch {
@@ -68,6 +69,7 @@ interface MonitorsFiltersPanelProps {
   onSaveSearch: () => void;
   onLoadSearch: (search: SavedSearch) => void;
   onDeleteSearch: (id: string) => void;
+  datasources?: Array<{ id: string; name: string }>;
 }
 
 function collectUniqueValues(rules: UnifiedRule[], field: (r: UnifiedRule) => string | string[]): string[] {
@@ -106,9 +108,11 @@ export const MonitorsFiltersPanel: React.FC<MonitorsFiltersPanelProps> = ({
   onSaveSearch,
   onLoadSearch,
   onDeleteSearch,
+  datasources = [],
 }) => {
   const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
 
+  const dsNameMap = React.useMemo(() => new Map(datasources.map(d => [d.id, d.name])), [datasources]);
   const labelKeys = React.useMemo(() => collectLabelKeys(rules), [rules]);
   const uniqueStatuses = React.useMemo(() => collectUniqueValues(rules, r => r.status), [rules]);
   const uniqueSeverities = React.useMemo(() => collectUniqueValues(rules, r => r.severity), [rules]);
@@ -116,6 +120,7 @@ export const MonitorsFiltersPanel: React.FC<MonitorsFiltersPanelProps> = ({
   const uniqueHealth = React.useMemo(() => collectUniqueValues(rules, r => r.healthStatus), [rules]);
   const uniqueCreators = React.useMemo(() => collectUniqueValues(rules, r => r.createdBy), [rules]);
   const uniqueBackends = React.useMemo(() => collectUniqueValues(rules, r => r.datasourceType), [rules]);
+  const uniqueDatasources = React.useMemo(() => collectUniqueValues(rules, r => r.datasourceId), [rules]);
 
   const activeFilterCount = React.useMemo(() => {
     let count = 0;
@@ -125,6 +130,7 @@ export const MonitorsFiltersPanel: React.FC<MonitorsFiltersPanelProps> = ({
     count += filters.healthStatus.length;
     count += filters.createdBy.length;
     count += filters.backend.length;
+    count += filters.datasourceId.length;
     for (const vals of Object.values(filters.labels)) count += vals.length;
     return count;
   }, [filters]);
@@ -132,7 +138,7 @@ export const MonitorsFiltersPanel: React.FC<MonitorsFiltersPanelProps> = ({
   // Facet counts
   const facetCounts = React.useMemo(() => {
     const counts: Record<string, Record<string, number>> = {
-      status: {}, severity: {}, monitorType: {}, healthStatus: {}, backend: {}, createdBy: {},
+      status: {}, severity: {}, monitorType: {}, healthStatus: {}, backend: {}, createdBy: {}, datasourceId: {},
     };
     for (const r of rules) {
       counts.status[r.status] = (counts.status[r.status] || 0) + 1;
@@ -141,6 +147,7 @@ export const MonitorsFiltersPanel: React.FC<MonitorsFiltersPanelProps> = ({
       counts.healthStatus[r.healthStatus] = (counts.healthStatus[r.healthStatus] || 0) + 1;
       counts.backend[r.datasourceType] = (counts.backend[r.datasourceType] || 0) + 1;
       counts.createdBy[r.createdBy] = (counts.createdBy[r.createdBy] || 0) + 1;
+      counts.datasourceId[r.datasourceId] = (counts.datasourceId[r.datasourceId] || 0) + 1;
     }
     const labelCounts: Record<string, Record<string, number>> = {};
     for (const key of labelKeys) {
@@ -253,6 +260,52 @@ export const MonitorsFiltersPanel: React.FC<MonitorsFiltersPanelProps> = ({
 
   return (
     <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', overflow: 'auto' }}>
+      {/* Data Sources Section */}
+      <EuiText size="s"><strong>Data sources</strong></EuiText>
+      <EuiSpacer size="s" />
+      {uniqueDatasources.length > 0 ? (
+        <div style={{ paddingLeft: 8 }}>
+          {uniqueDatasources.map(datasourceId => {
+            const isActive = filters.datasourceId.includes(datasourceId);
+            const count = facetCounts.counts.datasourceId[datasourceId] || 0;
+            const checkboxId = `datasource-${datasourceId}`;
+            const displayName = dsNameMap.get(datasourceId) || datasourceId;
+            
+            const labelContent = (
+              <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                <EuiFlexItem>
+                  <EuiText size="s">{displayName}</EuiText>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiText size="xs" color="subdued">({count})</EuiText>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            );
+            
+            return (
+              <div key={datasourceId} style={{ marginBottom: 4 }}>
+                <EuiCheckbox
+                  id={checkboxId}
+                  label={labelContent}
+                  checked={isActive}
+                  onChange={() => {
+                    if (isActive) {
+                      updateFilter('datasourceId', filters.datasourceId.filter(s => s !== datasourceId));
+                    } else {
+                      updateFilter('datasourceId', [...filters.datasourceId, datasourceId]);
+                    }
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <EuiText size="s" color="subdued">No data sources available</EuiText>
+      )}
+      <EuiSpacer size="m" />
+
+      {/* Filters Section */}
       <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
         <EuiFlexItem>
           <EuiText size="s"><strong>Filters</strong></EuiText>

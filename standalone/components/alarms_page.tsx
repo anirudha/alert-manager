@@ -367,6 +367,11 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       result = result.filter(alert => alertFilters.datasourceType.includes(alert.datasourceType));
     }
     
+    // Filter by datasource ID
+    if (alertFilters.datasourceId.length > 0) {
+      result = result.filter(alert => alertFilters.datasourceId.includes(alert.datasourceId));
+    }
+    
     // Filter by labels
     for (const [key, values] of Object.entries(alertFilters.labels)) {
       if (values.length > 0) {
@@ -452,6 +457,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
                         alerts={alerts}
                         filters={alertFilters}
                         onFiltersChange={setAlertFilters}
+                        datasources={datasources}
                       />
                     </div>
                   </div>
@@ -654,6 +660,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
                         onSaveSearch={saveCurrentSearch}
                         onLoadSearch={loadSavedSearch}
                         onDeleteSearch={deleteSavedSearch}
+                        datasources={datasources}
                       />
                     </div>
                   </div>

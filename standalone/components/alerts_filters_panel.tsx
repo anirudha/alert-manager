@@ -27,18 +27,20 @@ export interface AlertFilterState {
   state: string[];
   severity: string[];
   datasourceType: string[];
+  datasourceId: string[];
   labels: Record<string, string[]>;
   groupBy: 'none' | 'datasource' | 'state';
 }
 
 export const emptyAlertFilters = (): AlertFilterState => ({
-  state: [], severity: [], datasourceType: [], labels: {}, groupBy: 'none',
+  state: [], severity: [], datasourceType: [], datasourceId: [], labels: {}, groupBy: 'none',
 });
 
 interface AlertsFiltersPanelProps {
   alerts: UnifiedAlert[];
   filters: AlertFilterState;
   onFiltersChange: (filters: AlertFilterState) => void;
+  datasources?: Array<{ id: string; name: string }>;
 }
 
 function collectUniqueValues(alerts: UnifiedAlert[], field: (a: UnifiedAlert) => string): string[] {
@@ -71,6 +73,7 @@ export const AlertsFiltersPanel: React.FC<AlertsFiltersPanelProps> = ({
   alerts,
   filters,
   onFiltersChange,
+  datasources = [],
 }) => {
   const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
 
@@ -79,16 +82,19 @@ export const AlertsFiltersPanel: React.FC<AlertsFiltersPanelProps> = ({
     { id: 'datasource', label: 'Data Source' },
   ];
 
+  const dsNameMap = React.useMemo(() => new Map(datasources.map(d => [d.id, d.name])), [datasources]);
   const labelKeys = React.useMemo(() => collectLabelKeys(alerts), [alerts]);
   const uniqueStates = React.useMemo(() => collectUniqueValues(alerts, a => a.state), [alerts]);
   const uniqueSeverities = React.useMemo(() => collectUniqueValues(alerts, a => a.severity), [alerts]);
   const uniqueBackends = React.useMemo(() => collectUniqueValues(alerts, a => a.datasourceType), [alerts]);
+  const uniqueDatasources = React.useMemo(() => collectUniqueValues(alerts, a => a.datasourceId), [alerts]);
 
   const activeFilterCount = React.useMemo(() => {
     let count = 0;
     count += filters.state.length;
     count += filters.severity.length;
     count += filters.datasourceType.length;
+    count += filters.datasourceId.length;
     for (const vals of Object.values(filters.labels)) count += vals.length;
     return count;
   }, [filters]);
@@ -96,12 +102,13 @@ export const AlertsFiltersPanel: React.FC<AlertsFiltersPanelProps> = ({
   // Facet counts
   const facetCounts = React.useMemo(() => {
     const counts: Record<string, Record<string, number>> = {
-      state: {}, severity: {}, datasourceType: {},
+      state: {}, severity: {}, datasourceType: {}, datasourceId: {},
     };
     for (const a of alerts) {
       counts.state[a.state] = (counts.state[a.state] || 0) + 1;
       counts.severity[a.severity] = (counts.severity[a.severity] || 0) + 1;
       counts.datasourceType[a.datasourceType] = (counts.datasourceType[a.datasourceType] || 0) + 1;
+      counts.datasourceId[a.datasourceId] = (counts.datasourceId[a.datasourceId] || 0) + 1;
     }
     const labelCounts: Record<string, Record<string, number>> = {};
     for (const key of labelKeys) {
@@ -212,6 +219,51 @@ export const AlertsFiltersPanel: React.FC<AlertsFiltersPanelProps> = ({
 
   return (
     <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', overflow: 'auto' }}>
+      {/* Data Sources Section */}
+      <EuiText size="s"><strong>Data sources</strong></EuiText>
+      <EuiSpacer size="s" />
+      {uniqueDatasources.length > 0 ? (
+        <div style={{ paddingLeft: 8 }}>
+          {uniqueDatasources.map(datasourceId => {
+            const isActive = filters.datasourceId.includes(datasourceId);
+            const count = facetCounts.counts.datasourceId[datasourceId] || 0;
+            const checkboxId = `datasource-${datasourceId}`;
+            const displayName = dsNameMap.get(datasourceId) || datasourceId;
+            
+            const labelContent = (
+              <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                <EuiFlexItem>
+                  <EuiText size="s">{displayName}</EuiText>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiText size="xs" color="subdued">({count})</EuiText>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            );
+            
+            return (
+              <div key={datasourceId} style={{ marginBottom: 4 }}>
+                <EuiCheckbox
+                  id={checkboxId}
+                  label={labelContent}
+                  checked={isActive}
+                  onChange={() => {
+                    if (isActive) {
+                      updateFilter('datasourceId', filters.datasourceId.filter(s => s !== datasourceId));
+                    } else {
+                      updateFilter('datasourceId', [...filters.datasourceId, datasourceId]);
+                    }
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <EuiText size="s" color="subdued">No data sources available</EuiText>
+      )}
+      <EuiSpacer size="m" />
+
       {/* Group By Section */}
       <EuiText size="s"><strong>Group by</strong></EuiText>
       <EuiSpacer size="s" />
@@ -244,8 +296,6 @@ export const AlertsFiltersPanel: React.FC<AlertsFiltersPanelProps> = ({
         (v) => updateFilter('state', v), facetCounts.counts.state, STATE_COLORS)}
       {renderFacetGroup('severity', 'Severity', uniqueSeverities, filters.severity,
         (v) => updateFilter('severity', v), facetCounts.counts.severity, SEVERITY_COLORS)}
-      {renderFacetGroup('datasourceType', 'Backend', uniqueBackends, filters.datasourceType,
-        (v) => updateFilter('datasourceType', v), facetCounts.counts.datasourceType)}
 
       {labelKeys.length > 0 && (
         <>

@@ -76,11 +76,12 @@ interface FilterState {
   createdBy: string[];
   destinations: string[];
   backend: string[];
+  datasourceId: string[];
 }
 
 const emptyFilters = (): FilterState => ({
   status: [], severity: [], monitorType: [], healthStatus: [],
-  labels: {}, createdBy: [], destinations: [], backend: [],
+  labels: {}, createdBy: [], destinations: [], backend: [], datasourceId: [],
 });
 
 interface MonitorsTableProps {
@@ -147,6 +148,7 @@ function matchesFilters(rule: UnifiedRule, filters: FilterState): boolean {
   if (filters.healthStatus.length > 0 && !filters.healthStatus.includes(rule.healthStatus)) return false;
   if (filters.createdBy.length > 0 && !filters.createdBy.includes(rule.createdBy)) return false;
   if (filters.backend.length > 0 && !filters.backend.includes(rule.datasourceType)) return false;
+  if (filters.datasourceId.length > 0 && !filters.datasourceId.includes(rule.datasourceId)) return false;
   if (filters.destinations.length > 0) {
     const hasMatch = rule.notificationDestinations.some(d => filters.destinations.includes(d));
     if (!hasMatch) return false;
@@ -497,6 +499,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     count += filters.createdBy.length;
     count += filters.destinations.length;
     count += filters.backend.length;
+    count += filters.datasourceId.length;
     for (const vals of Object.values(filters.labels)) count += vals.length;
     return count;
   }, [filters]);
