@@ -17,6 +17,7 @@ import {
   EuiFilterGroup,
   EuiFilterButton,
   EuiCheckboxGroup,
+  EuiCheckbox,
   EuiEmptyPrompt,
   EuiConfirmModal,
   EuiIcon,
@@ -27,6 +28,7 @@ import {
   EuiListGroup,
   EuiListGroupItem,
   EuiButtonIcon,
+  EuiResizableContainer,
 } from '@opensearch-project/oui';
 import {
   UnifiedRule,
@@ -92,6 +94,7 @@ interface MonitorsTableProps {
   onClone?: (monitor: UnifiedRule) => void;
   onSilence?: (id: string) => void;
   onImport?: (configs: any[]) => void;
+  onCreateMonitor?: () => void;
 }
 
 // ============================================================================
@@ -399,7 +402,7 @@ function useResizableColumns(
 // Main Component
 // ============================================================================
 
-export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources, loading, onDelete, onClone, onSilence, onImport }) => {
+export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources, loading, onDelete, onClone, onSilence, onImport, onCreateMonitor }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [sortField, setSortField] = useState<string>('name');
@@ -415,6 +418,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
+  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -823,42 +827,30 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
               const isActive = selected.includes(opt);
               const count = counts[opt] || 0;
               const displayLabel = displayMap?.[opt] || opt;
+              const checkboxId = `${id}-${opt}`;
+              
+              const labelContent = (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
+                    {colorMap && <EuiHealth color={colorMap[opt] || 'subdued'} style={{ marginRight: 0 }} />}
+                    <span style={{ fontSize: '12px', lineHeight: '18px' }}>{displayLabel}</span>
+                  </span>
+                  <span style={{ fontSize: '12px', lineHeight: '18px', color: '#69707D' }}>({count})</span>
+                </span>
+              );
+
               return (
-                <div
-                  key={opt}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (isActive) onChange(selected.filter(s => s !== opt));
-                    else onChange([...selected, opt]);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
+                <div key={opt} style={{ marginBottom: 2 }}>
+                  <EuiCheckbox
+                    id={checkboxId}
+                    label={labelContent}
+                    checked={isActive}
+                    onChange={() => {
                       if (isActive) onChange(selected.filter(s => s !== opt));
                       else onChange([...selected, opt]);
-                    }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '3px 6px', borderRadius: 4, cursor: 'pointer', marginBottom: 1,
-                    backgroundColor: isActive ? '#E6F0FF' : 'transparent',
-                    fontWeight: isActive ? 600 : 400,
-                  }}
-                  aria-label={`Filter by ${label}: ${displayLabel}`}
-                  aria-pressed={isActive}
-                >
-                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-                    {colorMap && (
-                      <EuiFlexItem grow={false}>
-                        <EuiHealth color={colorMap[opt] || 'subdued'} />
-                      </EuiFlexItem>
-                    )}
-                    <EuiFlexItem grow={false}>
-                      <EuiText size="xs" style={{ lineHeight: '18px' }}>{displayLabel}</EuiText>
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
-                  <EuiText size="xs" color="subdued" style={{ lineHeight: '18px' }}>{count}</EuiText>
+                    }}
+                    compressed
+                  />
                 </div>
               );
             })}
@@ -869,23 +861,34 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   };
 
   return (
-    <EuiFlexGroup gutterSize="m" responsive={false} style={{ height: 'calc(100vh - 260px)', minHeight: 400 }}>
-      {/* ===== Left Facet Sidebar ===== */}
-      <EuiFlexItem grow={false} style={{ width: 220, minWidth: 220 }}>
-        <EuiPanel paddingSize="s" hasBorder style={{ position: 'sticky', top: 8, maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
-          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
-            <EuiFlexItem>
-              <EuiText size="xs"><strong>Filters</strong></EuiText>
-            </EuiFlexItem>
-            {activeFilterCount > 0 && (
-              <EuiFlexItem grow={false}>
-                <EuiButtonEmpty size="xs" onClick={clearAllFilters} flush="right">
-                  Clear ({activeFilterCount})
-                </EuiButtonEmpty>
-              </EuiFlexItem>
-            )}
-          </EuiFlexGroup>
-          <EuiSpacer size="s" />
+    <EuiResizableContainer style={{ height: 'calc(100vh - 250px)' }}>
+      {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
+        return (
+          <>
+            <EuiResizablePanel
+              id="filters-panel"
+              initialSize={20}
+              minSize="200px"
+              mode={['collapsible', { position: 'top' }]}
+              onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+              paddingSize="none"
+              style={{ overflow: 'hidden', paddingRight: '4px' }}
+            >
+              <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
+                    <EuiFlexItem>
+                      <EuiText size="xs"><strong>Filters</strong></EuiText>
+                    </EuiFlexItem>
+                    {activeFilterCount > 0 && (
+                      <EuiFlexItem grow={false}>
+                        <EuiButtonEmpty size="xs" onClick={clearAllFilters} flush="right">
+                          Clear ({activeFilterCount})
+                        </EuiButtonEmpty>
+                      </EuiFlexItem>
+                    )}
+                  </EuiFlexGroup>
+                  <EuiSpacer size="s" />
 
           {renderFacetGroup('status', 'Status', uniqueStatuses, filters.status,
             (v) => updateFilter('status', v as MonitorStatus[]), facetCounts.counts.status, undefined, STATUS_COLORS)}
@@ -945,159 +948,183 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
             disabled={!searchQuery && activeFilterCount === 0} flush="left">
             Save current
           </EuiButtonEmpty>
-        </EuiPanel>
-      </EuiFlexItem>
-
-      {/* ===== Right Content Area ===== */}
-      <EuiFlexItem style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        {/* Search bar with suggestions */}
-        <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
-          <EuiFieldSearch
-            placeholder="Search monitors by name, labels (team:infra), annotations..."
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); setActiveSuggestion(-1); }}
-            onFocus={() => searchQuery && setShowSuggestions(true)}
-            onKeyDown={handleSearchKeyDown}
-            isClearable
-            fullWidth
-            aria-label="Search monitors"
-          />
-          {showSuggestions && suggestions.length > 0 && (
-            <EuiPanel
-              paddingSize="none"
-              style={{
-                position: 'absolute', top: '100%', left: 0, right: 0,
-                zIndex: 1000, maxHeight: 250, overflow: 'auto',
-                border: '1px solid #D3DAE6', borderTop: 'none',
-              }}
-            >
-              {suggestions.map((s, i) => (
-                <div
-                  key={s}
-                  style={{
-                    padding: '6px 12px', cursor: 'pointer',
-                    background: i === activeSuggestion ? '#E6F0FF' : 'white',
-                  }}
-                  onMouseDown={() => { setSearchQuery(s); setShowSuggestions(false); }}
-                  onMouseEnter={() => setActiveSuggestion(i)}
-                >
-                  <EuiText size="s">{s}</EuiText>
                 </div>
-              ))}
-            </EuiPanel>
+              </EuiPanel>
+            </EuiResizablePanel>
+
+            <EuiResizableButton />
+
+            <EuiResizablePanel
+              initialSize={80}
+              minSize="400px"
+              mode="main"
+              paddingSize="none"
+              style={{ paddingLeft: '4px' }}
+            >
+              <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Create Monitor Button */}
+          {onCreateMonitor && (
+            <>
+              <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
+                <EuiFlexItem grow={false}>
+                  <EuiButton fill iconType="plusInCircle" size="s" onClick={onCreateMonitor}>
+                    Create Monitor
+                  </EuiButton>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+              <EuiSpacer size="s" />
+            </>
           )}
-        </div>
 
-        <EuiSpacer size="s" />
-
-        {/* Action bar */}
-        <div style={{ flexShrink: 0 }}>
-        <EuiFlexGroup gutterSize="s" alignItems="center" justifyContent="spaceBetween">
-          <EuiFlexItem grow={false}>
-            <EuiFlexGroup gutterSize="s" alignItems="center">
-              <EuiFlexItem grow={false}>
-                <EuiText size="s">
-                  <strong>{filtered.length}</strong> monitors
-                  {selectedIds.size > 0 && <span> · <strong>{selectedIds.size}</strong> selected</span>}
-                  {activeFilterCount > 0 && <span> · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>}
-                </EuiText>
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiFlexGroup gutterSize="s">
-              {selectedIds.size > 0 && (
-                <EuiFlexItem grow={false}>
-                  <EuiButton color="danger" size="s" iconType="trash" onClick={() => setShowDeleteConfirm(true)}>
-                    Delete ({selectedIds.size})
-                  </EuiButton>
-                </EuiFlexItem>
-              )}
-              <EuiFlexItem grow={false}>
-                <EuiButton size="s" iconType="exportAction" onClick={exportJson} isDisabled={filtered.length === 0}>
-                  Export
-                </EuiButton>
-              </EuiFlexItem>
-              {onImport && (
-                <EuiFlexItem grow={false}>
-                  <EuiButton size="s" iconType="importAction" onClick={handleImportFile}>
-                    Import
-                  </EuiButton>
-                </EuiFlexItem>
-              )}
-              <EuiFlexItem grow={false}>
-                <EuiPopover
-                  button={
-                    <EuiButton size="s" iconType="listAdd" onClick={() => setShowColumnPicker(!showColumnPicker)}>
-                      Columns
-                    </EuiButton>
-                  }
-                  isOpen={showColumnPicker}
-                  closePopover={() => setShowColumnPicker(false)}
-                  panelPaddingSize="s"
-                >
-                  <div style={{ width: 250, maxHeight: 400, overflow: 'auto' }}>
-                    <EuiText size="xs"><strong>Toggle columns</strong></EuiText>
-                    <EuiSpacer size="xs" />
-                    <EuiCheckboxGroup
-                      options={allColumns.map(c => ({ id: c.id, label: c.label }))}
-                      idToSelectedMap={Object.fromEntries(allColumns.map(c => [c.id, visibleColumns.has(c.id)]))}
-                      onChange={(id) => {
-                        const next = new Set(visibleColumns);
-                        if (next.has(id)) next.delete(id); else next.add(id);
-                        setVisibleColumns(next);
-                      }}
-                    />
+          {/* Search bar with suggestions */}
+          <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <EuiFieldSearch
+              placeholder="Search monitors by name, labels (team:infra), annotations..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); setActiveSuggestion(-1); }}
+              onFocus={() => searchQuery && setShowSuggestions(true)}
+              onKeyDown={handleSearchKeyDown}
+              isClearable
+              fullWidth
+              aria-label="Search monitors"
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <EuiPanel
+                paddingSize="none"
+                style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0,
+                  zIndex: 1000, maxHeight: 250, overflow: 'auto',
+                  border: '1px solid #D3DAE6', borderTop: 'none',
+                }}
+              >
+                {suggestions.map((s, i) => (
+                  <div
+                    key={s}
+                    style={{
+                      padding: '6px 12px', cursor: 'pointer',
+                      background: i === activeSuggestion ? '#E6F0FF' : 'white',
+                    }}
+                    onMouseDown={() => { setSearchQuery(s); setShowSuggestions(false); }}
+                    onMouseEnter={() => setActiveSuggestion(i)}
+                  >
+                    <EuiText size="s">{s}</EuiText>
                   </div>
-                </EuiPopover>
+                ))}
+              </EuiPanel>
+            )}
+          </div>
+
+          <EuiSpacer size="s" />
+
+          {/* Action bar */}
+          <div style={{ flexShrink: 0 }}>
+            <EuiFlexGroup gutterSize="s" alignItems="center" justifyContent="spaceBetween">
+              <EuiFlexItem grow={false}>
+                <EuiFlexGroup gutterSize="s" alignItems="center">
+                  <EuiFlexItem grow={false}>
+                    <EuiText size="s">
+                      <strong>{filtered.length}</strong> monitors
+                      {selectedIds.size > 0 && <span> · <strong>{selectedIds.size}</strong> selected</span>}
+                      {activeFilterCount > 0 && <span> · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>}
+                    </EuiText>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiFlexGroup gutterSize="s">
+                  {selectedIds.size > 0 && (
+                    <EuiFlexItem grow={false}>
+                      <EuiButton color="danger" size="s" iconType="trash" onClick={() => setShowDeleteConfirm(true)}>
+                        Delete ({selectedIds.size})
+                      </EuiButton>
+                    </EuiFlexItem>
+                  )}
+                  <EuiFlexItem grow={false}>
+                    <EuiButton size="s" iconType="exportAction" onClick={exportJson} isDisabled={filtered.length === 0}>
+                      Export
+                    </EuiButton>
+                  </EuiFlexItem>
+                  {onImport && (
+                    <EuiFlexItem grow={false}>
+                      <EuiButton size="s" iconType="importAction" onClick={handleImportFile}>
+                        Import
+                      </EuiButton>
+                    </EuiFlexItem>
+                  )}
+                  <EuiFlexItem grow={false}>
+                    <EuiPopover
+                      button={
+                        <EuiButton size="s" iconType="listAdd" onClick={() => setShowColumnPicker(!showColumnPicker)}>
+                          Columns
+                        </EuiButton>
+                      }
+                      isOpen={showColumnPicker}
+                      closePopover={() => setShowColumnPicker(false)}
+                      panelPaddingSize="s"
+                    >
+                      <div style={{ width: 250, maxHeight: 400, overflow: 'auto' }}>
+                        <EuiText size="xs"><strong>Toggle columns</strong></EuiText>
+                        <EuiSpacer size="xs" />
+                        <EuiCheckboxGroup
+                          options={allColumns.map(c => ({ id: c.id, label: c.label }))}
+                          idToSelectedMap={Object.fromEntries(allColumns.map(c => [c.id, visibleColumns.has(c.id)]))}
+                          onChange={(id) => {
+                            const next = new Set(visibleColumns);
+                            if (next.has(id)) next.delete(id); else next.add(id);
+                            setVisibleColumns(next);
+                          }}
+                        />
+                      </div>
+                    </EuiPopover>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
               </EuiFlexItem>
             </EuiFlexGroup>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-        </div>
+          </div>
 
-        <EuiSpacer size="s" />
+          <EuiSpacer size="s" />
 
-        {/* Table */}
-        <div style={{ overflowX: 'auto', overflowY: 'auto', flex: '1 1 auto', minHeight: 200 }} className="monitors-table-wrapper" ref={tableWrapperRef}>
-          <style>{`
-            .monitors-table-wrapper .euiTable { table-layout: auto; min-width: 100%; }
-            .monitors-table-wrapper .euiTableHeaderCell { position: relative; border-right: 1px solid #D3DAE6; }
-            .monitors-table-wrapper .euiTableHeaderCell:last-child { border-right: none; }
-            .monitors-table-wrapper .euiTableRowCell { border-right: 1px solid #EDF0F5; }
-            .monitors-table-wrapper .euiTableRowCell:last-child { border-right: none; }
-          `}</style>
-      {!loading && filtered.length === 0 ? (
-        <EuiEmptyPrompt
-          title={<h2>No Monitors Found</h2>}
-          body={
-            <p>
-              {rules.length === 0
-                ? 'No monitors configured yet.'
-                : 'No monitors match your current search and filters.'}
-            </p>
-          }
-          actions={
-            activeFilterCount > 0 || searchQuery ? (
-              <EuiButton onClick={clearAllFilters}>Clear filters</EuiButton>
-            ) : undefined
-          }
-        />
-      ) : (
-        <EuiBasicTable
-          items={filtered}
-          columns={tableColumns}
-          loading={loading}
-          sorting={{
-            sort: { field: sortField as any, direction: sortDirection },
-          }}
-          onChange={onTableChange}
-          rowProps={(item: UnifiedRule) => ({
-            style: selectedIds.has(item.id) ? { backgroundColor: '#F0F5FF' } : undefined,
-          })}
-        />
-        )}
-        </div>
+          {/* Table */}
+          <div style={{ overflowX: 'auto', overflowY: 'auto', minHeight: 300, maxHeight: 'calc(100vh - 400px)' }} className="monitors-table-wrapper" ref={tableWrapperRef}>
+            <style>{`
+              .monitors-table-wrapper .euiTable { table-layout: auto; min-width: 100%; }
+              .monitors-table-wrapper .euiTableHeaderCell { position: relative; border-right: 1px solid #D3DAE6; }
+              .monitors-table-wrapper .euiTableHeaderCell:last-child { border-right: none; }
+              .monitors-table-wrapper .euiTableRowCell { border-right: 1px solid #EDF0F5; }
+              .monitors-table-wrapper .euiTableRowCell:last-child { border-right: none; }
+            `}</style>
+            {!loading && filtered.length === 0 ? (
+              <EuiEmptyPrompt
+                title={<h2>No Monitors Found</h2>}
+                body={
+                  <p>
+                    {rules.length === 0
+                      ? 'No monitors configured yet.'
+                      : 'No monitors match your current search and filters.'}
+                  </p>
+                }
+                actions={
+                  activeFilterCount > 0 || searchQuery ? (
+                    <EuiButton onClick={clearAllFilters}>Clear filters</EuiButton>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <EuiBasicTable
+                items={filtered}
+                columns={tableColumns}
+                loading={loading}
+                sorting={{
+                  sort: { field: sortField as any, direction: sortDirection },
+                }}
+                onChange={onTableChange}
+                rowProps={(item: UnifiedRule) => ({
+                  style: selectedIds.has(item.id) ? { backgroundColor: '#F0F5FF' } : undefined,
+                })}
+              />
+            )}
+          </div>
+        </EuiPanel>
 
         {/* Delete confirmation modal */}
         {showDeleteConfirm && (
@@ -1135,7 +1162,11 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
             }}
           />
         )}
-      </EuiFlexItem>
-    </EuiFlexGroup>
+      </EuiResizablePanel>
+    </>
+  );
+}}
+</EuiResizableContainer>
   );
 };
+

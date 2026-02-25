@@ -700,7 +700,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     if (activeTab === 'rules') {
       if (noDatasourceSelected) {
         return (
-          <>
+          <EuiPanel paddingSize="m" hasBorder>
             <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
               <EuiFlexItem grow={false}>
                 <EuiButton fill iconType="plusInCircle" size="s" onClick={() => setShowCreateMonitor(true)}>
@@ -714,37 +714,20 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
               title={<h3>Select a datasource</h3>}
               body={<p>Choose a datasource above to view rules. For Prometheus datasources, select a specific workspace.</p>}
             />
-          </>
+          </EuiPanel>
         );
       }
       return (
-        <>
-          <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
-            <EuiFlexItem grow={false}>
-              <EuiButton fill iconType="plusInCircle" size="s" onClick={() => setShowCreateMonitor(true)}>
-                Create Monitor
-              </EuiButton>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-          <EuiSpacer size="s" />
-          <MonitorsTable
-            rules={visibleRules}
-            datasources={datasources}
-            loading={dataLoading}
-            onDelete={handleDeleteRules}
-            onSilence={handleSilenceRule}
-            onClone={handleCloneRule}
-            onImport={handleImportMonitors}
-          />
-          <PaginationBar
-            page={rulesPage}
-            pageSize={rulesPageSize}
-            total={rulesTotal}
-            hasMore={rulesHasMore}
-            onPageChange={setRulesPage}
-            onPageSizeChange={(size) => { setRulesPageSize(size); setRulesPage(1); }}
-          />
-        </>
+        <MonitorsTable
+          rules={visibleRules}
+          datasources={datasources}
+          loading={dataLoading}
+          onDelete={handleDeleteRules}
+          onSilence={handleSilenceRule}
+          onClone={handleCloneRule}
+          onImport={handleImportMonitors}
+          onCreateMonitor={() => setShowCreateMonitor(true)}
+        />
       );
     }
     if (activeTab === 'routing') {
@@ -758,7 +741,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   };
 
   return (
-    <EuiPage restrictWidth="1200px">
+    <EuiPage>
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>
