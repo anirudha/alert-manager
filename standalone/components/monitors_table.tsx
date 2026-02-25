@@ -28,6 +28,7 @@ import {
   EuiListGroup,
   EuiListGroupItem,
   EuiButtonIcon,
+  EuiResizableContainer,
 } from '@opensearch-project/oui';
 import {
   UnifiedRule,
@@ -417,6 +418,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
+  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -859,23 +861,34 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   };
 
   return (
-    <EuiFlexGroup gutterSize="m" responsive={false} alignItems="flexStart" style={{ minHeight: 400 }}>
-      {/* ===== Left Facet Sidebar ===== */}
-      <EuiFlexItem grow={false} style={{ width: 220, minWidth: 220 }}>
-        <EuiPanel paddingSize="s" hasBorder style={{ position: 'sticky', top: 8, maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
-          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
-            <EuiFlexItem>
-              <EuiText size="xs"><strong>Filters</strong></EuiText>
-            </EuiFlexItem>
-            {activeFilterCount > 0 && (
-              <EuiFlexItem grow={false}>
-                <EuiButtonEmpty size="xs" onClick={clearAllFilters} flush="right">
-                  Clear ({activeFilterCount})
-                </EuiButtonEmpty>
-              </EuiFlexItem>
-            )}
-          </EuiFlexGroup>
-          <EuiSpacer size="s" />
+    <EuiResizableContainer style={{ height: 'calc(100vh - 250px)' }}>
+      {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
+        return (
+          <>
+            <EuiResizablePanel
+              id="filters-panel"
+              initialSize={20}
+              minSize="200px"
+              mode={['collapsible', { position: 'top' }]}
+              onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+              paddingSize="none"
+              style={{ overflow: 'hidden', paddingRight: '4px' }}
+            >
+              <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
+                    <EuiFlexItem>
+                      <EuiText size="xs"><strong>Filters</strong></EuiText>
+                    </EuiFlexItem>
+                    {activeFilterCount > 0 && (
+                      <EuiFlexItem grow={false}>
+                        <EuiButtonEmpty size="xs" onClick={clearAllFilters} flush="right">
+                          Clear ({activeFilterCount})
+                        </EuiButtonEmpty>
+                      </EuiFlexItem>
+                    )}
+                  </EuiFlexGroup>
+                  <EuiSpacer size="s" />
 
           {renderFacetGroup('status', 'Status', uniqueStatuses, filters.status,
             (v) => updateFilter('status', v as MonitorStatus[]), facetCounts.counts.status, undefined, STATUS_COLORS)}
@@ -935,12 +948,20 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
             disabled={!searchQuery && activeFilterCount === 0} flush="left">
             Save current
           </EuiButtonEmpty>
-        </EuiPanel>
-      </EuiFlexItem>
+                </div>
+              </EuiPanel>
+            </EuiResizablePanel>
 
-      {/* ===== Right Content Area ===== */}
-      <EuiFlexItem style={{ display: 'flex', flexDirection: 'column' }}>
-        <EuiPanel paddingSize="m" hasBorder style={{ display: 'flex', flexDirection: 'column', minHeight: 400 }}>
+            <EuiResizableButton />
+
+            <EuiResizablePanel
+              initialSize={80}
+              minSize="400px"
+              mode="main"
+              paddingSize="none"
+              style={{ paddingLeft: '4px' }}
+            >
+              <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           {/* Create Monitor Button */}
           {onCreateMonitor && (
             <>
@@ -1141,7 +1162,11 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
             }}
           />
         )}
-      </EuiFlexItem>
-    </EuiFlexGroup>
+      </EuiResizablePanel>
+    </>
+  );
+}}
+</EuiResizableContainer>
   );
 };
+
