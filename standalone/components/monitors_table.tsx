@@ -95,6 +95,13 @@ interface MonitorsTableProps {
   onSilence?: (id: string) => void;
   onImport?: (configs: any[]) => void;
   onCreateMonitor?: () => void;
+  /** Workspace-scoped entries for Prometheus datasources */
+  workspaceOptions: Datasource[];
+  loadingWorkspaces: boolean;
+  /** Currently selected datasource IDs */
+  selectedDsIds: string[];
+  /** Callback when datasource selection changes */
+  onDatasourceChange: (ids: string[]) => void;
 }
 
 // ============================================================================
@@ -402,7 +409,7 @@ function useResizableColumns(
 // Main Component
 // ============================================================================
 
-export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources, loading, onDelete, onClone, onSilence, onImport, onCreateMonitor }) => {
+export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources, loading, onDelete, onClone, onSilence, onImport, onCreateMonitor, workspaceOptions, loadingWorkspaces, selectedDsIds, onDatasourceChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [sortField, setSortField] = useState<string>('name');
@@ -423,6 +430,30 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const tableWrapperRef = useRef<HTMLDivElement>(null);
 
   const dsNameMap = useMemo(() => new Map(datasources.map(d => [d.id, d.name])), [datasources]);
+
+  // Build selectable datasource entries for the filter facet
+  const datasourceEntries = useMemo(() => {
+    const entries: Array<{ id: string; label: string }> = [];
+    for (const ds of datasources) {
+      if (ds.type !== 'prometheus') {
+        entries.push({ id: ds.id, label: ds.name });
+      }
+    }
+    for (const ws of workspaceOptions) {
+      const parent = datasources.find(d => d.id === ws.parentDatasourceId);
+      const label = parent ? `${parent.name} / ${ws.workspaceName || ws.name}` : ws.name;
+      entries.push({ id: ws.id, label });
+    }
+    if (workspaceOptions.length === 0 && !loadingWorkspaces) {
+      for (const ds of datasources) {
+        if (ds.type === 'prometheus') {
+          entries.push({ id: ds.id, label: ds.name });
+        }
+      }
+    }
+    return entries;
+  }, [datasources, workspaceOptions, loadingWorkspaces]);
+
   const allSuggestions = useMemo(() => buildSuggestions(rules), [rules]);
   const labelKeys = useMemo(() => collectLabelKeys(rules), [rules]);
 
@@ -890,6 +921,13 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                   </EuiFlexGroup>
                   <EuiSpacer size="s" />
 
+          {/* Datasource filter */}
+          {renderFacetGroup('datasource', 'Datasource', datasourceEntries.map(e => e.label), selectedDsIds.map(id => datasourceEntries.find(e => e.id === id)?.label || '').filter(Boolean),
+            (labels) => {
+              const ids = labels.map(l => datasourceEntries.find(e => e.label === l)?.id).filter(Boolean) as string[];
+              onDatasourceChange(ids);
+            }, Object.fromEntries(datasourceEntries.map(e => [e.label, selectedDsIds.includes(e.id) || selectedDsIds.length === 0 ? 1 : 0])))}
+
           {renderFacetGroup('status', 'Status', uniqueStatuses, filters.status,
             (v) => updateFilter('status', v as MonitorStatus[]), facetCounts.counts.status, undefined, STATUS_COLORS)}
           {renderFacetGroup('severity', 'Severity', uniqueSeverities, filters.severity,
@@ -961,7 +999,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
               paddingSize="none"
               style={{ paddingLeft: '4px' }}
             >
-              <EuiPanel paddingSize="m" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           {/* Create Monitor Button */}
           {onCreateMonitor && (
             <>
@@ -972,7 +1010,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                   </EuiButton>
                 </EuiFlexItem>
               </EuiFlexGroup>
-              <EuiSpacer size="s" />
+              <EuiSpacer size="xs" />
             </>
           )}
 

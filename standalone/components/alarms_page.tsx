@@ -652,15 +652,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const renderTable = () => {
     if (activeTab === 'alerts') {
-      if (noDatasourceSelected) {
-        return (
-          <EuiEmptyPrompt
-            iconType="database"
-            title={<h3>Select a datasource</h3>}
-            body={<p>Choose a datasource above to view alerts. For Prometheus datasources, select a specific workspace.</p>}
-          />
-        );
-      }
       return (
         <>
           <AlertsDashboard
@@ -670,38 +661,16 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             onViewDetail={(alert) => setSelectedAlert(alert)}
             onAcknowledge={handleAcknowledgeAlert}
             onSilence={handleSilenceAlert}
+            workspaceOptions={workspaceOptions}
+            loadingWorkspaces={loadingWorkspaces}
+            selectedDsIds={selectedDsIds}
+            onDatasourceChange={handleDatasourceChange}
           />
-          <PaginationBar
-            page={alertsPage}
-            pageSize={alertsPageSize}
-            total={alertsTotal}
-            hasMore={alertsHasMore}
-            onPageChange={setAlertsPage}
-            onPageSizeChange={(size) => { setAlertsPageSize(size); setAlertsPage(1); }}
-          />
+
         </>
       );
     }
     if (activeTab === 'rules') {
-      if (noDatasourceSelected) {
-        return (
-          <EuiPanel paddingSize="m" hasBorder>
-            <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
-              <EuiFlexItem grow={false}>
-                <EuiButton fill iconType="plusInCircle" size="s" onClick={() => setShowCreateMonitor(true)}>
-                  Create Monitor
-                </EuiButton>
-              </EuiFlexItem>
-            </EuiFlexGroup>
-            <EuiSpacer size="m" />
-            <EuiEmptyPrompt
-              iconType="database"
-              title={<h3>Select a datasource</h3>}
-              body={<p>Choose a datasource above to view rules. For Prometheus datasources, select a specific workspace.</p>}
-            />
-          </EuiPanel>
-        );
-      }
       return (
         <MonitorsTable
           rules={visibleRules}
@@ -712,6 +681,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           onClone={handleCloneRule}
           onImport={handleImportMonitors}
           onCreateMonitor={() => setShowCreateMonitor(true)}
+          workspaceOptions={workspaceOptions}
+          loadingWorkspaces={loadingWorkspaces}
+          selectedDsIds={selectedDsIds}
+          onDatasourceChange={handleDatasourceChange}
         />
       );
     }
@@ -740,17 +713,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         </EuiTabs>
         <EuiSpacer size="s" />
 
-        {/* Datasource selector for alerts and rules tabs */}
-        {(activeTab === 'alerts' || activeTab === 'rules') && (
-          <DatasourceSelector
-            datasources={datasources}
-            selectedIds={selectedDsIds}
-            onSelectionChange={handleDatasourceChange}
-            loading={loading}
-            workspaceOptions={workspaceOptions}
-            loadingWorkspaces={loadingWorkspaces}
-          />
-        )}
+        {/* Datasource selector removed — now integrated into filter panels */}
 
         {error && (
           <EuiCallOut title="Error loading data" color="danger" iconType="alert" size="s" style={{ marginBottom: 12 }}>

@@ -2,7 +2,7 @@
  * Alerts Dashboard — visualization-first view of alert history
  * with summary stats, charts, and drill-down table.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   EuiFlexGroup,
   EuiFlexItem,
@@ -348,21 +348,57 @@ export interface AlertsDashboardProps {
   onViewDetail: (alert: UnifiedAlert) => void;
   onAcknowledge: (alertId: string) => void;
   onSilence: (alertId: string) => void;
+  /** Workspace-scoped entries for Prometheus datasources */
+  workspaceOptions: Datasource[];
+  loadingWorkspaces: boolean;
+  /** Currently selected datasource IDs */
+  selectedDsIds: string[];
+  /** Callback when datasource selection changes */
+  onDatasourceChange: (ids: string[]) => void;
 }
 
 export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   alerts, datasources, loading, onViewDetail, onAcknowledge, onSilence,
+  workspaceOptions, loadingWorkspaces, selectedDsIds, onDatasourceChange,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [sortField, setSortField] = useState<string>('startTime');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState<AlertFilterState>(emptyAlertFilters());
   const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
 
   const dsNameMap = useMemo(() => new Map(datasources.map(d => [d.id, d.name])), [datasources]);
+
+  // Build selectable datasource entries for the filter facet
+  const datasourceEntries = useMemo(() => {
+    const entries: Array<{ id: string; label: string }> = [];
+    // Non-prometheus datasources
+    for (const ds of datasources) {
+      if (ds.type !== 'prometheus') {
+        entries.push({ id: ds.id, label: ds.name });
+      }
+    }
+    // Prometheus workspace-scoped entries
+    for (const ws of workspaceOptions) {
+      const parent = datasources.find(d => d.id === ws.parentDatasourceId);
+      const label = parent ? `${parent.name} / ${ws.workspaceName || ws.name}` : ws.name;
+      entries.push({ id: ws.id, label });
+    }
+    // Fallback: prometheus datasources with no workspaces
+    if (workspaceOptions.length === 0 && !loadingWorkspaces) {
+      for (const ds of datasources) {
+        if (ds.type === 'prometheus') {
+          entries.push({ id: ds.id, label: ds.name });
+        }
+      }
+    }
+    return entries;
+  }, [datasources, workspaceOptions, loadingWorkspaces]);
 
   // Unique values for facets
   const uniqueSeverities = useMemo(() => collectAlertUniqueValues(alerts, a => a.severity), [alerts]);
@@ -452,6 +488,21 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   const severityCounts = useMemo(() => countBy(filteredAlerts, a => a.severity), [filteredAlerts]);
   const activeCount = useMemo(() => filteredAlerts.filter(a => a.state === 'active').length, [filteredAlerts]);
   const isFiltered = activeFilterCount > 0 || searchQuery !== '' || severityFilter !== 'all' || stateFilter !== 'all';
+
+  // Reset to first page when filters change
+  useEffect(() => { setPageIndex(0); }, [filteredAlerts.length]);
+
+  const paginatedAlerts = useMemo(() => {
+    const start = pageIndex * pageSize;
+    return filteredAlerts.slice(start, start + pageSize);
+  }, [filteredAlerts, pageIndex, pageSize]);
+
+  const pagination = useMemo(() => ({
+    pageIndex,
+    pageSize,
+    totalItemCount: filteredAlerts.length,
+    pageSizeOptions: [10, 20, 50, 100],
+  }), [pageIndex, pageSize, filteredAlerts.length]);
 
   const onTableSort = (col: { field: string; direction: 'asc' | 'desc' }) => {
     setSortField(col.field);
@@ -645,6 +696,13 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                 </EuiFlexGroup>
                 <EuiSpacer size="s" />
 
+                {/* Datasource filter */}
+                {renderFacetGroup('datasource', 'Datasource', datasourceEntries.map(e => e.label), selectedDsIds.map(id => datasourceEntries.find(e => e.id === id)?.label || '').filter(Boolean),
+                  (labels) => {
+                    const ids = labels.map(l => datasourceEntries.find(e => e.label === l)?.id).filter(Boolean) as string[];
+                    onDatasourceChange(ids);
+                  }, countBy(datasourceEntries.filter(e => selectedDsIds.includes(e.id) || selectedDsIds.length === 0), e => e.label))}
+
                 {renderFacetGroup('severity', 'Severity', uniqueSeverities, filters.severity,
                   (v) => updateFilter('severity', v), facetCounts.counts.severity, SEVERITY_COLORS)}
                 {renderFacetGroup('state', 'State', uniqueStates, filters.state,
@@ -776,32 +834,38 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
             <EuiSpacer size="l" />
 
             {/* ---- Search + Table ---- */}
-            <EuiTitle size="xs"><h3>All Alerts</h3></EuiTitle>
-            <EuiSpacer size="s" />
-            <EuiFieldSearch
-              placeholder="Search alerts by name, message, or label..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              isClearable
-              fullWidth
-              aria-label="Search alerts"
-            />
-            <EuiSpacer size="s" />
-            <EuiText size="s">
-              <strong>{filteredAlerts.length}</strong> alerts
-              {activeFilterCount > 0 && <span> · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>}
-            </EuiText>
-            <EuiSpacer size="s" />
-            <EuiBasicTable
-              items={filteredAlerts}
-              columns={columns}
-              loading={loading}
-              sorting={{
-                sort: { field: sortField as any, direction: sortDirection },
-              }}
-              onChange={({ sort }: any) => { if (sort) onTableSort(sort); }}
-              noItemsMessage={searchQuery || activeFilterCount > 0 || severityFilter !== 'all' || stateFilter !== 'all' ? 'No alerts match your filters' : 'No alerts'}
-            />
+            <EuiPanel paddingSize="m" hasBorder>
+              <EuiTitle size="xs"><h3>All Alerts</h3></EuiTitle>
+              <EuiSpacer size="s" />
+              <EuiFieldSearch
+                placeholder="Search alerts by name, message, or label..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                isClearable
+                fullWidth
+                aria-label="Search alerts"
+              />
+              <EuiSpacer size="s" />
+              <EuiText size="s">
+                <strong>{filteredAlerts.length}</strong> alerts
+                {activeFilterCount > 0 && <span> · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>}
+              </EuiText>
+              <EuiSpacer size="s" />
+              <EuiBasicTable
+                items={paginatedAlerts}
+                columns={columns}
+                loading={loading}
+                pagination={pagination}
+                sorting={{
+                  sort: { field: sortField as any, direction: sortDirection },
+                }}
+                onChange={({ sort, page }: any) => {
+                  if (sort) onTableSort(sort);
+                  if (page) { setPageIndex(page.index); setPageSize(page.size); }
+                }}
+                noItemsMessage={searchQuery || activeFilterCount > 0 || severityFilter !== 'all' || stateFilter !== 'all' ? 'No alerts match your filters' : 'No alerts'}
+              />
+            </EuiPanel>
           </EuiResizablePanel>
         </>
       )}
