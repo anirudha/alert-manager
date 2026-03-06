@@ -307,7 +307,7 @@ interface AlarmsPageProps {
   apiClient: AlarmsApiClient;
 }
 
-type TabId = 'alerts' | 'rules' | 'routing' | 'suppression' | 'datasources';
+type TabId = 'alerts' | 'rules' | 'routing' | 'suppression';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -458,20 +458,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     setRulesPage(1);
     setDeletedRuleIds(new Set());
   }, []);
-
-  // ---- Datasource columns ----
-  const datasourceColumns = [
-    { field: 'name', name: 'Name', sortable: true },
-    {
-      field: 'type', name: 'Type',
-      render: (t: string) => <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>,
-    },
-    { field: 'url', name: 'URL', truncateText: true },
-    {
-      field: 'enabled', name: 'Status',
-      render: (e: boolean) => <EuiBadge color={e ? 'success' : 'default'}>{e ? 'Enabled' : 'Disabled'}</EuiBadge>,
-    },
-  ];
 
   // ---- Handlers ----
 
@@ -660,7 +646,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     { id: 'rules' as TabId, name: `Rules (${rulesTotal})` },
     { id: 'routing' as TabId, name: 'Routing' },
     { id: 'suppression' as TabId, name: 'Suppression' },
-    { id: 'datasources' as TabId, name: `Datasources (${datasources.length})` },
   ];
 
   const noDatasourceSelected = selectedDsIds.length === 0;
@@ -736,8 +721,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     if (activeTab === 'suppression') {
       return <SuppressionRulesPanel apiClient={apiClient} />;
     }
-    if (!loading && datasources.length === 0) return <EuiEmptyPrompt title={<h2>No Datasources</h2>} body={<p>Add a datasource to get started.</p>} />;
-    return <EuiBasicTable items={datasources} columns={datasourceColumns} loading={loading} />;
+    return null;
   };
 
   return (
