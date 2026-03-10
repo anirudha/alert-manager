@@ -40,7 +40,7 @@ interface AlarmsPageProps {
   apiClient: AlarmsApiClient;
 }
 
-type TabId = 'alerts' | 'rules' | 'datasources';
+type TabId = 'alerts' | 'rules';
 
 export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [activeTab, setActiveTab] = useState<TabId>('alerts');
@@ -139,30 +139,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     { field: 'group', name: 'Group', render: (g: string) => g || '-' },
   ];
 
-  // --- Datasource columns ---
-  const datasourceColumns = [
-    { field: 'name', name: 'Name', sortable: true },
-    {
-      field: 'type',
-      name: 'Type',
-      render: (t: string) => (
-        <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>
-      ),
-    },
-    { field: 'url', name: 'URL', truncateText: true },
-    {
-      field: 'enabled',
-      name: 'Status',
-      render: (e: boolean) => (
-        <EuiBadge color={e ? 'success' : 'default'}>{e ? 'Enabled' : 'Disabled'}</EuiBadge>
-      ),
-    },
-  ];
-
   const tabs = [
     { id: 'alerts' as TabId, name: `Alerts (${alerts.length})` },
     { id: 'rules' as TabId, name: `Rules (${rules.length})` },
-    { id: 'datasources' as TabId, name: `Datasources (${datasources.length})` },
   ];
 
   const renderTable = () => {
@@ -186,14 +165,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         );
       return <EuiBasicTable items={rules} columns={ruleColumns} loading={loading} />;
     }
-    if (!loading && datasources.length === 0)
-      return (
-        <EuiEmptyPrompt
-          title={<h2>No Datasources</h2>}
-          body={<p>Add a datasource to get started.</p>}
-        />
-      );
-    return <EuiBasicTable items={datasources} columns={datasourceColumns} loading={loading} />;
+    return null;
   };
 
   return (

@@ -17,12 +17,11 @@ import {
   EuiButtonIcon,
   EuiToolTip,
   EuiFieldSearch,
-  EuiSelect,
   EuiEmptyPrompt,
   EuiButtonEmpty,
+  EuiResizableContainer,
   EuiIcon,
-  EuiLoadingContent,
-  EuiHorizontalRule,
+  EuiCheckbox,
 } from '@opensearch-project/oui';
 import { UnifiedAlert, UnifiedAlertSeverity, UnifiedAlertState, Datasource } from '../../core';
 import { filterAlerts } from '../../core/filter';
@@ -55,6 +54,60 @@ function countBy<T>(items: T[], key: (item: T) => string): Record<string, number
     counts[k] = (counts[k] || 0) + 1;
   }
   return counts;
+}
+
+// ============================================================================
+// Alert Filter State
+// ============================================================================
+
+interface AlertFilterState {
+  severity: string[];
+  state: string[];
+  backend: string[];
+  labels: Record<string, string[]>;
+}
+
+const emptyAlertFilters = (): AlertFilterState => ({
+  severity: [], state: [], backend: [], labels: {},
+});
+
+function collectAlertUniqueValues(alerts: UnifiedAlert[], field: (a: UnifiedAlert) => string): string[] {
+  const set = new Set<string>();
+  for (const a of alerts) {
+    const val = field(a);
+    if (val) set.add(val);
+  }
+  return Array.from(set).sort();
+}
+
+function collectAlertLabelKeys(alerts: UnifiedAlert[]): string[] {
+  const keys = new Set<string>();
+  for (const a of alerts) {
+    for (const k of Object.keys(a.labels)) keys.add(k);
+  }
+  return Array.from(keys).sort();
+}
+
+function collectAlertLabelValues(alerts: UnifiedAlert[], key: string): string[] {
+  const set = new Set<string>();
+  for (const a of alerts) {
+    const v = a.labels[key];
+    if (v) set.add(v);
+  }
+  return Array.from(set).sort();
+}
+
+function matchesAlertFilters(alert: UnifiedAlert, filters: AlertFilterState): boolean {
+  if (filters.severity.length > 0 && !filters.severity.includes(alert.severity)) return false;
+  if (filters.state.length > 0 && !filters.state.includes(alert.state)) return false;
+  if (filters.backend.length > 0 && !filters.backend.includes(alert.datasourceType)) return false;
+  for (const [key, values] of Object.entries(filters.labels)) {
+    if (values.length > 0) {
+      const alertVal = alert.labels[key];
+      if (!alertVal || !values.includes(alertVal)) return false;
+    }
+  }
+  return true;
 }
 
 // ============================================================================
@@ -281,589 +334,8 @@ const AlertsByGroup: React.FC<{ alerts: UnifiedAlert[]; groupKey: string }> = ({
 // AI Briefing — contextual narrative about system state
 // ============================================================================
 
-interface BriefingSection {
-  icon: string;
-  iconColor: string;
-  text: string;
-}
 
-interface AlertBriefing {
-  greeting: string;
-  overallStatus: 'healthy' | 'degraded' | 'critical';
-  headline: string;
-  sections: BriefingSection[];
-  nextSteps: ActionStep[];
-  generatedAt: string;
-}
 
-type ActionStepType = 'investigate' | 'acknowledge' | 'acknowledge_all' | 'silence' | 'runbook' | 'monitor' | 'review_rules';
-
-interface ActionStep {
-  id: string;
-  type: ActionStepType;
-  icon: string;
-  iconColor: string;
-  label: string;
-  description: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  /** The alert this step relates to, if any */
-  alertId?: string;
-  /** For bulk actions, the list of alert IDs */
-  alertIds?: string[];
-  /** External link (e.g. runbook) */
-  href?: string;
-  /** Whether this step has been completed in-session */
-  completed?: boolean;
-}
-
-function generateBriefing(alerts: UnifiedAlert[], datasources: Datasource[]): AlertBriefing {
-  const now = new Date();
-  const hour = now.getHours();
-  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const generatedAt = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  const total = alerts.length;
-  const active = alerts.filter(a => a.state === 'active');
-  const pending = alerts.filter(a => a.state === 'pending');
-  const critical = alerts.filter(a => a.severity === 'critical');
-  const high = alerts.filter(a => a.severity === 'high');
-
-  const sevCounts = countBy(alerts, a => a.severity);
-  const stateCounts = countBy(alerts, a => a.state);
-  const serviceCounts = countBy(alerts, a => a.labels.service || 'unknown');
-  const teamCounts = countBy(alerts, a => a.labels.team || 'unknown');
-  const regionCounts = countBy(alerts, a => a.labels.region || 'unknown');
-
-  // Determine overall status
-  const overallStatus: AlertBriefing['overallStatus'] =
-    critical.length >= 2 ? 'critical' : (critical.length > 0 || high.length >= 2) ? 'degraded' : 'healthy';
-
-  // Build headline
-  let headline: string;
-  if (total === 0) {
-    headline = 'All systems are operating normally. No active alerts across any of your monitored services.';
-  } else if (overallStatus === 'critical') {
-    headline = `Your system needs immediate attention. There are ${critical.length} critical alert${critical.length > 1 ? 's' : ''} actively firing that require investigation.`;
-  } else if (overallStatus === 'degraded') {
-    headline = `There are some issues that need your attention. ${active.length} alert${active.length !== 1 ? 's are' : ' is'} currently active across your infrastructure.`;
-  } else {
-    headline = `Things are mostly stable. ${total} alert${total !== 1 ? 's' : ''} detected, but nothing critical requires immediate action.`;
-  }
-
-  const sections: BriefingSection[] = [];
-  const recommendations: string[] = [];
-
-  // Critical alerts narrative
-  if (critical.length > 0) {
-    const critNames = critical.map(a => a.name);
-    const critServices = [...new Set(critical.map(a => a.labels.service).filter(Boolean))];
-    sections.push({
-      icon: 'alert',
-      iconColor: 'danger',
-      text: `${critical.length} critical alert${critical.length > 1 ? 's' : ''} firing: ${critNames.join(', ')}. ${critServices.length > 0 ? `Affected service${critServices.length > 1 ? 's' : ''}: ${critServices.join(', ')}.` : ''} These started ${describeTimeRange(critical)} and are actively impacting your system.`,
-    });
-  }
-
-  // High severity narrative
-  if (high.length > 0) {
-    const highNames = high.map(a => a.name);
-    sections.push({
-      icon: 'flag',
-      iconColor: 'warning',
-      text: `${high.length} high-severity alert${high.length > 1 ? 's' : ''}: ${highNames.join(', ')}. These aren't critical yet but could escalate if left unaddressed.`,
-    });
-  }
-
-  // Pending alerts
-  if (pending.length > 0) {
-    sections.push({
-      icon: 'clock',
-      iconColor: 'warning',
-      text: `${pending.length} alert${pending.length > 1 ? 's are' : ' is'} in pending state — ${pending.map(a => a.name).join(', ')}. These haven't breached their duration threshold yet but are trending toward firing.`,
-    });
-  }
-
-  // Service impact analysis
-  const impactedServices = Object.entries(serviceCounts).filter(([_, c]) => c > 0).sort((a, b) => b[1] - a[1]);
-  if (impactedServices.length > 0) {
-    const topService = impactedServices[0];
-    const multiService = impactedServices.length > 1;
-    sections.push({
-      icon: 'apps',
-      iconColor: 'primary',
-      text: `${impactedServices.length} service${multiService ? 's' : ''} affected. ${topService[0]} has the most alerts (${topService[1]}). ${multiService ? `Other impacted services: ${impactedServices.slice(1, 4).map(([s, c]) => `${s} (${c})`).join(', ')}.` : ''}`,
-    });
-  }
-
-  // Cross-region analysis
-  const activeRegions = Object.entries(regionCounts).filter(([_, c]) => c > 0);
-  if (activeRegions.length > 1) {
-    sections.push({
-      icon: 'globe',
-      iconColor: 'subdued',
-      text: `Alerts are spread across ${activeRegions.length} regions: ${activeRegions.map(([r, c]) => `${r} (${c})`).join(', ')}. This suggests the issue may not be region-isolated.`,
-    });
-  } else if (activeRegions.length === 1) {
-    sections.push({
-      icon: 'globe',
-      iconColor: 'subdued',
-      text: `All alerts are concentrated in ${activeRegions[0][0]}. Other regions appear unaffected.`,
-    });
-  }
-
-  // Correlation insights
-  const firingCriticalServices = critical.map(a => a.labels.service).filter(Boolean);
-  const firingHighServices = high.map(a => a.labels.service).filter(Boolean);
-  const overlapping = firingCriticalServices.filter(s => firingHighServices.includes(s));
-  if (overlapping.length > 0) {
-    sections.push({
-      icon: 'link',
-      iconColor: 'primary',
-      text: `Possible correlation detected: ${overlapping.join(', ')} ${overlapping.length > 1 ? 'have' : 'has'} both critical and high-severity alerts firing simultaneously. These may share a common root cause.`,
-    });
-  }
-
-  const nextSteps: ActionStep[] = [];
-  let stepIdx = 0;
-
-  // Step: Investigate each critical alert
-  for (const alert of critical) {
-    const runbook = alert.annotations?.runbook_url;
-    nextSteps.push({
-      id: `step-${stepIdx++}`,
-      type: 'investigate',
-      icon: 'search',
-      iconColor: 'danger',
-      label: `Investigate ${alert.name}`,
-      description: alert.message || alert.annotations?.summary || `Critical alert on ${alert.labels.service || alert.labels.instance || 'unknown service'} — open details to see AI analysis and root cause.`,
-      severity: 'critical',
-      alertId: alert.id,
-    });
-    if (runbook) {
-      nextSteps.push({
-        id: `step-${stepIdx++}`,
-        type: 'runbook',
-        icon: 'document',
-        iconColor: 'warning',
-        label: `Open runbook for ${alert.name}`,
-        description: `Follow the documented remediation steps at ${runbook}`,
-        severity: 'critical',
-        alertId: alert.id,
-        href: runbook,
-      });
-    }
-  }
-
-  // Step: Bulk acknowledge active alerts
-  const unacked = active.filter(a => a.state === 'active');
-  if (unacked.length > 1) {
-    nextSteps.push({
-      id: `step-${stepIdx++}`,
-      type: 'acknowledge_all',
-      icon: 'check',
-      iconColor: 'primary',
-      label: `Acknowledge all ${unacked.length} active alerts`,
-      description: 'Stop repeated notifications for all active alerts while you investigate. You can still see them in the table below.',
-      severity: 'high',
-      alertIds: unacked.map(a => a.id),
-    });
-  } else if (unacked.length === 1) {
-    nextSteps.push({
-      id: `step-${stepIdx++}`,
-      type: 'acknowledge',
-      icon: 'check',
-      iconColor: 'primary',
-      label: `Acknowledge ${unacked[0].name}`,
-      description: 'Mark as acknowledged to stop repeated notifications while you investigate.',
-      severity: 'high',
-      alertId: unacked[0].id,
-    });
-  }
-
-  // Step: Investigate high-severity alerts
-  for (const alert of high.filter(a => !critical.some(c => c.id === a.id))) {
-    nextSteps.push({
-      id: `step-${stepIdx++}`,
-      type: 'investigate',
-      icon: 'inspect',
-      iconColor: 'warning',
-      label: `Review ${alert.name}`,
-      description: alert.message || alert.annotations?.summary || `High-severity alert that could escalate — review details and determine if action is needed.`,
-      severity: 'high',
-      alertId: alert.id,
-    });
-  }
-
-  // Step: Monitor pending alerts
-  if (pending.length > 0) {
-    for (const alert of pending) {
-      nextSteps.push({
-        id: `step-${stepIdx++}`,
-        type: 'monitor',
-        icon: 'eye',
-        iconColor: 'warning',
-        label: `Watch ${alert.name}`,
-        description: `Currently pending — hasn't breached its duration threshold yet. If conditions persist, this will fire. Consider preemptive action.`,
-        severity: 'medium',
-        alertId: alert.id,
-      });
-    }
-  }
-
-  // Step: Silence noisy low-severity alerts
-  const lowNoise = alerts.filter(a => (a.severity === 'low' || a.severity === 'info') && a.state === 'active');
-  if (lowNoise.length > 0) {
-    nextSteps.push({
-      id: `step-${stepIdx++}`,
-      type: 'silence',
-      icon: 'bellSlash',
-      iconColor: 'subdued',
-      label: `Silence ${lowNoise.length} low-priority alert${lowNoise.length > 1 ? 's' : ''}`,
-      description: 'These are informational and may be adding noise. Silence them to focus on what matters.',
-      severity: 'low',
-      alertIds: lowNoise.map(a => a.id),
-    });
-  }
-
-  // Step: Review rules if no alerts
-  if (total === 0) {
-    nextSteps.push({
-      id: `step-${stepIdx++}`,
-      type: 'review_rules',
-      icon: 'gear',
-      iconColor: 'primary',
-      label: 'Review your alert rules',
-      description: 'No alerts is great, but make sure your coverage is adequate. Check the Rules tab to verify your monitors are configured correctly.',
-      severity: 'low',
-    });
-  }
-
-  return {
-    greeting: timeGreeting,
-    overallStatus,
-    headline,
-    sections,
-    nextSteps,
-    generatedAt,
-  };
-}
-
-function describeTimeRange(alerts: UnifiedAlert[]): string {
-  if (alerts.length === 0) return '';
-  const times = alerts.map(a => new Date(a.startTime).getTime());
-  const earliest = Math.min(...times);
-  const ms = Date.now() - earliest;
-  const minutes = Math.floor(ms / 60000);
-  if (minutes < 2) return 'just now';
-  if (minutes < 60) return `${minutes} minutes ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-  return `${Math.floor(hours / 24)} day${Math.floor(hours / 24) > 1 ? 's' : ''} ago`;
-}
-
-const STATUS_INDICATOR: Record<string, { color: string; label: string; bg: string }> = {
-  healthy: { color: '#017D73', label: 'Systems Healthy', bg: 'rgba(1, 125, 115, 0.06)' },
-  degraded: { color: '#F5A700', label: 'Degraded', bg: 'rgba(245, 167, 0, 0.06)' },
-  critical: { color: '#BD271E', label: 'Critical Issues', bg: 'rgba(189, 39, 30, 0.06)' },
-};
-
-const AiBriefing: React.FC<{
-  alerts: UnifiedAlert[];
-  datasources: Datasource[];
-  loading: boolean;
-  onViewDetail: (alert: UnifiedAlert) => void;
-  onAcknowledge: (alertId: string) => void;
-  onSilence: (alertId: string) => void;
-}> = ({
-  alerts, datasources, loading, onViewDetail, onAcknowledge, onSilence,
-}) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [dismissed, setDismissed] = useState(false);
-  const [expanded, setExpanded] = useState(true);
-  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
-
-  const briefing = useMemo(() => generateBriefing(alerts, datasources), [alerts, datasources]);
-
-  // Simulate AI "thinking" delay
-  useEffect(() => {
-    if (!loading && alerts.length >= 0) {
-      const timer = setTimeout(() => setIsLoading(false), 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [loading, alerts]);
-
-  const alertMap = useMemo(() => new Map(alerts.map(a => [a.id, a])), [alerts]);
-
-  const handleStepAction = (step: ActionStep) => {
-    switch (step.type) {
-      case 'investigate':
-      case 'monitor': {
-        const alert = step.alertId ? alertMap.get(step.alertId) : undefined;
-        if (alert) onViewDetail(alert);
-        break;
-      }
-      case 'acknowledge': {
-        if (step.alertId) {
-          onAcknowledge(step.alertId);
-          setCompletedSteps(prev => new Set(prev).add(step.id));
-        }
-        break;
-      }
-      case 'acknowledge_all': {
-        if (step.alertIds) {
-          for (const id of step.alertIds) onAcknowledge(id);
-          setCompletedSteps(prev => new Set(prev).add(step.id));
-        }
-        break;
-      }
-      case 'silence': {
-        const ids = step.alertIds || (step.alertId ? [step.alertId] : []);
-        for (const id of ids) onSilence(id);
-        setCompletedSteps(prev => new Set(prev).add(step.id));
-        break;
-      }
-      case 'runbook': {
-        // Open in new tab — also mark as done
-        if (step.href) window.open(step.href, '_blank');
-        setCompletedSteps(prev => new Set(prev).add(step.id));
-        break;
-      }
-      case 'review_rules':
-        // No direct action — just informational
-        break;
-    }
-  };
-
-  const stepButtonLabel = (type: ActionStepType): string => {
-    switch (type) {
-      case 'investigate': return 'View Details';
-      case 'acknowledge': return 'Acknowledge';
-      case 'acknowledge_all': return 'Acknowledge All';
-      case 'silence': return 'Silence';
-      case 'runbook': return 'Open Runbook';
-      case 'monitor': return 'View Details';
-      case 'review_rules': return 'Go to Rules';
-      default: return 'Action';
-    }
-  };
-
-  const stepButtonIcon = (type: ActionStepType): string => {
-    switch (type) {
-      case 'investigate': return 'inspect';
-      case 'acknowledge': return 'check';
-      case 'acknowledge_all': return 'check';
-      case 'silence': return 'bellSlash';
-      case 'runbook': return 'popout';
-      case 'monitor': return 'eye';
-      case 'review_rules': return 'gear';
-      default: return 'arrowRight';
-    }
-  };
-
-  const STEP_SEVERITY_BORDER: Record<string, string> = {
-    critical: '#BD271E',
-    high: '#F5A700',
-    medium: '#006BB4',
-    low: '#98A2B3',
-  };
-
-  if (dismissed) return null;
-
-  const status = STATUS_INDICATOR[briefing.overallStatus];
-
-  return (
-    <EuiPanel
-      paddingSize="l"
-      hasBorder
-      style={{
-        background: status.bg,
-        borderLeft: `4px solid ${status.color}`,
-        position: 'relative',
-      }}
-    >
-      {/* Dismiss / collapse controls */}
-      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 4 }}>
-        <EuiToolTip content={expanded ? 'Collapse briefing' : 'Expand briefing'}>
-          <EuiButtonIcon
-            iconType={expanded ? 'arrowUp' : 'arrowDown'}
-            aria-label="Toggle briefing"
-            size="s"
-            onClick={() => setExpanded(!expanded)}
-          />
-        </EuiToolTip>
-        <EuiToolTip content="Dismiss briefing">
-          <EuiButtonIcon iconType="cross" aria-label="Dismiss" size="s" onClick={() => setDismissed(true)} />
-        </EuiToolTip>
-      </div>
-
-      {/* Header row */}
-      <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
-        <EuiFlexItem grow={false}>
-          <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: `linear-gradient(135deg, ${status.color}22, ${status.color}44)`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <EuiIcon type="compute" size="l" color={status.color} />
-          </div>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiFlexGroup alignItems="baseline" gutterSize="s" responsive={false}>
-            <EuiFlexItem grow={false}>
-              <EuiTitle size="xs"><h3 style={{ margin: 0 }}>{briefing.greeting}</h3></EuiTitle>
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <EuiBadge color="hollow" style={{ fontSize: 10 }}>AI Briefing</EuiBadge>
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <EuiText size="xs" color="subdued">Updated {briefing.generatedAt}</EuiText>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-          <EuiFlexGroup alignItems="center" gutterSize="xs" responsive={false} style={{ marginTop: 2 }}>
-            <EuiFlexItem grow={false}>
-              <span style={{
-                width: 8, height: 8, borderRadius: '50%', background: status.color,
-                display: 'inline-block', boxShadow: `0 0 6px ${status.color}66`,
-              }} />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <EuiText size="xs" style={{ color: status.color, fontWeight: 600 }}>{status.label}</EuiText>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-
-      {isLoading ? (
-        <>
-          <EuiSpacer size="m" />
-          <EuiLoadingContent lines={3} />
-        </>
-      ) : expanded ? (
-        <>
-          <EuiSpacer size="m" />
-
-          {/* Headline */}
-          <EuiText size="s" style={{ lineHeight: 1.6 }}>
-            <p style={{ margin: 0 }}>{briefing.headline}</p>
-          </EuiText>
-
-          {/* Detail sections */}
-          {briefing.sections.length > 0 && (
-            <>
-              <EuiSpacer size="m" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {briefing.sections.map((section, i) => (
-                  <EuiFlexGroup key={i} gutterSize="s" responsive={false} alignItems="flexStart">
-                    <EuiFlexItem grow={false} style={{ paddingTop: 2 }}>
-                      <EuiIcon type={section.icon} size="s" color={section.iconColor} />
-                    </EuiFlexItem>
-                    <EuiFlexItem>
-                      <EuiText size="xs" style={{ lineHeight: 1.5 }}><p style={{ margin: 0 }}>{section.text}</p></EuiText>
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Actionable Next Steps */}
-          {briefing.nextSteps.length > 0 && (
-            <>
-              <EuiSpacer size="m" />
-              <EuiHorizontalRule margin="none" />
-              <EuiSpacer size="s" />
-              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-                <EuiFlexItem grow={false}>
-                  <EuiIcon type="sparkles" size="s" color="primary" />
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiText size="xs" style={{ fontWeight: 600 }}>Next steps</EuiText>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiText size="xs" color="subdued">
-                    {completedSteps.size > 0 ? `${completedSteps.size} of ${briefing.nextSteps.length} done` : `${briefing.nextSteps.length} action${briefing.nextSteps.length > 1 ? 's' : ''}`}
-                  </EuiText>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-              <EuiSpacer size="s" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {briefing.nextSteps.map((step, i) => {
-                  const done = completedSteps.has(step.id);
-                  return (
-                    <div
-                      key={step.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 10,
-                        padding: '10px 12px',
-                        borderRadius: 6,
-                        background: done ? 'rgba(1, 125, 115, 0.04)' : 'rgba(255,255,255,0.6)',
-                        border: `1px solid ${done ? '#017D7333' : '#D3DAE6'}`,
-                        borderLeft: `3px solid ${done ? '#017D73' : STEP_SEVERITY_BORDER[step.severity] || '#D3DAE6'}`,
-                        opacity: done ? 0.7 : 1,
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      {/* Step number / check */}
-                      <div style={{
-                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                        background: done ? '#017D73' : `${STEP_SEVERITY_BORDER[step.severity]}15`,
-                        border: `1.5px solid ${done ? '#017D73' : STEP_SEVERITY_BORDER[step.severity] || '#D3DAE6'}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 600,
-                        color: done ? '#fff' : STEP_SEVERITY_BORDER[step.severity],
-                      }}>
-                        {done ? '✓' : i + 1}
-                      </div>
-                      {/* Content */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                          <EuiIcon type={step.icon} size="s" color={done ? 'success' : step.iconColor} />
-                          <span style={{
-                            fontSize: 13, fontWeight: 600,
-                            color: done ? '#017D73' : '#343741',
-                            textDecoration: done ? 'line-through' : 'none',
-                          }}>
-                            {step.label}
-                          </span>
-                          <EuiBadge color={
-                            step.severity === 'critical' ? 'danger' :
-                            step.severity === 'high' ? 'warning' :
-                            step.severity === 'medium' ? 'primary' : 'default'
-                          } style={{ fontSize: 9 }}>
-                            {step.severity}
-                          </EuiBadge>
-                        </div>
-                        <EuiText size="xs" color="subdued" style={{ lineHeight: 1.4 }}>
-                          <p style={{ margin: 0 }}>{step.description}</p>
-                        </EuiText>
-                      </div>
-                      {/* Action button */}
-                      {!done && (
-                        <div style={{ flexShrink: 0, paddingTop: 2 }}>
-                          <EuiButtonEmpty
-                            size="xs"
-                            iconType={stepButtonIcon(step.type)}
-                            onClick={() => handleStepAction(step)}
-                            color={step.severity === 'critical' ? 'danger' : 'primary'}
-                            style={{ whiteSpace: 'nowrap' }}
-                          >
-                            {stepButtonLabel(step.type)}
-                          </EuiButtonEmpty>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </>
-      ) : null}
-    </EuiPanel>
-  );
-};
 
 // ============================================================================
 // Main Dashboard Component
@@ -876,40 +348,128 @@ export interface AlertsDashboardProps {
   onViewDetail: (alert: UnifiedAlert) => void;
   onAcknowledge: (alertId: string) => void;
   onSilence: (alertId: string) => void;
+  /** Workspace-scoped entries for Prometheus datasources */
+  workspaceOptions: Datasource[];
+  loadingWorkspaces: boolean;
+  /** Currently selected datasource IDs */
+  selectedDsIds: string[];
+  /** Callback when datasource selection changes */
+  onDatasourceChange: (ids: string[]) => void;
 }
 
 export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   alerts, datasources, loading, onViewDetail, onAcknowledge, onSilence,
+  workspaceOptions, loadingWorkspaces, selectedDsIds, onDatasourceChange,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [sortField, setSortField] = useState<string>('startTime');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [filters, setFilters] = useState<AlertFilterState>(emptyAlertFilters());
+  const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
+  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
 
   const dsNameMap = useMemo(() => new Map(datasources.map(d => [d.id, d.name])), [datasources]);
 
-  // Severity counts for stat cards
-  const severityCounts = useMemo(() => countBy(alerts, a => a.severity), [alerts]);
-  const activeCount = useMemo(() => alerts.filter(a => a.state === 'active').length, [alerts]);
+  // Build selectable datasource entries for the filter facet
+  const datasourceEntries = useMemo(() => {
+    const entries: Array<{ id: string; label: string }> = [];
+    // Non-prometheus datasources
+    for (const ds of datasources) {
+      if (ds.type !== 'prometheus') {
+        entries.push({ id: ds.id, label: ds.name });
+      }
+    }
+    // Prometheus workspace-scoped entries
+    for (const ws of workspaceOptions) {
+      const parent = datasources.find(d => d.id === ws.parentDatasourceId);
+      const label = parent ? `${parent.name} / ${ws.workspaceName || ws.name}` : ws.name;
+      entries.push({ id: ws.id, label });
+    }
+    // Fallback: prometheus datasources with no workspaces
+    if (workspaceOptions.length === 0 && !loadingWorkspaces) {
+      for (const ds of datasources) {
+        if (ds.type === 'prometheus') {
+          entries.push({ id: ds.id, label: ds.name });
+        }
+      }
+    }
+    return entries;
+  }, [datasources, workspaceOptions, loadingWorkspaces]);
+
+  // Unique values for facets
+  const uniqueSeverities = useMemo(() => collectAlertUniqueValues(alerts, a => a.severity), [alerts]);
+  const uniqueStates = useMemo(() => collectAlertUniqueValues(alerts, a => a.state), [alerts]);
+  const uniqueBackends = useMemo(() => collectAlertUniqueValues(alerts, a => a.datasourceType), [alerts]);
+  const labelKeys = useMemo(() => collectAlertLabelKeys(alerts), [alerts]);
+
+  // Facet counts (against search-matched but not filter-matched alerts)
+  const facetCounts = useMemo(() => {
+    const searchMatched = alerts.filter(a => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return a.name.toLowerCase().includes(q) ||
+        (a.message || '').toLowerCase().includes(q) ||
+        Object.values(a.labels).some(v => v.toLowerCase().includes(q));
+    });
+    const counts: Record<string, Record<string, number>> = {
+      severity: {}, state: {}, backend: {},
+    };
+    for (const a of searchMatched) {
+      counts.severity[a.severity] = (counts.severity[a.severity] || 0) + 1;
+      counts.state[a.state] = (counts.state[a.state] || 0) + 1;
+      counts.backend[a.datasourceType] = (counts.backend[a.datasourceType] || 0) + 1;
+    }
+    const labelCounts: Record<string, Record<string, number>> = {};
+    for (const key of labelKeys) {
+      labelCounts[key] = {};
+      for (const a of searchMatched) {
+        const v = a.labels[key];
+        if (v) labelCounts[key][v] = (labelCounts[key][v] || 0) + 1;
+      }
+    }
+    return { counts, labelCounts };
+  }, [alerts, searchQuery, labelKeys]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = filters.severity.length + filters.state.length + filters.backend.length;
+    for (const vals of Object.values(filters.labels)) count += vals.length;
+    return count;
+  }, [filters]);
 
   // Filtered + sorted alerts for the table
   const filteredAlerts = useMemo(() => {
-    // Build severity filter array
+    // Combine stat-card filters with panel filters
     let sevArr: string[] | undefined;
-    if (severityFilter === 'medium') {
+    if (filters.severity.length > 0) {
+      sevArr = filters.severity;
+    } else if (severityFilter === 'medium') {
       sevArr = ['medium', 'low', 'info'];
     } else if (severityFilter !== 'all') {
       sevArr = [severityFilter];
     }
 
-    const stateArr = stateFilter !== 'all' ? [stateFilter] : undefined;
+    let stateArr: string[] | undefined;
+    if (filters.state.length > 0) {
+      stateArr = filters.state;
+    } else if (stateFilter !== 'all') {
+      stateArr = [stateFilter];
+    }
 
-    const result = filterAlerts(alerts, {
+    let result = filterAlerts(alerts, {
       severity: sevArr,
       state: stateArr,
+      labels: Object.keys(filters.labels).length > 0 ? filters.labels : undefined,
       search: searchQuery || undefined,
     });
+
+    // Apply backend filter separately (not in core filterAlerts)
+    if (filters.backend.length > 0) {
+      result = result.filter(a => filters.backend.includes(a.datasourceType));
+    }
 
     result.sort((a, b) => {
       let cmp = 0;
@@ -922,11 +482,121 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
       return sortDirection === 'desc' ? -cmp : cmp;
     });
     return result;
-  }, [alerts, searchQuery, severityFilter, stateFilter, sortField, sortDirection]);
+  }, [alerts, searchQuery, severityFilter, stateFilter, filters, sortField, sortDirection]);
+
+  // Severity counts for stat cards — derived from filtered set
+  const severityCounts = useMemo(() => countBy(filteredAlerts, a => a.severity), [filteredAlerts]);
+  const activeCount = useMemo(() => filteredAlerts.filter(a => a.state === 'active').length, [filteredAlerts]);
+  const isFiltered = activeFilterCount > 0 || searchQuery !== '' || severityFilter !== 'all' || stateFilter !== 'all';
+
+  // Reset to first page when filters change
+  useEffect(() => { setPageIndex(0); }, [filteredAlerts.length]);
+
+  const paginatedAlerts = useMemo(() => {
+    const start = pageIndex * pageSize;
+    return filteredAlerts.slice(start, start + pageSize);
+  }, [filteredAlerts, pageIndex, pageSize]);
+
+  const pagination = useMemo(() => ({
+    pageIndex,
+    pageSize,
+    totalItemCount: filteredAlerts.length,
+    pageSizeOptions: [10, 20, 50, 100],
+  }), [pageIndex, pageSize, filteredAlerts.length]);
 
   const onTableSort = (col: { field: string; direction: 'asc' | 'desc' }) => {
     setSortField(col.field);
     setSortDirection(col.direction);
+  };
+
+  const clearAllFilters = () => {
+    setFilters(emptyAlertFilters());
+    setSeverityFilter('all');
+    setStateFilter('all');
+    setSearchQuery('');
+  };
+
+  const updateFilter = <K extends keyof AlertFilterState>(key: K, value: AlertFilterState[K]) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    if (key === 'severity') setSeverityFilter('all');
+    if (key === 'state') setStateFilter('all');
+  };
+
+  const updateLabelFilter = (key: string, values: string[]) => {
+    setFilters(prev => ({ ...prev, labels: { ...prev.labels, [key]: values } }));
+  };
+
+  const toggleFacetCollapse = (id: string) => {
+    setCollapsedFacets(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const renderFacetGroup = (
+    id: string,
+    label: string,
+    options: string[],
+    selected: string[],
+    onChange: (v: string[]) => void,
+    counts: Record<string, number>,
+    colorMap?: Record<string, string>,
+  ) => {
+    const isCollapsed = collapsedFacets.has(id);
+    const numActive = selected.length;
+    return (
+      <div key={id} style={{ marginBottom: 12 }}>
+        <EuiFlexGroup
+          gutterSize="xs" alignItems="center" responsive={false}
+          style={{ cursor: 'pointer', marginBottom: 4 }}
+          onClick={() => toggleFacetCollapse(id)}
+        >
+          <EuiFlexItem grow={false}>
+            <EuiIcon type={isCollapsed ? 'arrowRight' : 'arrowDown'} size="s" />
+          </EuiFlexItem>
+          <EuiFlexItem>
+            <EuiText size="xs"><strong>{label}</strong></EuiText>
+          </EuiFlexItem>
+          {numActive > 0 && (
+            <EuiFlexItem grow={false}>
+              <EuiBadge color="primary">{numActive}</EuiBadge>
+            </EuiFlexItem>
+          )}
+        </EuiFlexGroup>
+        {!isCollapsed && (
+          <div style={{ paddingLeft: 4 }}>
+            {options.map(opt => {
+              const isActive = selected.includes(opt);
+              const count = counts[opt] || 0;
+              const labelContent = (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
+                    {colorMap && <EuiHealth color={colorMap[opt] || 'subdued'} style={{ marginRight: 0 }} />}
+                    <span style={{ fontSize: '12px', lineHeight: '18px', textTransform: 'capitalize' as const }}>{opt}</span>
+                  </span>
+                  <span style={{ fontSize: '12px', lineHeight: '18px', color: '#69707D' }}>({count})</span>
+                </span>
+              );
+              return (
+                <div key={opt} style={{ marginBottom: 2 }}>
+                  <EuiCheckbox
+                    id={`alert-${id}-${opt}`}
+                    label={labelContent}
+                    checked={isActive}
+                    onChange={() => {
+                      if (isActive) onChange(selected.filter(s => s !== opt));
+                      else onChange([...selected, opt]);
+                    }}
+                    compressed
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Table columns
@@ -992,187 +662,213 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   if (!loading && alerts.length === 0) {
     return (
       <div>
-        <AiBriefing
-          alerts={alerts}
-          datasources={datasources}
-          loading={loading}
-          onViewDetail={onViewDetail}
-          onAcknowledge={onAcknowledge}
-          onSilence={onSilence}
-        />
-        <EuiSpacer size="l" />
         <EuiEmptyPrompt title={<h2>No Active Alerts</h2>} body={<p>All systems operating normally.</p>} iconType="checkInCircleFilled" iconColor="success" />
       </div>
     );
   }
 
   return (
-    <div>
-      {/* ---- AI Briefing ---- */}
-      <AiBriefing
-        alerts={alerts}
-        datasources={datasources}
-        loading={loading}
-        onViewDetail={onViewDetail}
-        onAcknowledge={onAcknowledge}
-        onSilence={onSilence}
-      />
-      <EuiSpacer size="m" />
-
-      {/* ---- Summary Stat Cards ---- */}
-      <EuiFlexGroup gutterSize="m" responsive={true}>
-        <EuiFlexItem>
-          <EuiPanel
-            paddingSize="m" hasBorder
-            onClick={() => { setSeverityFilter('all'); setStateFilter('all'); }}
-            style={{ cursor: 'pointer', outline: severityFilter === 'all' && stateFilter === 'all' ? '2px solid #006BB4' : 'none', borderRadius: 6 }}
+    <EuiResizableContainer style={{ height: 'calc(100vh - 180px)' }}>
+      {(EuiResizablePanel, EuiResizableButton) => (
+        <>
+          <EuiResizablePanel
+            id="alerts-filters-panel"
+            initialSize={15}
+            minSize="180px"
+            mode={['collapsible', { position: 'top' }]}
+            onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+            paddingSize="none"
+            style={{ overflow: 'hidden', paddingRight: '4px' }}
           >
-            <EuiStat title={alerts.length} description="Total Alerts" titleSize="m" />
-          </EuiPanel>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiPanel
-            paddingSize="m" hasBorder
-            onClick={() => { setSeverityFilter('all'); setStateFilter(stateFilter === 'active' ? 'all' : 'active'); }}
-            style={{ cursor: 'pointer', outline: stateFilter === 'active' ? '2px solid #BD271E' : 'none', borderRadius: 6 }}
+            <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
+                  <EuiFlexItem>
+                    <EuiText size="xs"><strong>Filters</strong></EuiText>
+                  </EuiFlexItem>
+                  {activeFilterCount > 0 && (
+                    <EuiFlexItem grow={false}>
+                      <EuiButtonEmpty size="xs" onClick={clearAllFilters} flush="right">
+                        Clear ({activeFilterCount})
+                      </EuiButtonEmpty>
+                    </EuiFlexItem>
+                  )}
+                </EuiFlexGroup>
+                <EuiSpacer size="s" />
+
+                {/* Datasource filter */}
+                {renderFacetGroup('datasource', 'Datasource', datasourceEntries.map(e => e.label), selectedDsIds.map(id => datasourceEntries.find(e => e.id === id)?.label || '').filter(Boolean),
+                  (labels) => {
+                    const ids = labels.map(l => datasourceEntries.find(e => e.label === l)?.id).filter(Boolean) as string[];
+                    onDatasourceChange(ids);
+                  }, countBy(datasourceEntries.filter(e => selectedDsIds.includes(e.id) || selectedDsIds.length === 0), e => e.label))}
+
+                {renderFacetGroup('severity', 'Severity', uniqueSeverities, filters.severity,
+                  (v) => updateFilter('severity', v), facetCounts.counts.severity, SEVERITY_COLORS)}
+                {renderFacetGroup('state', 'State', uniqueStates, filters.state,
+                  (v) => updateFilter('state', v), facetCounts.counts.state, STATE_COLORS)}
+                {renderFacetGroup('backend', 'Backend', uniqueBackends, filters.backend,
+                  (v) => updateFilter('backend', v), facetCounts.counts.backend)}
+
+                {labelKeys.length > 0 && (
+                  <>
+                    <EuiSpacer size="xs" />
+                    <EuiText size="xs" color="subdued" style={{ marginBottom: 6 }}><strong>Labels</strong></EuiText>
+                    {labelKeys.map(key => renderFacetGroup(
+                      `label:${key}`, key, collectAlertLabelValues(alerts, key),
+                      filters.labels[key] || [],
+                      (v) => updateLabelFilter(key, v),
+                      facetCounts.labelCounts[key] || {},
+                    ))}
+                  </>
+                )}
+              </div>
+            </EuiPanel>
+          </EuiResizablePanel>
+
+          <EuiResizableButton />
+
+          <EuiResizablePanel
+            initialSize={85}
+            minSize="400px"
+            mode="main"
+            paddingSize="none"
+            style={{ paddingLeft: '4px', overflow: 'auto' }}
           >
-            <EuiStat title={activeCount} description="Active" titleColor="danger" titleSize="m" />
-          </EuiPanel>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiPanel
-            paddingSize="m" hasBorder
-            onClick={() => { setStateFilter('all'); setSeverityFilter(severityFilter === 'critical' ? 'all' : 'critical'); }}
-            style={{ cursor: 'pointer', outline: severityFilter === 'critical' ? '2px solid #BD271E' : 'none', borderRadius: 6 }}
-          >
-            <EuiStat title={severityCounts['critical'] || 0} description="Critical" titleColor="danger" titleSize="m" />
-          </EuiPanel>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiPanel
-            paddingSize="m" hasBorder
-            onClick={() => { setStateFilter('all'); setSeverityFilter(severityFilter === 'high' ? 'all' : 'high'); }}
-            style={{ cursor: 'pointer', outline: severityFilter === 'high' ? '2px solid #F5A700' : 'none', borderRadius: 6 }}
-          >
-            <EuiStat title={severityCounts['high'] || 0} description="High" titleColor="default" titleSize="m" />
-          </EuiPanel>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiPanel
-            paddingSize="m" hasBorder
-            onClick={() => { setStateFilter('all'); setSeverityFilter(severityFilter === 'medium' ? 'all' : 'medium'); }}
-            style={{ cursor: 'pointer', outline: severityFilter === 'medium' ? '2px solid #006BB4' : 'none', borderRadius: 6 }}
-          >
-            <EuiStat title={(severityCounts['medium'] || 0) + (severityCounts['low'] || 0) + (severityCounts['info'] || 0)} description="Medium / Low" titleSize="m" />
-          </EuiPanel>
-        </EuiFlexItem>
-      </EuiFlexGroup>
+            {/* ---- Summary Stat Cards ---- */}
+            <EuiFlexGroup gutterSize="m" responsive={true}>
+              <EuiFlexItem>
+                <EuiPanel
+                  paddingSize="m" hasBorder
+                  onClick={() => { setSeverityFilter('all'); setStateFilter('all'); setFilters(prev => ({ ...prev, severity: [], state: [] })); }}
+                  style={{ cursor: 'pointer', outline: severityFilter === 'all' && stateFilter === 'all' && filters.severity.length === 0 && filters.state.length === 0 ? '2px solid #006BB4' : 'none', borderRadius: 6 }}
+                >
+                  <EuiStat title={filteredAlerts.length} description={isFiltered ? `of ${alerts.length} Total Alerts` : 'Total Alerts'} titleSize="m" />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel
+                  paddingSize="m" hasBorder
+                  onClick={() => { setSeverityFilter('all'); setStateFilter(stateFilter === 'active' ? 'all' : 'active'); setFilters(prev => ({ ...prev, severity: [], state: [] })); }}
+                  style={{ cursor: 'pointer', outline: stateFilter === 'active' ? '2px solid #BD271E' : 'none', borderRadius: 6 }}
+                >
+                  <EuiStat title={activeCount} description="Active" titleColor="danger" titleSize="m" />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel
+                  paddingSize="m" hasBorder
+                  onClick={() => { setStateFilter('all'); setSeverityFilter(severityFilter === 'critical' ? 'all' : 'critical'); setFilters(prev => ({ ...prev, severity: [], state: [] })); }}
+                  style={{ cursor: 'pointer', outline: severityFilter === 'critical' ? '2px solid #BD271E' : 'none', borderRadius: 6 }}
+                >
+                  <EuiStat title={severityCounts['critical'] || 0} description="Critical" titleColor="danger" titleSize="m" />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel
+                  paddingSize="m" hasBorder
+                  onClick={() => { setStateFilter('all'); setSeverityFilter(severityFilter === 'high' ? 'all' : 'high'); setFilters(prev => ({ ...prev, severity: [], state: [] })); }}
+                  style={{ cursor: 'pointer', outline: severityFilter === 'high' ? '2px solid #F5A700' : 'none', borderRadius: 6 }}
+                >
+                  <EuiStat title={severityCounts['high'] || 0} description="High" titleColor="default" titleSize="m" />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel
+                  paddingSize="m" hasBorder
+                  onClick={() => { setStateFilter('all'); setSeverityFilter(severityFilter === 'medium' ? 'all' : 'medium'); setFilters(prev => ({ ...prev, severity: [], state: [] })); }}
+                  style={{ cursor: 'pointer', outline: severityFilter === 'medium' ? '2px solid #006BB4' : 'none', borderRadius: 6 }}
+                >
+                  <EuiStat title={(severityCounts['medium'] || 0) + (severityCounts['low'] || 0) + (severityCounts['info'] || 0)} description="Medium / Low" titleSize="m" />
+                </EuiPanel>
+              </EuiFlexItem>
+            </EuiFlexGroup>
 
-      <EuiSpacer size="m" />
+            <EuiSpacer size="m" />
 
-      {/* ---- Visualization Row ---- */}
-      <EuiFlexGroup gutterSize="m" responsive={true}>
-        {/* Timeline */}
-        <EuiFlexItem grow={3}>
-          <EuiPanel paddingSize="m" hasBorder>
-            <EuiTitle size="xxs"><h3>Alert Timeline (24h)</h3></EuiTitle>
-            <EuiSpacer size="s" />
-            <AlertTimeline alerts={alerts} />
-          </EuiPanel>
-        </EuiFlexItem>
-        {/* Severity Donut */}
-        <EuiFlexItem grow={1}>
-          <EuiPanel paddingSize="m" hasBorder>
-            <EuiTitle size="xxs"><h3>By Severity</h3></EuiTitle>
-            <EuiSpacer size="s" />
-            <SeverityDonut alerts={alerts} />
-          </EuiPanel>
-        </EuiFlexItem>
-      </EuiFlexGroup>
+            {/* ---- Visualization Row ---- */}
+            <EuiFlexGroup gutterSize="m" responsive={true}>
+              <EuiFlexItem grow={3}>
+                <EuiPanel paddingSize="m" hasBorder>
+                  <EuiTitle size="xxs"><h3>Alert Timeline (24h)</h3></EuiTitle>
+                  <EuiSpacer size="s" />
+                  <AlertTimeline alerts={filteredAlerts} />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem grow={1}>
+                <EuiPanel paddingSize="m" hasBorder>
+                  <EuiTitle size="xxs"><h3>By Severity</h3></EuiTitle>
+                  <EuiSpacer size="s" />
+                  <SeverityDonut alerts={filteredAlerts} />
+                </EuiPanel>
+              </EuiFlexItem>
+            </EuiFlexGroup>
 
-      <EuiSpacer size="m" />
+            <EuiSpacer size="m" />
 
-      {/* ---- State + Service Row ---- */}
-      <EuiFlexGroup gutterSize="m" responsive={true}>
-        <EuiFlexItem>
-          <EuiPanel paddingSize="m" hasBorder>
-            <EuiTitle size="xxs"><h3>By State</h3></EuiTitle>
-            <EuiSpacer size="s" />
-            <StateBreakdown alerts={alerts} />
-          </EuiPanel>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiPanel paddingSize="m" hasBorder>
-            <EuiTitle size="xxs"><h3>By Service</h3></EuiTitle>
-            <EuiSpacer size="s" />
-            <AlertsByGroup alerts={alerts} groupKey="service" />
-          </EuiPanel>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiPanel paddingSize="m" hasBorder>
-            <EuiTitle size="xxs"><h3>By Team</h3></EuiTitle>
-            <EuiSpacer size="s" />
-            <AlertsByGroup alerts={alerts} groupKey="team" />
-          </EuiPanel>
-        </EuiFlexItem>
-      </EuiFlexGroup>
+            {/* ---- State + Service Row ---- */}
+            <EuiFlexGroup gutterSize="m" responsive={true}>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder>
+                  <EuiTitle size="xxs"><h3>By State</h3></EuiTitle>
+                  <EuiSpacer size="s" />
+                  <StateBreakdown alerts={filteredAlerts} />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder>
+                  <EuiTitle size="xxs"><h3>By Service</h3></EuiTitle>
+                  <EuiSpacer size="s" />
+                  <AlertsByGroup alerts={filteredAlerts} groupKey="service" />
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder>
+                  <EuiTitle size="xxs"><h3>By Team</h3></EuiTitle>
+                  <EuiSpacer size="s" />
+                  <AlertsByGroup alerts={filteredAlerts} groupKey="team" />
+                </EuiPanel>
+              </EuiFlexItem>
+            </EuiFlexGroup>
 
-      <EuiSpacer size="l" />
+            <EuiSpacer size="l" />
 
-      {/* ---- Filters + Table ---- */}
-      <EuiTitle size="xs"><h3>All Alerts</h3></EuiTitle>
-      <EuiSpacer size="s" />
-      <EuiFlexGroup gutterSize="s" responsive={false} alignItems="center">
-        <EuiFlexItem grow={3}>
-          <EuiFieldSearch
-            placeholder="Search alerts by name, message, or label..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            compressed
-          />
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiSelect
-            compressed
-            prepend="Severity"
-            options={[
-              { value: 'all', text: 'All' },
-              { value: 'critical', text: 'Critical' },
-              { value: 'high', text: 'High' },
-              { value: 'medium', text: 'Medium' },
-              { value: 'low', text: 'Low' },
-            ]}
-            value={severityFilter}
-            onChange={e => setSeverityFilter(e.target.value)}
-          />
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiSelect
-            compressed
-            prepend="State"
-            options={[
-              { value: 'all', text: 'All' },
-              { value: 'active', text: 'Active' },
-              { value: 'pending', text: 'Pending' },
-              { value: 'acknowledged', text: 'Acknowledged' },
-              { value: 'resolved', text: 'Resolved' },
-            ]}
-            value={stateFilter}
-            onChange={e => setStateFilter(e.target.value)}
-          />
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      <EuiSpacer size="s" />
-      <EuiBasicTable
-        items={filteredAlerts}
-        columns={columns}
-        loading={loading}
-        sorting={{
-          sort: { field: sortField as any, direction: sortDirection },
-        }}
-        onChange={({ sort }: any) => { if (sort) onTableSort(sort); }}
-        noItemsMessage={searchQuery || severityFilter !== 'all' || stateFilter !== 'all' ? 'No alerts match your filters' : 'No alerts'}
-      />
-    </div>
+            {/* ---- Search + Table ---- */}
+            <EuiPanel paddingSize="m" hasBorder>
+              <EuiTitle size="xs"><h3>All Alerts</h3></EuiTitle>
+              <EuiSpacer size="s" />
+              <EuiFieldSearch
+                placeholder="Search alerts by name, message, or label..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                isClearable
+                fullWidth
+                aria-label="Search alerts"
+              />
+              <EuiSpacer size="s" />
+              <EuiText size="s">
+                <strong>{filteredAlerts.length}</strong> alerts
+                {activeFilterCount > 0 && <span> · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>}
+              </EuiText>
+              <EuiSpacer size="s" />
+              <EuiBasicTable
+                items={paginatedAlerts}
+                columns={columns}
+                loading={loading}
+                pagination={pagination}
+                sorting={{
+                  sort: { field: sortField as any, direction: sortDirection },
+                }}
+                onChange={({ sort, page }: any) => {
+                  if (sort) onTableSort(sort);
+                  if (page) { setPageIndex(page.index); setPageSize(page.size); }
+                }}
+                noItemsMessage={searchQuery || activeFilterCount > 0 || severityFilter !== 'all' || stateFilter !== 'all' ? 'No alerts match your filters' : 'No alerts'}
+              />
+            </EuiPanel>
+          </EuiResizablePanel>
+        </>
+      )}
+    </EuiResizableContainer>
   );
 };
