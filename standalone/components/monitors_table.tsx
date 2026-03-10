@@ -1125,10 +1125,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
           <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} className="monitors-table-wrapper" ref={tableWrapperRef}>
             <style>{`
               .monitors-table-wrapper .euiTable { table-layout: auto; min-width: 100%; }
-              .monitors-table-wrapper .euiTableHeaderCell { position: relative; border-right: 1px solid #D3DAE6; }
+              .monitors-table-wrapper .euiTableHeaderCell { position: relative; }
               .monitors-table-wrapper .euiTableHeaderCell:last-child { border-right: none; }
-              .monitors-table-wrapper .euiTableRowCell { border-right: 1px solid #EDF0F5; }
-              .monitors-table-wrapper .euiTableRowCell:last-child { border-right: none; }
             `}</style>
             {!loading && filtered.length === 0 ? (
               <EuiEmptyPrompt
