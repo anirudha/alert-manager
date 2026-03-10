@@ -892,7 +892,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   };
 
   return (
-    <EuiResizableContainer style={{ height: 'calc(100vh - 250px)' }}>
+    <EuiResizableContainer style={{ height: 'calc(100vh - 180px)' }}>
       {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
         return (
           <>
@@ -997,25 +997,23 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
               minSize="400px"
               mode="main"
               paddingSize="none"
-              style={{ paddingLeft: '4px' }}
+              style={{ paddingLeft: '4px', overflow: 'auto' }}
             >
               <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          {/* Create Monitor Button */}
+          {/* Create Monitor Button + Search bar */}
+          <div style={{ flexShrink: 0 }}>
           {onCreateMonitor && (
-            <>
-              <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s">
-                <EuiFlexItem grow={false}>
-                  <EuiButton fill iconType="plusInCircle" size="s" onClick={onCreateMonitor}>
-                    Create Monitor
-                  </EuiButton>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-              <EuiSpacer size="xs" />
-            </>
+            <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s" style={{ marginBottom: 8 }}>
+              <EuiFlexItem grow={false}>
+                <EuiButton fill iconType="plusInCircle" size="s" onClick={onCreateMonitor}>
+                  Create Monitor
+                </EuiButton>
+              </EuiFlexItem>
+            </EuiFlexGroup>
           )}
 
           {/* Search bar with suggestions */}
-          <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <div ref={searchRef} style={{ position: 'relative' }}>
             <EuiFieldSearch
               placeholder="Search monitors by name, labels (team:infra), annotations..."
               value={searchQuery}
@@ -1050,6 +1048,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                 ))}
               </EuiPanel>
             )}
+          </div>
           </div>
 
           <EuiSpacer size="s" />
@@ -1123,7 +1122,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
           <EuiSpacer size="s" />
 
           {/* Table */}
-          <div style={{ overflowX: 'auto', overflowY: 'auto', minHeight: 300, maxHeight: 'calc(100vh - 400px)' }} className="monitors-table-wrapper" ref={tableWrapperRef}>
+          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} className="monitors-table-wrapper" ref={tableWrapperRef}>
             <style>{`
               .monitors-table-wrapper .euiTable { table-layout: auto; min-width: 100%; }
               .monitors-table-wrapper .euiTableHeaderCell { position: relative; border-right: 1px solid #D3DAE6; }
