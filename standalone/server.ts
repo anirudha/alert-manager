@@ -9,9 +9,13 @@ import {
   MultiBackendAlertService,
   MockOpenSearchBackend,
   MockPrometheusBackend,
+  HttpOpenSearchBackend,
+  HttpPrometheusBackend,
   NotificationRoutingService,
   SuppressionRuleService,
   Logger,
+  OpenSearchBackend,
+  PrometheusBackend,
 } from '../core';
 import {
   handleListDatasources,
@@ -53,6 +57,13 @@ import {
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE !== 'false';
 
+// Real backend configuration (used when MOCK_MODE=false)
+const OPENSEARCH_URL = process.env.OPENSEARCH_URL || 'https://localhost:9200';
+const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME || 'admin';
+const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'My_password_123!@#';
+const PROMETHEUS_URL = process.env.PROMETHEUS_URL || 'http://localhost:9090';
+const ALERTMANAGER_URL = process.env.ALERTMANAGER_URL || 'http://localhost:9093';
+
 const logger: Logger = {
   info: (msg) => console.log(`[INFO] ${msg}`),
   warn: (msg) => console.warn(`[WARN] ${msg}`),
@@ -64,20 +75,16 @@ const logger: Logger = {
 const datasourceService = new InMemoryDatasourceService(logger);
 const alertService = new MultiBackendAlertService(datasourceService, logger);
 
-// Register backends
-const osBackend = new MockOpenSearchBackend(logger);
-const promBackend = new MockPrometheusBackend(logger);
-alertService.registerOpenSearch(osBackend);
-alertService.registerPrometheus(promBackend);
-datasourceService.setPrometheusBackend(promBackend);
+let osBackend: OpenSearchBackend;
+let promBackend: PrometheusBackend;
 
-// Routing and suppression services
-const routingService = new NotificationRoutingService();
-const suppressionService = new SuppressionRuleService();
-
-// Seed mock data
 if (MOCK_MODE) {
   logger.info('Running in MOCK MODE — seeding sample datasources');
+
+  const mockOs = new MockOpenSearchBackend(logger);
+  const mockProm = new MockPrometheusBackend(logger);
+  osBackend = mockOs;
+  promBackend = mockProm;
 
   datasourceService.seed([
     { name: 'OpenSearch Production', type: 'opensearch', url: 'https://opensearch.example.com:9200', enabled: true },
@@ -85,10 +92,52 @@ if (MOCK_MODE) {
     { name: 'OpenSearch Staging', type: 'opensearch', url: 'https://opensearch-staging.example.com:9200', enabled: true },
   ]);
 
-  osBackend.seed('ds-1');
-  osBackend.seed('ds-3');
-  promBackend.seed('ds-2');
+  mockOs.seed('ds-1');
+  mockOs.seed('ds-3');
+  mockProm.seed('ds-2');
+} else {
+  logger.info('Running in LIVE MODE — connecting to real backends');
+  logger.info(`  OpenSearch:   ${OPENSEARCH_URL}`);
+  logger.info(`  Prometheus:   ${PROMETHEUS_URL}`);
+  logger.info(`  Alertmanager: ${ALERTMANAGER_URL}`);
+
+  const httpOs = new HttpOpenSearchBackend(logger);
+  const httpProm = new HttpPrometheusBackend(logger, ALERTMANAGER_URL);
+  osBackend = httpOs;
+  promBackend = httpProm;
+
+  // Seed datasource entries pointing to real infrastructure
+  datasourceService.seed([
+    {
+      name: 'OpenSearch',
+      type: 'opensearch',
+      url: OPENSEARCH_URL,
+      enabled: true,
+      auth: { type: 'basic', credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD } },
+    },
+    {
+      name: 'Prometheus',
+      type: 'prometheus',
+      url: PROMETHEUS_URL,
+      enabled: true,
+    },
+  ]);
+
+  // Optionally register Prometheus in OpenSearch SQL plugin for SQL/PPL queries
+  httpProm.registerInOpenSearch(
+    OPENSEARCH_URL,
+    { id: '', name: 'Prometheus', type: 'prometheus', url: PROMETHEUS_URL, enabled: true },
+    { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD },
+  ).catch(() => { /* logged internally */ });
 }
+
+alertService.registerOpenSearch(osBackend);
+alertService.registerPrometheus(promBackend);
+datasourceService.setPrometheusBackend(promBackend);
+
+// Routing and suppression services
+const routingService = new NotificationRoutingService();
+const suppressionService = new SuppressionRuleService();
 
 const app = express();
 app.use(express.json());
@@ -175,6 +224,70 @@ app.get('/api/datasources/:dsId/rules', async (req, res) => {
 app.get('/api/datasources/:dsId/prom-alerts', async (req, res) => {
   const r = await handleGetPromAlerts(alertService, req.params.dsId);
   res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Prometheus Alertmanager Routes (prom/alertmanager API v2)
+// ============================================================================
+
+app.get('/api/alertmanager/alerts', async (_req, res) => {
+  try {
+    if (!promBackend.getAlertmanagerAlerts) {
+      return res.status(501).json({ error: 'Alertmanager not configured' });
+    }
+    const alerts = await promBackend.getAlertmanagerAlerts();
+    res.json({ alerts });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/alertmanager/silences', async (_req, res) => {
+  try {
+    if (!promBackend.getSilences) {
+      return res.status(501).json({ error: 'Alertmanager not configured' });
+    }
+    const silences = await promBackend.getSilences();
+    res.json({ silences });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/alertmanager/silences', async (req, res) => {
+  try {
+    if (!promBackend.createSilence) {
+      return res.status(501).json({ error: 'Alertmanager not configured' });
+    }
+    const silenceId = await promBackend.createSilence(req.body);
+    res.json({ silenceID: silenceId });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/alertmanager/silences/:id', async (req, res) => {
+  try {
+    if (!promBackend.deleteSilence) {
+      return res.status(501).json({ error: 'Alertmanager not configured' });
+    }
+    const ok = await promBackend.deleteSilence(req.params.id);
+    res.json({ success: ok });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/alertmanager/status', async (_req, res) => {
+  try {
+    if (!promBackend.getAlertmanagerStatus) {
+      return res.status(501).json({ error: 'Alertmanager not configured' });
+    }
+    const status = await promBackend.getAlertmanagerStatus();
+    res.json(status);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ============================================================================
@@ -309,6 +422,22 @@ app.post('/api/alerts/:id/acknowledge', async (req, res) => {
 app.post('/api/alerts/:id/silence', async (req, res) => {
   const r = await handleSilenceAlert(suppressionService, req.params.id, req.body);
   res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Alertmanager Webhook Receiver
+// Receives alert notifications from Prometheus Alertmanager
+// ============================================================================
+
+app.post('/api/webhooks/alertmanager', (req, res) => {
+  const alerts = req.body?.alerts || [];
+  logger.info(`Received ${alerts.length} alert(s) from Alertmanager`);
+  for (const alert of alerts) {
+    const name = alert.labels?.alertname || 'unknown';
+    const status = alert.status || 'unknown';
+    logger.info(`  [${status.toUpperCase()}] ${name}`);
+  }
+  res.json({ status: 'ok' });
 });
 
 // ============================================================================

@@ -2,13 +2,17 @@
  * Datasource service — manages alert datasource configurations
  */
 import { Datasource, DatasourceService, PrometheusBackend, Logger } from './types';
+import { HttpClient, buildAuthFromDatasource } from './http_client';
 
 export class InMemoryDatasourceService implements DatasourceService {
   private datasources: Map<string, Datasource> = new Map();
   private counter = 0;
   private promBackend?: PrometheusBackend;
+  private readonly httpClient: HttpClient;
 
-  constructor(private readonly logger: Logger) {}
+  constructor(private readonly logger: Logger) {
+    this.httpClient = new HttpClient(logger);
+  }
 
   setPrometheusBackend(backend: PrometheusBackend): void {
     this.promBackend = backend;
@@ -50,8 +54,33 @@ export class InMemoryDatasourceService implements DatasourceService {
     if (!datasource) {
       return { success: false, message: 'Datasource not found' };
     }
-    // In mock mode, always succeed
-    return { success: true, message: 'Connection successful' };
+
+    try {
+      if (datasource.type === 'opensearch') {
+        const resp = await this.httpClient.request({
+          method: 'GET',
+          url: `${datasource.url.replace(/\/+$/, '')}/_cluster/health`,
+          auth: buildAuthFromDatasource(datasource),
+          rejectUnauthorized: false,
+          timeoutMs: 5000,
+        });
+        const status = resp.body?.status; // green, yellow, red
+        return { success: true, message: `Connected. Cluster health: ${status}` };
+      } else if (datasource.type === 'prometheus') {
+        await this.httpClient.request({
+          method: 'GET',
+          url: `${datasource.url.replace(/\/+$/, '')}/-/healthy`,
+          timeoutMs: 5000,
+        });
+        return { success: true, message: 'Prometheus is healthy' };
+      }
+      return { success: false, message: `Unknown datasource type: ${datasource.type}` };
+    } catch (err) {
+      return {
+        success: false,
+        message: `Connection failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   }
 
   async listWorkspaces(dsId: string): Promise<Datasource[]> {

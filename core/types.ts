@@ -214,6 +214,44 @@ export interface OpenSearchBackend {
   deleteDestination(ds: Datasource, destId: string): Promise<boolean>;
 }
 
+// ============================================================================
+// Prometheus Alertmanager types
+// (mirrors /api/v2 shapes from prom/alertmanager)
+// ============================================================================
+
+export interface AlertmanagerSilence {
+  id?: string;
+  status?: { state: 'active' | 'pending' | 'expired' };
+  createdBy: string;
+  comment: string;
+  startsAt: string;
+  endsAt: string;
+  matchers: Array<{
+    name: string;
+    value: string;
+    isRegex: boolean;
+    isEqual: boolean;
+  }>;
+}
+
+export interface AlertmanagerAlert {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt: string;
+  endsAt: string;
+  generatorURL: string;
+  fingerprint: string;
+  status: { state: 'active' | 'suppressed' | 'unprocessed'; silencedBy: string[]; inhibitedBy: string[] };
+  receivers: Array<{ name: string }>;
+}
+
+export interface AlertmanagerStatus {
+  cluster: { status: string; peers: Array<{ name: string; address: string }> };
+  config: { original: string };
+  uptime: string;
+  versionInfo: Record<string, string>;
+}
+
 /** Prometheus / AMP backend */
 export interface PrometheusBackend {
   readonly type: 'prometheus';
@@ -221,11 +259,28 @@ export interface PrometheusBackend {
   // Rules (read-only from Prometheus API; AMP supports write via ruler API)
   getRuleGroups(ds: Datasource): Promise<PromRuleGroup[]>;
 
-  // Active alerts
+  // Active alerts from Prometheus server
   getAlerts(ds: Datasource): Promise<PromAlert[]>;
 
   // Workspace discovery
   listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]>;
+
+  // ---- Alertmanager operations (optional — only available when alertmanagerUrl is set) ----
+
+  /** Get alerts from Alertmanager (richer than Prometheus /api/v1/alerts — includes routing info) */
+  getAlertmanagerAlerts?(): Promise<AlertmanagerAlert[]>;
+
+  /** List active silences */
+  getSilences?(): Promise<AlertmanagerSilence[]>;
+
+  /** Create a new silence (returns the silence ID) */
+  createSilence?(silence: AlertmanagerSilence): Promise<string>;
+
+  /** Delete (expire) a silence by ID */
+  deleteSilence?(silenceId: string): Promise<boolean>;
+
+  /** Get Alertmanager status */
+  getAlertmanagerStatus?(): Promise<AlertmanagerStatus>;
 }
 
 export interface DatasourceService {
