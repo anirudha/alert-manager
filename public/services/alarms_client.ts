@@ -42,12 +42,12 @@ export class AlarmsApiClient {
   }
 
   async listAlerts(): Promise<UnifiedAlert[]> {
-    const res = await this.http.get<{ alerts: UnifiedAlert[] }>(this.paths.alerts);
-    return res.alerts;
+    const res = await this.http.get<any>(this.paths.alerts);
+    return res.results ?? res.alerts ?? [];
   }
 
   async listRules(): Promise<UnifiedRule[]> {
-    const res = await this.http.get<{ rules: UnifiedRule[] }>(this.paths.rules);
-    return res.rules;
+    const res = await this.http.get<any>(this.paths.rules);
+    return res.results ?? res.rules ?? [];
   }
 }
