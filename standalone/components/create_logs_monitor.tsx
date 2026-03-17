@@ -26,11 +26,10 @@ import {
   EuiButton,
   EuiButtonEmpty,
   EuiButtonIcon,
+  EuiIcon,
   EuiText,
   EuiBadge,
   EuiAccordion,
-  EuiTabs,
-  EuiTab,
   EuiFlyout,
   EuiFlyoutHeader,
   EuiFlyoutBody,
@@ -38,7 +37,10 @@ import {
   EuiTitle,
   EuiCheckbox,
   EuiBasicTable,
-  EuiSwitch,
+  EuiHorizontalRule,
+  EuiPopover,
+  EuiListGroup,
+  EuiListGroupItem,
 } from '@opensearch-project/oui';
 
 echarts.use([BarChart, GridComponent, TooltipComponent, MarkLineComponent, CanvasRenderer]);
@@ -68,7 +70,7 @@ interface ActionState {
 export interface LogsMonitorFormState {
   monitorName: string;
   description: string;
-  queryTab: 'ppl' | 'query_editor';
+  selectedDatasource: string;
   query: string;
   frequencyType: string;
   runEveryValue: number;
@@ -209,17 +211,19 @@ const MonitorDetailsSection: React.FC<{
         value={form.monitorName}
         onChange={(e) => onUpdate({ monitorName: e.target.value })}
         fullWidth
+        compressed
         aria-label="Monitor name"
       />
     </EuiFormRow>
     <EuiSpacer size="m" />
-    <EuiFormRow label={<span>Description <EuiText size="xs" color="subdued" style={{ display: 'inline' }}>(optional)</EuiText></span>} fullWidth>
+    <EuiFormRow label={<span>Description <span style={{ fontSize: 12, color: '#98A2B3', fontStyle: 'italic', fontWeight: 'normal' }}>— optional</span></span>} fullWidth>
       <EuiTextArea
         placeholder="Describe this monitor"
         value={form.description}
         onChange={(e) => onUpdate({ description: e.target.value })}
         rows={3}
         fullWidth
+        compressed
         aria-label="Monitor description"
       />
     </EuiFormRow>
@@ -232,101 +236,173 @@ const QuerySection: React.FC<{
   onUpdate: (patch: Partial<LogsMonitorFormState>) => void;
   showPreview: boolean;
   onRunPreview: () => void;
-}> = ({ form, onUpdate, showPreview, onRunPreview }) => (
-  <EuiAccordion
-    id="logs-query-section"
-    buttonContent={<strong>Query</strong>}
-    initialIsOpen
-    paddingSize="m"
-    extraAction={
-      <EuiButton size="s" onClick={onRunPreview} aria-label="Run preview">
-        Run preview
-      </EuiButton>
-    }
-  >
-    {/* Tab bar: PPL / Query Editor */}
-    <EuiTabs size="s">
-      <EuiTab
-        isSelected={form.queryTab === 'ppl'}
-        onClick={() => onUpdate({ queryTab: 'ppl' })}
-      >
-        PPL
-      </EuiTab>
-      <EuiTab
-        isSelected={form.queryTab === 'query_editor'}
-        onClick={() => onUpdate({ queryTab: 'query_editor' })}
-      >
-        Query Editor
-      </EuiTab>
-    </EuiTabs>
-    <EuiSpacer size="s" />
+}> = ({ form, onUpdate, showPreview, onRunPreview }) => {
+  const [showDsPicker, setShowDsPicker] = useState(false);
+  const datasourceOptions = ['OpenSearch', 'OpenSearch-logs', 'OpenSearch-metrics'];
 
-    {/* Code editor area */}
-    <EuiPanel
-      paddingSize="s"
-      style={{ backgroundColor: '#1D1E24', borderRadius: 4, position: 'relative' }}
+  const lineCount = form.query.split('\n').length;
+
+  return (
+    <EuiAccordion
+      id="logs-query-section"
+      buttonContent={<strong>Query</strong>}
+      initialIsOpen
+      paddingSize="m"
+      extraAction={
+        <EuiButton size="s" onClick={onRunPreview} aria-label="Run preview">
+          Run preview
+        </EuiButton>
+      }
     >
-      <EuiTextArea
-        value={form.query}
-        onChange={(e) => onUpdate({ query: e.target.value })}
-        rows={6}
-        fullWidth
-        style={{
-          fontFamily: 'monospace',
-          fontSize: 13,
-          backgroundColor: '#1D1E24',
-          color: '#DFE5EF',
-          border: 'none',
-        }}
-        aria-label={form.queryTab === 'ppl' ? 'PPL query editor' : 'Query editor'}
-      />
-      <EuiButtonIcon
-        iconType="expand"
-        size="s"
-        aria-label="Expand editor"
-        style={{ position: 'absolute', top: 4, right: 4, color: '#98A2B3' }}
-        onClick={() => {}}
-      />
-    </EuiPanel>
-
-    {/* Preview Results */}
-    {showPreview && (
-      <>
-        <EuiSpacer size="m" />
-        <EuiAccordion
-          id="logs-preview-results"
-          buttonContent={
-            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-              <EuiFlexItem grow={false}><strong>Results (34)</strong></EuiFlexItem>
-            </EuiFlexGroup>
-          }
-          initialIsOpen
-          paddingSize="s"
+      {/* Single container wrapping top bar + code editor */}
+      <EuiPanel paddingSize="none" hasBorder style={{ borderRadius: 4, overflow: 'hidden' }}>
+        {/* Top bar: PPL badge, datasource picker, query library */}
+        <EuiFlexGroup
+          gutterSize="s"
+          alignItems="center"
+          responsive={false}
+          style={{ padding: '6px 8px', borderBottom: '1px solid #D3DAE6' }}
         >
-          <EuiText size="xs" color="subdued">EVENTS_LAST_HOUR_v2</EuiText>
-          <EuiSpacer size="s" />
-          <ReactEChartsCore
-            echarts={echarts}
-            option={buildPreviewChartOption()}
-            style={{ height: 200, width: '100%' }}
-            notMerge
-            lazyUpdate
+          <EuiFlexItem grow={false}>
+            <EuiBadge color="hollow">PPL</EuiBadge>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiPopover
+              button={
+                <EuiButtonEmpty
+                  size="xs"
+                  onClick={() => setShowDsPicker(!showDsPicker)}
+                  aria-label="Select data source"
+                >
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                    <EuiFlexItem grow={false}><EuiIcon type="database" size="s" /></EuiFlexItem>
+                    <EuiFlexItem grow={false}>{form.selectedDatasource}</EuiFlexItem>
+                    <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiButtonEmpty>
+              }
+              isOpen={showDsPicker}
+              closePopover={() => setShowDsPicker(false)}
+              panelPaddingSize="none"
+              anchorPosition="downLeft"
+            >
+              <EuiListGroup flush style={{ width: 200 }}>
+                {datasourceOptions.map((ds) => (
+                  <EuiListGroupItem
+                    key={ds}
+                    label={ds}
+                    onClick={() => {
+                      onUpdate({ selectedDatasource: ds });
+                      setShowDsPicker(false);
+                    }}
+                    isActive={form.selectedDatasource === ds}
+                    aria-label={`Select ${ds} data source`}
+                  />
+                ))}
+              </EuiListGroup>
+            </EuiPopover>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiButtonEmpty size="xs" aria-label="Query library">
+              <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                <EuiFlexItem grow={false}><EuiIcon type="addBookmark" size="s" /></EuiFlexItem>
+                <EuiFlexItem grow={false}>Query library</EuiFlexItem>
+                <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
+              </EuiFlexGroup>
+            </EuiButtonEmpty>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+
+        {/* Code editor with line numbers */}
+        <div style={{ display: 'flex', position: 'relative' }}>
+          {/* Line number gutter */}
+          <div
+            aria-hidden="true"
+            style={{
+              padding: '8px 0',
+              minWidth: 36,
+              textAlign: 'right',
+              fontFamily: 'monospace',
+              fontSize: 13,
+              lineHeight: '20px',
+              color: '#98A2B3',
+              backgroundColor: '#F5F7FA',
+              borderRight: '1px solid #D3DAE6',
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+          >
+            {Array.from({ length: lineCount }, (_, i) => (
+              <div key={i} style={{ paddingRight: 8 }}>{i + 1}</div>
+            ))}
+          </div>
+          {/* Textarea */}
+          <textarea
+            value={form.query}
+            onChange={(e) => onUpdate({ query: e.target.value })}
+            rows={Math.max(2, lineCount)}
+            style={{
+              flex: 1,
+              fontFamily: 'monospace',
+              fontSize: 13,
+              lineHeight: '20px',
+              padding: '8px 12px',
+              border: 'none',
+              outline: 'none',
+              resize: 'vertical',
+              backgroundColor: 'transparent',
+            }}
+            aria-label="PPL query editor"
           />
-          <EuiSpacer size="s" />
-          <EuiBasicTable
-            items={MOCK_TABLE_ROWS}
-            columns={[
-              { field: 'date', name: 'Date' },
-              { field: 'eventType', name: 'Event type' },
-              { field: 'status', name: 'Status' },
-            ]}
-            tableLayout="auto"
+          <EuiButtonIcon
+            iconType="expand"
+            size="s"
+            aria-label="Expand editor"
+            style={{ position: 'absolute', top: 4, right: 4 }}
+            onClick={() => {}}
           />
-        </EuiAccordion>
-      </>
-    )}
-  </EuiAccordion>
-);
+        </div>
+      </EuiPanel>
+
+      {/* Preview Results */}
+      {showPreview && (
+        <>
+          <EuiSpacer size="m" />
+          <EuiAccordion
+            id="logs-preview-results"
+            buttonContent={
+              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                <EuiFlexItem grow={false}><strong>Results (34)</strong></EuiFlexItem>
+              </EuiFlexGroup>
+            }
+            initialIsOpen
+            paddingSize="s"
+          >
+            <EuiText size="xs" color="subdued">EVENTS_LAST_HOUR_v2</EuiText>
+            <EuiSpacer size="s" />
+            <ReactEChartsCore
+              echarts={echarts}
+              option={buildPreviewChartOption()}
+              style={{ height: 200, width: '100%' }}
+              notMerge
+              lazyUpdate
+            />
+            <EuiSpacer size="s" />
+            <EuiBasicTable
+              items={MOCK_TABLE_ROWS}
+              columns={[
+                { field: 'date', name: 'Date' },
+                { field: 'eventType', name: 'Event type' },
+                { field: 'status', name: 'Status' },
+              ]}
+              tableLayout="auto"
+            />
+          </EuiAccordion>
+        </>
+      )}
+    </EuiAccordion>
+  );
+};
 
 /** Section 3: Schedule */
 const ScheduleSection: React.FC<{
@@ -410,6 +486,7 @@ const TriggerItem: React.FC<{
         value={trigger.name}
         onChange={(e) => onUpdate(trigger.id, { name: e.target.value })}
         fullWidth
+        compressed
         aria-label="Trigger name"
       />
     </EuiFormRow>
@@ -551,12 +628,9 @@ const TriggersSection: React.FC<{
   onDeleteTrigger: (id: string) => void;
   onAddTrigger: () => void;
 }> = ({ triggers, onUpdateTrigger, onDeleteTrigger, onAddTrigger }) => (
-  <EuiAccordion
-    id="logs-triggers-section"
-    buttonContent={<strong>Triggers ({triggers.length})</strong>}
-    initialIsOpen
-    paddingSize="m"
-  >
+  <section aria-label="Triggers">
+    <EuiTitle size="xs"><h3>Triggers ({triggers.length})</h3></EuiTitle>
+    <EuiSpacer size="s" />
     {triggers.map((trigger, idx) => (
       <React.Fragment key={trigger.id}>
         {idx > 0 && <EuiSpacer size="m" />}
@@ -580,7 +654,7 @@ const TriggersSection: React.FC<{
     >
       Add another trigger
     </EuiButtonEmpty>
-  </EuiAccordion>
+  </section>
 );
 
 /** Section 5: Actions */
@@ -589,10 +663,10 @@ const ActionsSection: React.FC<{
   onDeleteAction: (id: string) => void;
   onAddAction: () => void;
 }> = ({ actions, onDeleteAction, onAddAction }) => (
-  <section aria-label="Actions">
+  <section aria-label="Notification actions">
     <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
       <EuiFlexItem grow={false}>
-        <EuiTitle size="xs"><h3>Actions ({actions.length})</h3></EuiTitle>
+        <EuiTitle size="xs"><h3>Notification actions ({actions.length})</h3></EuiTitle>
       </EuiFlexItem>
     </EuiFlexGroup>
     <EuiSpacer size="s" />
@@ -642,7 +716,7 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
   const [form, setForm] = useState<LogsMonitorFormState>({
     monitorName: '',
     description: '',
-    queryTab: 'ppl',
+    selectedDatasource: 'OpenSearch',
     query: DEFAULT_PPL_QUERY,
     frequencyType: 'by_interval',
     runEveryValue: 1,
@@ -718,23 +792,23 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
 
       <EuiFlyoutBody>
         <MonitorDetailsSection form={form} onUpdate={updateForm} />
-        <EuiSpacer size="l" />
+        <EuiHorizontalRule margin="l" />
         <QuerySection
           form={form}
           onUpdate={updateForm}
           showPreview={showPreview}
           onRunPreview={handleRunPreview}
         />
-        <EuiSpacer size="l" />
+        <EuiHorizontalRule margin="l" />
         <ScheduleSection form={form} onUpdate={updateForm} />
-        <EuiSpacer size="l" />
+        <EuiHorizontalRule margin="l" />
         <TriggersSection
           triggers={form.triggers}
           onUpdateTrigger={updateTrigger}
           onDeleteTrigger={deleteTrigger}
           onAddTrigger={addTrigger}
         />
-        <EuiSpacer size="l" />
+        <EuiHorizontalRule margin="l" />
         <ActionsSection
           actions={form.actions}
           onDeleteAction={deleteAction}

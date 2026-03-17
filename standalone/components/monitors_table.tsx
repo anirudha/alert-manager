@@ -94,7 +94,7 @@ interface MonitorsTableProps {
   onClone?: (monitor: UnifiedRule) => void;
   onSilence?: (id: string) => void;
   onImport?: (configs: any[]) => void;
-  onCreateMonitor?: (type: 'logs' | 'prometheus' | 'slo') => void;
+  onCreateMonitor?: (type: 'logs' | 'prometheus' | 'metrics' | 'slo') => void;
   /** Workspace-scoped entries for Prometheus datasources */
   workspaceOptions: Datasource[];
   loadingWorkspaces: boolean;
@@ -1022,6 +1022,11 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                       label="Logs"
                       onClick={() => { setShowCreatePopover(false); onCreateMonitor('logs'); }}
                       aria-label="Create Logs monitor"
+                    />
+                    <EuiListGroupItem
+                      label="Metrics"
+                      onClick={() => { setShowCreatePopover(false); onCreateMonitor('metrics'); }}
+                      aria-label="Create Metrics monitor"
                     />
                     <EuiListGroupItem
                       label="Prometheus Metrics"

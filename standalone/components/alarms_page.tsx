@@ -39,6 +39,7 @@ import { AlertDetailFlyout } from './alert_detail_flyout';
 import { NotificationRoutingPanel } from './notification_routing_panel';
 import { SuppressionRulesPanel } from './suppression_rules_panel';
 import { CreateLogsMonitor, LogsMonitorFormState } from './create_logs_monitor';
+import { CreateMetricsMonitor, MetricsMonitorFormState } from './create_metrics_monitor';
 
 // ============================================================================
 // HTTP Client & API
@@ -337,7 +338,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const [deletedRuleIds, setDeletedRuleIds] = useState<Set<string>>(new Set());
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
-  const [createMonitorType, setCreateMonitorType] = useState<'logs' | 'prometheus' | null>(null);
+  const [createMonitorType, setCreateMonitorType] = useState<'logs' | 'prometheus' | 'metrics' | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
 
   const visibleRules = rules.filter(r => !deletedRuleIds.has(r.id));
@@ -676,6 +677,51 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     setCreateMonitorType(null);
   };
 
+  const handleCreateMetricsMonitor = async (metricsForm: MetricsMonitorFormState) => {
+    const now = new Date().toISOString();
+    const labelsObj: Record<string, string> = {};
+    for (const l of metricsForm.labels) {
+      if (l.key && l.value) labelsObj[l.key] = l.value;
+    }
+    const annotationsObj: Record<string, string> = {};
+    for (const a of metricsForm.annotations) {
+      if (a.key && a.value) annotationsObj[a.key] = a.value;
+    }
+    const newRule: UnifiedRule = {
+      id: `new-metrics-${Date.now()}`,
+      datasourceId: selectedDsIds[0] || 'ds-2',
+      datasourceType: 'prometheus',
+      name: metricsForm.monitorName,
+      enabled: true,
+      severity: (labelsObj.severity as any) || 'medium',
+      query: metricsForm.query,
+      condition: `${metricsForm.threshold.operator} ${metricsForm.threshold.value}${metricsForm.threshold.unit}`,
+      labels: labelsObj,
+      annotations: annotationsObj,
+      monitorType: 'metric',
+      status: 'active',
+      healthStatus: 'healthy',
+      createdBy: 'current-user',
+      createdAt: now,
+      lastModified: now,
+      notificationDestinations: metricsForm.actions.map(a => a.name),
+      description: annotationsObj.description || metricsForm.description,
+      aiSummary: 'Newly created metrics monitor.',
+      evaluationInterval: metricsForm.evaluationInterval,
+      pendingPeriod: metricsForm.pendingPeriod,
+      firingPeriod: metricsForm.firingPeriod,
+      threshold: { operator: metricsForm.threshold.operator, value: metricsForm.threshold.value, unit: metricsForm.threshold.unit },
+      alertHistory: [],
+      conditionPreviewData: [],
+      notificationRouting: [],
+      suppressionRules: [],
+      raw: {} as any,
+    };
+    try { await apiClient.createMonitor(metricsForm); } catch (_e) { /* local-only fallback */ }
+    setRules(prev => [newRule, ...prev]);
+    setCreateMonitorType(null);
+  };
+
   // ---- Render ----
 
   const tabs = [
@@ -720,6 +766,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           onCreateMonitor={(type) => {
             if (type === 'logs') {
               setCreateMonitorType('logs');
+            } else if (type === 'metrics') {
+              setCreateMonitorType('metrics');
             } else if (type === 'prometheus') {
               setCreateMonitorType('prometheus');
               setShowCreateMonitor(true);
@@ -780,6 +828,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           <CreateLogsMonitor
             onCancel={() => setCreateMonitorType(null)}
             onSave={handleCreateLogsMonitor}
+          />
+        )}
+        {createMonitorType === 'metrics' && (
+          <CreateMetricsMonitor
+            onCancel={() => setCreateMonitorType(null)}
+            onSave={handleCreateMetricsMonitor}
           />
         )}
         {selectedAlert && (

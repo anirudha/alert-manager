@@ -1,8 +1,8 @@
-# Create Alert Page — UI Mockup Specification for logs type monitors
+# Create Alert Page — UI Mockup Specification
 
 ## Page Layout
 
-The page is a single-column form layout with collapsible sections, a sticky footer with Cancel and Create buttons. Each section is divided by a line. Optional fields label should be on the same line as the field label.
+The page is a single-column form layout with collapsible sections, a sticky footer with Cancel and Create buttons.
 
 ---
 
@@ -13,7 +13,7 @@ Collapsible section (expanded by default).
 | Field              | Type        | Placeholder / Notes                  | Required |
 |--------------------|-------------|---------------------------------------|----------|
 | Monitor name       | Text input  | "Enter a monitor name"               | Yes      |
-| Description *— optional*        | Textarea    | "Describe this monitor" | No       |
+| Description        | Textarea    | "Describe this monitor" — labeled "optional" | No       |
 
 ---
 
@@ -22,13 +22,9 @@ Collapsible section (expanded by default).
 Collapsible section (expanded by default). Contains a "Run preview" button in the section header (right-aligned).
 
 ### Query Editor
-- THe query editor is wrapped in a single container.
-- Top of the container contains 3 items:
-    - Badge that displays the current language **PPL**, 
-    - Button for picking data source, it should display and selected an OpenSearch data source by default. With OUI left icon **database** and OUI right icon **arrowDown**
-    - Button for picking sample queries named **Query library** with OUI left icon **addBookmark**  and OUI right icon **arrowDown**
-- Code editor area with syntax-highlighted query text (use monospace font, show 2 lines by default)
-- Code editor should show the line number
+
+- Tab bar with two tabs: **PPL** (active) and **Query Editor**
+- Code editor area with syntax-highlighted query text (dark background, monospace font)
 - A small copy/expand icon in the top-right corner of the editor
 
 ### Preview Results (collapsible sub-section)
@@ -68,7 +64,7 @@ Collapsible section (expanded by default).
 
 ## Section 4: Triggers (1)
 
-Not collapsible. The header shows the trigger count in parentheses.
+Collapsible section (expanded by default). The header shows the trigger count in parentheses.
 
 ### Trigger 1 (collapsible, expanded)
 
@@ -99,7 +95,7 @@ A "Delete" button (red text) is right-aligned in the trigger header.
 
 ---
 
-## Section 5: Notification actions (2)
+## Section 5: Actions (2)
 
 Not collapsible — shown as a list with a count in the header.
 
