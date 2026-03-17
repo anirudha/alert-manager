@@ -70,7 +70,7 @@ Collapsible section (expanded by default).
 
 Not collapsible. The header shows the trigger count in parentheses.
 
-### Trigger 1 (collapsible, expanded)
+### Trigger (collapsible, expanded)
 
 A "Delete" button (red text) is right-aligned in the trigger header.
 
@@ -79,14 +79,14 @@ A "Delete" button (red text) is right-aligned in the trigger header.
 | Trigger name       | Text input                          | `Trigger 1`                    |
 | Severity level     | Dropdown                            | `Critical`                     |
 | Type               | Dropdown                            | `Extraction query response`    |
-| Trigger condition  | Dropdown + Operator + Number input  | `is greater than` · `900`      |
+| Trigger condition  | Dropdown + Operator + Number input  | `is greater than` · `8`      |
 
 ### Trigger Threshold Visualization
 
-- Label: **Trigger**
+<!-- - Label: **Trigger**
 - Two radio buttons:
   - **Visual** (selected)
-  - **Per-value threshold**
+  - **Per-value threshold** -->
 - Chart: Same bar chart as Preview Results, but with a horizontal red dashed threshold line overlaid at the configured value
 - Header above chart: **Results** with subtitle `EVENTS_LAST_HOUR_v2`
 
@@ -111,6 +111,18 @@ Each action is a collapsible accordion row with a "Delete" button (red text) on 
 |----|------------------------|
 | 1  | `slack_message`        |
 | 2  | `pager-duty_message`   |
+
+Each action should contain the following
+
+| Field                | Type             | Default Value     | Placeholder     |
+|----------------------|------------------|-------------------|-------------------|
+| Notification channel | Dropdown         | Oncall (Slack)    | -                 |  
+| Subject              | Text input       | -                 | Enter a subject   |
+| Message (Description text: Embed variables in your message using Mustache templates. Learn more)              | Textfield       | -                 | Monitor {{ctx.monitor.name}} just entered alert status. Please investigate the issue.
+  - Trigger: {{ctx.trigger.name}}
+  - Severity: {{ctx.trigger.severity}}
+  - Period start: {{ctx.periodStart}}
+  - Period end: {{ctx.periodEnd}}   |
 
 ### Add Action
 

@@ -56,7 +56,6 @@ interface TriggerState {
   type: string;
   conditionOperator: string;
   conditionValue: number;
-  visualMode: 'visual' | 'per_value';
   suppressEnabled: boolean;
   suppressExpiry: number;
   suppressExpiryUnit: string;
@@ -65,6 +64,9 @@ interface TriggerState {
 interface ActionState {
   id: string;
   name: string;
+  notificationChannel: string;
+  subject: string;
+  message: string;
 }
 
 export interface LogsMonitorFormState {
@@ -124,6 +126,19 @@ const TIME_UNIT_OPTIONS = [
   { value: 'day(s)', text: 'day(s)' },
 ];
 
+const NOTIFICATION_CHANNEL_OPTIONS = [
+  { value: 'oncall_slack', text: 'Oncall (Slack)' },
+  { value: 'pagerduty', text: 'PagerDuty' },
+  { value: 'email', text: 'Email' },
+  { value: 'webhook', text: 'Webhook' },
+];
+
+const DEFAULT_ACTION_MESSAGE = `Monitor {{ctx.monitor.name}} just entered alert status. Please investigate the issue.
+  - Trigger: {{ctx.trigger.name}}
+  - Severity: {{ctx.trigger.severity}}
+  - Period start: {{ctx.periodStart}}
+  - Period end: {{ctx.periodEnd}}`;
+
 const DEFAULT_PPL_QUERY = `source = logs-* | where @timestamp > NOW() - INTERVAL 5 MINUTE
 | stats count() as EVENTS_LAST_HOUR_v2 by span(@timestamp, 1h)`;
 
@@ -134,8 +149,7 @@ function createDefaultTrigger(index: number): TriggerState {
     severityLevel: 'critical',
     type: 'extraction_query_response',
     conditionOperator: 'is_greater_than',
-    conditionValue: 900,
-    visualMode: 'visual',
+    conditionValue: 8,
     suppressEnabled: false,
     suppressExpiry: 24,
     suppressExpiryUnit: 'hour(s)',
@@ -149,7 +163,7 @@ const PREVIEW_TIMESTAMPS = [
 ];
 const PREVIEW_VALUES = [3, 5, 2, 7, 4, 8, 6, 9, 3, 5, 7, 4, 6, 8];
 
-const MOCK_TABLE_ROWS = Array.from({ length: 6 }, (_, i) => ({
+const MOCK_TABLE_ROWS = Array.from({ length: 10 }, (_, i) => ({
   date: `Nov 15, 2025 @ 25:59:0${i}.883`,
   eventType: 'login',
   status: 'false',
@@ -544,28 +558,6 @@ const TriggerItem: React.FC<{
 
     {/* Threshold visualization */}
     <EuiPanel paddingSize="s" color="subdued">
-      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-        <EuiFlexItem grow={false}><EuiText size="xs"><strong>Trigger</strong></EuiText></EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiBadge
-            color={trigger.visualMode === 'visual' ? 'primary' : 'hollow'}
-            onClick={() => onUpdate(trigger.id, { visualMode: 'visual' })}
-            onClickAriaLabel="Visual mode"
-          >
-            Visual
-          </EuiBadge>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiBadge
-            color={trigger.visualMode === 'per_value' ? 'primary' : 'hollow'}
-            onClick={() => onUpdate(trigger.id, { visualMode: 'per_value' })}
-            onClickAriaLabel="Per-value threshold mode"
-          >
-            Per-value threshold
-          </EuiBadge>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      <EuiSpacer size="s" />
       <EuiText size="xs"><strong>Results</strong></EuiText>
       <EuiText size="xs" color="subdued">EVENTS_LAST_HOUR_v2</EuiText>
       <EuiSpacer size="xs" />
@@ -660,9 +652,10 @@ const TriggersSection: React.FC<{
 /** Section 5: Actions */
 const ActionsSection: React.FC<{
   actions: ActionState[];
+  onUpdateAction: (id: string, patch: Partial<ActionState>) => void;
   onDeleteAction: (id: string) => void;
   onAddAction: () => void;
-}> = ({ actions, onDeleteAction, onAddAction }) => (
+}> = ({ actions, onUpdateAction, onDeleteAction, onAddAction }) => (
   <section aria-label="Notification actions">
     <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
       <EuiFlexItem grow={false}>
@@ -689,9 +682,44 @@ const ActionsSection: React.FC<{
               </EuiButtonEmpty>
             }
           >
-            <EuiText size="xs" color="subdued">
-              Action configuration placeholder — destination, message template, etc.
-            </EuiText>
+            <EuiFormRow label="Notification channel" display="rowCompressed" fullWidth>
+              <EuiSelect
+                options={NOTIFICATION_CHANNEL_OPTIONS}
+                value={action.notificationChannel}
+                onChange={(e) => onUpdateAction(action.id, { notificationChannel: e.target.value })}
+                compressed
+                fullWidth
+                aria-label="Notification channel"
+              />
+            </EuiFormRow>
+            <EuiSpacer size="s" />
+            <EuiFormRow label="Subject" display="rowCompressed" fullWidth>
+              <EuiFieldText
+                placeholder="Enter a subject"
+                value={action.subject}
+                onChange={(e) => onUpdateAction(action.id, { subject: e.target.value })}
+                compressed
+                fullWidth
+                aria-label="Action subject"
+              />
+            </EuiFormRow>
+            <EuiSpacer size="s" />
+            <EuiFormRow
+              label="Message"
+              helpText="Embed variables in your message using Mustache templates. Learn more"
+              display="rowCompressed"
+              fullWidth
+            >
+              <EuiTextArea
+                placeholder={DEFAULT_ACTION_MESSAGE}
+                value={action.message}
+                onChange={(e) => onUpdateAction(action.id, { message: e.target.value })}
+                rows={6}
+                fullWidth
+                compressed
+                aria-label="Action message"
+              />
+            </EuiFormRow>
           </EuiAccordion>
         </EuiPanel>
       </React.Fragment>
@@ -723,8 +751,8 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
     runEveryUnit: 'minute(s)',
     triggers: [createDefaultTrigger(0)],
     actions: [
-      { id: `action-${Date.now()}-0`, name: 'slack_message' },
-      { id: `action-${Date.now()}-1`, name: 'pager-duty_message' },
+      { id: `action-${Date.now()}-0`, name: 'slack_message', notificationChannel: 'oncall_slack', subject: '', message: '' },
+      { id: `action-${Date.now()}-1`, name: 'pager-duty_message', notificationChannel: 'oncall_slack', subject: '', message: '' },
     ],
   });
   const [showPreview, setShowPreview] = useState(false);
@@ -761,11 +789,18 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
     }));
   }, []);
 
+  const updateAction = useCallback((id: string, patch: Partial<ActionState>) => {
+    setForm((prev) => ({
+      ...prev,
+      actions: prev.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    }));
+  }, []);
+
   const addAction = useCallback(() => {
     const name = `action_${form.actions.length + 1}`;
     setForm((prev) => ({
       ...prev,
-      actions: [...prev.actions, { id: `action-${Date.now()}`, name }],
+      actions: [...prev.actions, { id: `action-${Date.now()}`, name, notificationChannel: 'oncall_slack', subject: '', message: '' }],
     }));
   }, [form.actions.length]);
 
@@ -811,6 +846,7 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
         <EuiHorizontalRule margin="l" />
         <ActionsSection
           actions={form.actions}
+          onUpdateAction={updateAction}
           onDeleteAction={deleteAction}
           onAddAction={addAction}
         />
