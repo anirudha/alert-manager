@@ -94,7 +94,7 @@ interface MonitorsTableProps {
   onClone?: (monitor: UnifiedRule) => void;
   onSilence?: (id: string) => void;
   onImport?: (configs: any[]) => void;
-  onCreateMonitor?: () => void;
+  onCreateMonitor?: (type: 'logs' | 'prometheus' | 'slo') => void;
   /** Workspace-scoped entries for Prometheus datasources */
   workspaceOptions: Datasource[];
   loadingWorkspaces: boolean;
@@ -426,6 +426,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
+  const [showCreatePopover, setShowCreatePopover] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -1005,9 +1006,35 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
           {onCreateMonitor && (
             <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s" style={{ marginBottom: 8 }}>
               <EuiFlexItem grow={false}>
-                <EuiButton fill iconType="plusInCircle" size="s" onClick={onCreateMonitor}>
-                  Create Monitor
-                </EuiButton>
+                <EuiPopover
+                  button={
+                    <EuiButton fill iconType="plusInCircle" size="s" onClick={() => setShowCreatePopover(!showCreatePopover)}>
+                      Create Monitor
+                    </EuiButton>
+                  }
+                  isOpen={showCreatePopover}
+                  closePopover={() => setShowCreatePopover(false)}
+                  panelPaddingSize="none"
+                  anchorPosition="downRight"
+                >
+                  <EuiListGroup flush style={{ width: 200 }}>
+                    <EuiListGroupItem
+                      label="Logs"
+                      onClick={() => { setShowCreatePopover(false); onCreateMonitor('logs'); }}
+                      aria-label="Create Logs monitor"
+                    />
+                    <EuiListGroupItem
+                      label="Prometheus Metrics"
+                      onClick={() => { setShowCreatePopover(false); onCreateMonitor('prometheus'); }}
+                      aria-label="Create Prometheus Metrics monitor"
+                    />
+                    <EuiListGroupItem
+                      label="SLO"
+                      onClick={() => { setShowCreatePopover(false); onCreateMonitor('slo'); }}
+                      aria-label="Create SLO monitor"
+                    />
+                  </EuiListGroup>
+                </EuiPopover>
               </EuiFlexItem>
             </EuiFlexGroup>
           )}

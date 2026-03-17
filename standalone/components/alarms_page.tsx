@@ -38,6 +38,7 @@ import { AlertsDashboard } from './alerts_dashboard';
 import { AlertDetailFlyout } from './alert_detail_flyout';
 import { NotificationRoutingPanel } from './notification_routing_panel';
 import { SuppressionRulesPanel } from './suppression_rules_panel';
+import { CreateLogsMonitor, LogsMonitorFormState } from './create_logs_monitor';
 
 // ============================================================================
 // HTTP Client & API
@@ -336,6 +337,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const [deletedRuleIds, setDeletedRuleIds] = useState<Set<string>>(new Set());
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
+  const [createMonitorType, setCreateMonitorType] = useState<'logs' | 'prometheus' | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
 
   const visibleRules = rules.filter(r => !deletedRuleIds.has(r.id));
@@ -639,6 +641,41 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     // Don't close flyout — AI wizard shows its own summary step and "Done" button
   };
 
+  const handleCreateLogsMonitor = async (logsForm: LogsMonitorFormState) => {
+    const now = new Date().toISOString();
+    const newRule: UnifiedRule = {
+      id: `new-logs-${Date.now()}`,
+      datasourceId: selectedDsIds[0] || 'ds-1',
+      datasourceType: 'opensearch',
+      name: logsForm.monitorName,
+      enabled: true,
+      severity: (logsForm.triggers[0]?.severityLevel as any) || 'medium',
+      query: logsForm.query,
+      condition: logsForm.triggers.map(t => `${t.conditionOperator} ${t.conditionValue}`).join(', '),
+      labels: { monitorType: 'logs' },
+      annotations: { description: logsForm.description },
+      monitorType: 'log',
+      status: 'active',
+      healthStatus: 'healthy',
+      createdBy: 'current-user',
+      createdAt: now,
+      lastModified: now,
+      notificationDestinations: logsForm.actions.map(a => a.name),
+      description: logsForm.description,
+      aiSummary: 'Newly created logs monitor.',
+      evaluationInterval: `${logsForm.runEveryValue} ${logsForm.runEveryUnit}`,
+      pendingPeriod: '5 minutes',
+      alertHistory: [],
+      conditionPreviewData: [],
+      notificationRouting: [],
+      suppressionRules: [],
+      raw: {} as any,
+    };
+    try { await apiClient.createMonitor(logsForm); } catch (_e) { /* local-only fallback */ }
+    setRules(prev => [newRule, ...prev]);
+    setCreateMonitorType(null);
+  };
+
   // ---- Render ----
 
   const tabs = [
@@ -680,7 +717,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           onSilence={handleSilenceRule}
           onClone={handleCloneRule}
           onImport={handleImportMonitors}
-          onCreateMonitor={() => setShowCreateMonitor(true)}
+          onCreateMonitor={(type) => {
+            if (type === 'logs') {
+              setCreateMonitorType('logs');
+            } else if (type === 'prometheus') {
+              setCreateMonitorType('prometheus');
+              setShowCreateMonitor(true);
+            }
+            // TODO: handle 'slo' type
+          }}
           workspaceOptions={workspaceOptions}
           loadingWorkspaces={loadingWorkspaces}
           selectedDsIds={selectedDsIds}
@@ -729,6 +774,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             onCancel={() => setShowCreateMonitor(false)}
             datasources={creatableDatasources}
             selectedDsIds={selectedDsIds}
+          />
+        )}
+        {createMonitorType === 'logs' && (
+          <CreateLogsMonitor
+            onCancel={() => setCreateMonitorType(null)}
+            onSave={handleCreateLogsMonitor}
           />
         )}
         {selectedAlert && (
