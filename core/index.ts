@@ -7,6 +7,8 @@ export { MultiBackendAlertService } from './alert_service';
 export { MockOpenSearchBackend, MockPrometheusBackend } from './mock_backend';
 export { HttpOpenSearchBackend } from './opensearch_backend';
 export { HttpPrometheusBackend } from './prometheus_backend';
+export { DirectQueryPrometheusBackend } from './directquery_prometheus_backend';
+export type { DirectQueryConfig } from './directquery_prometheus_backend';
 export { HttpClient, buildAuthFromDatasource } from './http_client';
 export { parseDuration, formatDuration, validateMonitorForm } from './validators';
 export type { MonitorFormState, ValidationResult, ThresholdCondition, LabelEntry, AnnotationEntry } from './validators';

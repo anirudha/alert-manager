@@ -7,6 +7,7 @@ import {
   DatasourceService,
   DatasourceFetchResult,
   DatasourceFetchStatus,
+  DatasourceWarning,
   Logger,
   OpenSearchBackend,
   PrometheusBackend,
@@ -196,11 +197,21 @@ export class MultiBackendAlertService {
     const pageSize = options?.pageSize ?? 20;
     const datasources = await this.resolveDatasources(options?.dsIds);
 
-    // Fetch all rules from selected datasources (typically just 1-2)
     const allRules: UnifiedRule[] = [];
+    const warnings: DatasourceWarning[] = [];
+
     for (const ds of datasources) {
-      const rules = await this.fetchRulesRaw(ds);
-      allRules.push(...rules);
+      try {
+        const rules = await this.fetchRulesRaw(ds);
+        allRules.push(...rules);
+      } catch (err) {
+        this.logger.error(`Failed to fetch rules from ${ds.name} (${ds.id}): ${err}`);
+        warnings.push({ datasourceId: ds.id, datasourceName: ds.name, datasourceType: ds.type, error: String(err) });
+      }
+    }
+
+    if (allRules.length === 0 && warnings.length === datasources.length && datasources.length > 0) {
+      throw new Error(`All datasources failed: ${warnings.map(w => `${w.datasourceName}: ${w.error}`).join('; ')}`);
     }
 
     const total = allRules.length;
@@ -213,6 +224,7 @@ export class MultiBackendAlertService {
       page,
       pageSize,
       hasMore: start + pageSize < total,
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
   }
 
@@ -222,9 +234,20 @@ export class MultiBackendAlertService {
     const datasources = await this.resolveDatasources(options?.dsIds);
 
     const allAlerts: UnifiedAlert[] = [];
+    const warnings: DatasourceWarning[] = [];
+
     for (const ds of datasources) {
-      const alerts = await this.fetchAlertsRaw(ds);
-      allAlerts.push(...alerts);
+      try {
+        const alerts = await this.fetchAlertsRaw(ds);
+        allAlerts.push(...alerts);
+      } catch (err) {
+        this.logger.error(`Failed to fetch alerts from ${ds.name} (${ds.id}): ${err}`);
+        warnings.push({ datasourceId: ds.id, datasourceName: ds.name, datasourceType: ds.type, error: String(err) });
+      }
+    }
+
+    if (allAlerts.length === 0 && warnings.length === datasources.length && datasources.length > 0) {
+      throw new Error(`All datasources failed: ${warnings.map(w => `${w.datasourceName}: ${w.error}`).join('; ')}`);
     }
 
     const total = allAlerts.length;
@@ -237,6 +260,7 @@ export class MultiBackendAlertService {
       page,
       pageSize,
       hasMore: start + pageSize < total,
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
   }
 

@@ -17,6 +17,8 @@ import {
   PromRuleGroup,
   PrometheusWorkspace,
   AlertmanagerAlert,
+  AlertmanagerAlertGroup,
+  AlertmanagerReceiver,
   AlertmanagerSilence,
   AlertmanagerStatus,
 } from './types';
@@ -183,6 +185,26 @@ export class HttpPrometheusBackend implements PrometheusBackend {
     const resp = await this.http.request<AlertmanagerStatus>({
       method: 'GET',
       url: `${this.alertmanagerUrl}/api/v2/status`,
+      timeoutMs: 10_000,
+    });
+    return resp.body;
+  }
+
+  async getAlertmanagerReceivers(): Promise<AlertmanagerReceiver[]> {
+    if (!this.alertmanagerUrl) return [];
+    const resp = await this.http.request<AlertmanagerReceiver[]>({
+      method: 'GET',
+      url: `${this.alertmanagerUrl}/api/v2/receivers`,
+      timeoutMs: 10_000,
+    });
+    return resp.body;
+  }
+
+  async getAlertmanagerAlertGroups(): Promise<AlertmanagerAlertGroup[]> {
+    if (!this.alertmanagerUrl) return [];
+    const resp = await this.http.request<AlertmanagerAlertGroup[]>({
+      method: 'GET',
+      url: `${this.alertmanagerUrl}/api/v2/alerts/groups`,
       timeoutMs: 10_000,
     });
     return resp.body;

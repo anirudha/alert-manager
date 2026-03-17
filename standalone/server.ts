@@ -10,7 +10,7 @@ import {
   MockOpenSearchBackend,
   MockPrometheusBackend,
   HttpOpenSearchBackend,
-  HttpPrometheusBackend,
+  DirectQueryPrometheusBackend,
   NotificationRoutingService,
   SuppressionRuleService,
   Logger,
@@ -55,14 +55,13 @@ import {
 } from '../server/routes/monitor_handlers';
 
 const PORT = process.env.PORT || 5603;
-const MOCK_MODE = process.env.MOCK_MODE !== 'false';
+const MOCK_MODE = process.env.MOCK_MODE === 'true';
 
-// Real backend configuration (used when MOCK_MODE=false)
+// Real backend configuration (used when MOCK_MODE is not 'true')
+// All values are read from environment variables with safe defaults.
 const OPENSEARCH_URL = process.env.OPENSEARCH_URL || 'https://localhost:9200';
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME || 'admin';
-const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'My_password_123!@#';
-const PROMETHEUS_URL = process.env.PROMETHEUS_URL || 'http://localhost:9090';
-const ALERTMANAGER_URL = process.env.ALERTMANAGER_URL || 'http://localhost:9093';
+const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'MyStr0ngP@ssw0rd2024';
 
 const logger: Logger = {
   info: (msg) => console.log(`[INFO] ${msg}`),
@@ -78,62 +77,77 @@ const alertService = new MultiBackendAlertService(datasourceService, logger);
 let osBackend: OpenSearchBackend;
 let promBackend: PrometheusBackend;
 
-if (MOCK_MODE) {
-  logger.info('Running in MOCK MODE — seeding sample datasources');
+/**
+ * Initialize backends. In live mode, auto-discovers Prometheus datasources
+ * registered in the OpenSearch SQL plugin — no hardcoded names needed.
+ */
+async function initBackends(): Promise<void> {
+  if (MOCK_MODE) {
+    logger.info('Running in MOCK MODE — seeding sample datasources');
 
-  const mockOs = new MockOpenSearchBackend(logger);
-  const mockProm = new MockPrometheusBackend(logger);
-  osBackend = mockOs;
-  promBackend = mockProm;
+    const mockOs = new MockOpenSearchBackend(logger);
+    const mockProm = new MockPrometheusBackend(logger);
+    osBackend = mockOs;
+    promBackend = mockProm;
 
-  datasourceService.seed([
-    { name: 'OpenSearch Production', type: 'opensearch', url: 'https://opensearch.example.com:9200', enabled: true },
-    { name: 'Prometheus US-East (AMP)', type: 'prometheus', url: 'https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxx', enabled: true },
-    { name: 'OpenSearch Staging', type: 'opensearch', url: 'https://opensearch-staging.example.com:9200', enabled: true },
-  ]);
+    datasourceService.seed([
+      { name: 'OpenSearch Production', type: 'opensearch', url: 'https://opensearch.example.com:9200', enabled: true },
+      { name: 'Prometheus US-East (AMP)', type: 'prometheus', url: 'https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxx', enabled: true },
+      { name: 'OpenSearch Staging', type: 'opensearch', url: 'https://opensearch-staging.example.com:9200', enabled: true },
+    ]);
 
-  mockOs.seed('ds-1');
-  mockOs.seed('ds-3');
-  mockProm.seed('ds-2');
-} else {
-  logger.info('Running in LIVE MODE — connecting to real backends');
-  logger.info(`  OpenSearch:   ${OPENSEARCH_URL}`);
-  logger.info(`  Prometheus:   ${PROMETHEUS_URL}`);
-  logger.info(`  Alertmanager: ${ALERTMANAGER_URL}`);
+    mockOs.seed('ds-1');
+    mockOs.seed('ds-3');
+    mockProm.seed('ds-2');
+  } else {
+    logger.info('Running in LIVE MODE — connecting to real backends');
+    logger.info(`  OpenSearch: ${OPENSEARCH_URL}`);
 
-  const httpOs = new HttpOpenSearchBackend(logger);
-  const httpProm = new HttpPrometheusBackend(logger, ALERTMANAGER_URL);
-  osBackend = httpOs;
-  promBackend = httpProm;
+    osBackend = new HttpOpenSearchBackend(logger);
 
-  // Seed datasource entries pointing to real infrastructure
-  datasourceService.seed([
-    {
-      name: 'OpenSearch',
-      type: 'opensearch',
-      url: OPENSEARCH_URL,
-      enabled: true,
-      auth: { type: 'basic', credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD } },
-    },
-    {
-      name: 'Prometheus',
-      type: 'prometheus',
-      url: PROMETHEUS_URL,
-      enabled: true,
-    },
-  ]);
+    // DirectQuery backend handles all Prometheus/Alertmanager API calls via OpenSearch
+    const dqBackend = new DirectQueryPrometheusBackend(logger, {
+      opensearchUrl: OPENSEARCH_URL,
+      auth: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD },
+    });
+    promBackend = dqBackend;
 
-  // Optionally register Prometheus in OpenSearch SQL plugin for SQL/PPL queries
-  httpProm.registerInOpenSearch(
-    OPENSEARCH_URL,
-    { id: '', name: 'Prometheus', type: 'prometheus', url: PROMETHEUS_URL, enabled: true },
-    { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD },
-  ).catch(() => { /* logged internally */ });
+    // Seed the OpenSearch datasource (always present)
+    datasourceService.seed([
+      {
+        name: 'OpenSearch',
+        type: 'opensearch',
+        url: OPENSEARCH_URL,
+        enabled: true,
+        auth: { type: 'basic', credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD } },
+      },
+    ]);
+
+    // Auto-discover Prometheus datasources registered in the OpenSearch SQL plugin.
+    // Each PROMETHEUS connector becomes a datasource entry with directQueryName set.
+    logger.info('Discovering Prometheus datasources from OpenSearch SQL plugin...');
+    const discovered = await dqBackend.discoverDatasources();
+
+    if (discovered.length > 0) {
+      datasourceService.seed(discovered);
+      // Set the first discovered datasource as the default for alertmanager operations
+      const firstDs = await datasourceService.list();
+      const firstProm = firstDs.find((d) => d.type === 'prometheus');
+      if (firstProm) {
+        dqBackend.setDefaultDatasource(firstProm);
+      }
+    } else {
+      logger.warn(
+        'No Prometheus datasources found in OpenSearch SQL plugin. ' +
+        'Register one via POST /_plugins/_query/_datasources with connector=PROMETHEUS.',
+      );
+    }
+  }
+
+  alertService.registerOpenSearch(osBackend);
+  alertService.registerPrometheus(promBackend);
+  datasourceService.setPrometheusBackend(promBackend);
 }
-
-alertService.registerOpenSearch(osBackend);
-alertService.registerPrometheus(promBackend);
-datasourceService.setPrometheusBackend(promBackend);
 
 // Routing and suppression services
 const routingService = new NotificationRoutingService();
@@ -285,6 +299,30 @@ app.get('/api/alertmanager/status', async (_req, res) => {
     }
     const status = await promBackend.getAlertmanagerStatus();
     res.json(status);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/alertmanager/receivers', async (_req, res) => {
+  try {
+    if (!promBackend.getAlertmanagerReceivers) {
+      return res.status(501).json({ error: 'Alertmanager receivers not available' });
+    }
+    const receivers = await promBackend.getAlertmanagerReceivers();
+    res.json({ receivers });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/alertmanager/alert-groups', async (_req, res) => {
+  try {
+    if (!promBackend.getAlertmanagerAlertGroups) {
+      return res.status(501).json({ error: 'Alertmanager alert groups not available' });
+    }
+    const groups = await promBackend.getAlertmanagerAlertGroups();
+    res.json({ groups });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -448,7 +486,15 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  logger.info(`Alert Manager running at http://localhost:${PORT}`);
-  logger.info(`Mock mode: ${MOCK_MODE ? 'ENABLED' : 'DISABLED'}`);
-});
+// Initialize backends (with auto-discovery) then start the server
+initBackends()
+  .then(() => {
+    app.listen(PORT, () => {
+      logger.info(`Alert Manager running at http://localhost:${PORT}`);
+      logger.info(`Mock mode: ${MOCK_MODE ? 'ENABLED' : 'DISABLED'}`);
+    });
+  })
+  .catch((err) => {
+    logger.error(`Failed to initialize backends: ${err}`);
+    process.exit(1);
+  });
