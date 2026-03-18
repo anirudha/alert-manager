@@ -679,23 +679,22 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const handleCreateMetricsMonitor = async (metricsForm: MetricsMonitorFormState) => {
     const now = new Date().toISOString();
+    const severityLabel = metricsForm.labels.find(l => l.key === 'severity');
+    const severity = severityLabel?.value || 'medium';
+    const condition = `${metricsForm.operator} ${metricsForm.thresholdValue}`;
     const labelsObj: Record<string, string> = {};
-    for (const l of metricsForm.labels) {
-      if (l.key && l.value) labelsObj[l.key] = l.value;
-    }
+    for (const l of metricsForm.labels) { if (l.key) labelsObj[l.key] = l.value; }
     const annotationsObj: Record<string, string> = {};
-    for (const a of metricsForm.annotations) {
-      if (a.key && a.value) annotationsObj[a.key] = a.value;
-    }
+    for (const a of metricsForm.annotations) { if (a.key) annotationsObj[a.key] = a.value; }
     const newRule: UnifiedRule = {
       id: `new-metrics-${Date.now()}`,
-      datasourceId: selectedDsIds[0] || 'ds-2',
+      datasourceId: metricsForm.datasourceId || selectedDsIds[0] || 'ds-2',
       datasourceType: 'prometheus',
       name: metricsForm.monitorName,
       enabled: true,
-      severity: (labelsObj.severity as any) || 'medium',
+      severity: severity as any,
       query: metricsForm.query,
-      condition: `${metricsForm.threshold.operator} ${metricsForm.threshold.value}${metricsForm.threshold.unit}`,
+      condition,
       labels: labelsObj,
       annotations: annotationsObj,
       monitorType: 'metric',
@@ -705,12 +704,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       createdAt: now,
       lastModified: now,
       notificationDestinations: metricsForm.actions.map(a => a.name),
-      description: annotationsObj.description || metricsForm.description,
+      description: metricsForm.description,
       aiSummary: 'Newly created metrics monitor.',
-      evaluationInterval: metricsForm.evaluationInterval,
+      evaluationInterval: metricsForm.evalInterval,
       pendingPeriod: metricsForm.pendingPeriod,
       firingPeriod: metricsForm.firingPeriod,
-      threshold: { operator: metricsForm.threshold.operator, value: metricsForm.threshold.value, unit: metricsForm.threshold.unit },
+      threshold: { operator: metricsForm.operator as any, value: metricsForm.thresholdValue, unit: '' },
       alertHistory: [],
       conditionPreviewData: [],
       notificationRouting: [],

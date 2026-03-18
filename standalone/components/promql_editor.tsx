@@ -379,10 +379,12 @@ export interface PromQLEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   height?: number;
+  showLineNumbers?: boolean;
+  hideToolbar?: boolean;
 }
 
 export const PromQLEditor: React.FC<PromQLEditorProps> = ({
-  value, onChange, placeholder = 'Enter PromQL query...', height = 120,
+  value, onChange, placeholder = 'Enter PromQL query...', height = 120, showLineNumbers = false, hideToolbar = false,
 }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -472,10 +474,31 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
   const errorCount = errors.filter(e => e.severity === 'error').length;
   const warnCount = errors.filter(e => e.severity === 'warning').length;
 
+  const lineCount = Math.max((value || '').split('\n').length, 1);
+  const gutterWidth = showLineNumbers ? 36 : 0;
+
   return (
     <div style={{ position: 'relative' }}>
       {/* Editor container */}
-      <div style={{ position: 'relative', border: `1px solid ${errorCount > 0 ? '#BD271E' : '#D3DAE6'}`, borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', border: `1px solid ${errorCount > 0 ? '#BD271E' : '#D3DAE6'}`, borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
+        {/* Line number gutter */}
+        {showLineNumbers && (
+          <div
+            aria-hidden="true"
+            style={{
+              width: gutterWidth, minWidth: gutterWidth, padding: '8px 4px 8px 0',
+              fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
+              fontSize: 13, lineHeight: '20px', textAlign: 'right',
+              color: '#98A2B3', userSelect: 'none', borderRight: '1px solid #D3DAE6',
+              background: '#F5F7FA', flexShrink: 0,
+            }}
+          >
+            {Array.from({ length: lineCount }, (_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+        )}
+        <div style={{ position: 'relative', flex: 1 }}>
         {/* Syntax highlight overlay */}
         <div
           aria-hidden="true"
@@ -512,9 +535,11 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
             caretColor: '#343741', position: 'relative', zIndex: 1,
           }}
         />
+        </div>
       </div>
 
       {/* Toolbar */}
+      {!hideToolbar && (
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} style={{ marginTop: 4 }}>
         <EuiFlexItem grow={false}>
           <EuiToolTip content="Format query">
@@ -538,6 +563,7 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
           </EuiFlexItem>
         )}
       </EuiFlexGroup>
+      )}
 
       {/* Validation messages */}
       {errors.length > 0 && (

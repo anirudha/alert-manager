@@ -1028,11 +1028,13 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                       onClick={() => { setShowCreatePopover(false); onCreateMonitor('metrics'); }}
                       aria-label="Create Metrics monitor"
                     />
+                    {/* Temporarily hidden — Prometheus Metrics option
                     <EuiListGroupItem
                       label="Prometheus Metrics"
                       onClick={() => { setShowCreatePopover(false); onCreateMonitor('prometheus'); }}
                       aria-label="Create Prometheus Metrics monitor"
                     />
+                    */}
                     <EuiListGroupItem
                       label="SLO"
                       onClick={() => { setShowCreatePopover(false); onCreateMonitor('slo'); }}

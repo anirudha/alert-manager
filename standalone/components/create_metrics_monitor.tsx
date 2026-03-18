@@ -1,7 +1,8 @@
 /**
- * Create Metrics Monitor — flyout form following the Prometheus alerting rule spec.
- * Sections: Monitor Details, PromQL Query (with Metric Browser), Alert Condition,
- * Evaluation Settings, Labels, Annotations, Actions, Rule Preview (YAML), and a sticky footer.
+ * Create Metrics Monitor — flyout form based on the Prometheus alert spec.
+ * Sections: Monitor Details, Query (PromQL + datasource + metric browser),
+ * Trigger Condition, Evaluation Settings, Labels, Annotations,
+ * Matched Notification Actions, Rule Preview (YAML), and a sticky footer.
  */
 import React, { useState, useCallback, useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
@@ -34,10 +35,13 @@ import {
   EuiFlyoutBody,
   EuiFlyoutFooter,
   EuiTitle,
+  EuiHorizontalRule,
   EuiCallOut,
-  EuiTabs,
-  EuiTab,
+  EuiSwitch,
   EuiToolTip,
+  EuiPopover,
+  EuiIcon,
+  EuiBetaBadge,
 } from '@opensearch-project/oui';
 import { PromQLEditor } from './promql_editor';
 import { MetricBrowser } from './metric_browser';
@@ -48,17 +52,10 @@ echarts.use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, Canv
 // Types
 // ============================================================================
 
-interface ThresholdCondition {
-  operator: '>' | '>=' | '<' | '<=' | '==' | '!=';
-  value: number;
-  unit: string;
-  forDuration: string;
-}
-
 interface LabelEntry {
   key: string;
   value: string;
-  isDynamic?: boolean;
+  isDynamic: boolean;
 }
 
 interface AnnotationEntry {
@@ -75,12 +72,19 @@ export interface MetricsMonitorFormState {
   monitorName: string;
   description: string;
   query: string;
-  threshold: ThresholdCondition;
-  evaluationInterval: string;
+  datasourceId: string;
+  // Trigger condition
+  operator: '>' | '>=' | '<' | '<=' | '==' | '!=';
+  thresholdValue: number;
+  forDuration: string;
+  // Evaluation settings
+  evalInterval: string;
   pendingPeriod: string;
   firingPeriod: string;
+  // Labels & annotations
   labels: LabelEntry[];
   annotations: AnnotationEntry[];
+  // Actions
   actions: ActionState[];
 }
 
@@ -102,7 +106,7 @@ const OPERATOR_OPTIONS = [
   { value: '!=', text: '!= (not equal)' },
 ];
 
-const DURATION_OPTIONS = [
+const FOR_DURATION_OPTIONS = [
   { value: '1m', text: '1 minute' },
   { value: '5m', text: '5 minutes' },
   { value: '10m', text: '10 minutes' },
@@ -111,7 +115,7 @@ const DURATION_OPTIONS = [
   { value: '1h', text: '1 hour' },
 ];
 
-const INTERVAL_OPTIONS = [
+const EVAL_INTERVAL_OPTIONS = [
   { value: '30s', text: '30 seconds' },
   { value: '1m', text: '1 minute' },
   { value: '5m', text: '5 minutes' },
@@ -121,19 +125,31 @@ const INTERVAL_OPTIONS = [
   { value: '1h', text: '1 hour' },
 ];
 
-const COMMON_LABEL_KEYS = ['severity', 'team', 'service', 'environment', 'region', 'component'];
+const MOCK_DATASOURCES = [
+  { id: 'prom-1', name: 'Prometheus (production)' },
+  { id: 'prom-2', name: 'Prometheus (staging)' },
+];
 
-// Mock preview data
+const MOCK_SAMPLE_QUERIES = [
+  { label: 'High CPU usage', query: 'rate(node_cpu_seconds_total{mode!="idle"}[5m]) > 0.8' },
+  { label: 'High memory usage', query: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9' },
+  { label: 'High error rate', query: 'rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05' },
+  { label: 'Disk almost full', query: '(1 - node_filesystem_avail_bytes / node_filesystem_size_bytes) > 0.85' },
+];
+
+const DEFAULT_PROMQL = 'rate(http_requests_total{status=~"5.."}[5m])';
+
+// Mock preview data — line chart
 const PREVIEW_TIMESTAMPS = [
   '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '17:00',
 ];
-const PREVIEW_VALUES = [12, 35, 28, 45, 62, 48, 55, 40];
+const PREVIEW_VALUES = [0.02, 0.03, 0.01, 0.06, 0.04, 0.07, 0.05, 0.08];
 
 // ============================================================================
 // Chart helpers
 // ============================================================================
 
-function buildPreviewChartOption(metricName: string): any {
+function buildPreviewChartOption(): any {
   return {
     grid: { left: 48, right: 16, top: 16, bottom: 32 },
     tooltip: { trigger: 'axis' },
@@ -181,8 +197,13 @@ const MonitorDetailsSection: React.FC<{
   form: MetricsMonitorFormState;
   onUpdate: (patch: Partial<MetricsMonitorFormState>) => void;
 }> = ({ form, onUpdate }) => (
-  <EuiAccordion id="metrics-monitor-details" buttonContent={<strong>Monitor Details</strong>} initialIsOpen paddingSize="m">
-    <EuiFormRow label="Monitor name" fullWidth>
+  <EuiAccordion
+    id="prom-monitor-details"
+    buttonContent={<strong>Monitor details</strong>}
+    initialIsOpen
+    paddingSize="m"
+  >
+    <EuiFormRow label="Monitor name" fullWidth isInvalid={!form.monitorName.trim()} error={!form.monitorName.trim() ? 'Required' : undefined}>
       <EuiFieldText
         placeholder="Enter a monitor name"
         value={form.monitorName}
@@ -192,9 +213,9 @@ const MonitorDetailsSection: React.FC<{
         aria-label="Monitor name"
       />
     </EuiFormRow>
-    <EuiSpacer size="s" />
+    <EuiSpacer size="m" />
     <EuiFormRow
-      label={<span>Description <EuiText size="xs" color="subdued" component="span">(optional)</EuiText></span>}
+      label={<span>Description <span style={{ fontSize: 12, color: '#98A2B3', fontStyle: 'italic', fontWeight: 'normal' }}>— optional</span></span>}
       fullWidth
     >
       <EuiTextArea
@@ -210,57 +231,180 @@ const MonitorDetailsSection: React.FC<{
   </EuiAccordion>
 );
 
-/** Section 2: PromQL Query */
+/** Section 2: Query — PromQL editor with datasource picker, query library, metric browser */
 const QuerySection: React.FC<{
   form: MetricsMonitorFormState;
   onUpdate: (patch: Partial<MetricsMonitorFormState>) => void;
   showPreview: boolean;
   onRunPreview: () => void;
 }> = ({ form, onUpdate, showPreview, onRunPreview }) => {
-  const [queryTab, setQueryTab] = useState<'editor' | 'browser'>('editor');
+  const [showMetricBrowser, setShowMetricBrowser] = useState(false);
+  const [showQueryLibrary, setShowQueryLibrary] = useState(false);
+  const [showDatasourcePicker, setShowDatasourcePicker] = useState(false);
+
+  const selectedDs = MOCK_DATASOURCES.find((d) => d.id === form.datasourceId) || MOCK_DATASOURCES[0];
 
   const handleMetricSelect = (metricName: string) => {
-    if (!form.query) {
-      onUpdate({ query: metricName });
-    } else {
-      onUpdate({ query: form.query + (form.query.endsWith(' ') ? '' : ' ') + metricName });
-    }
-    setQueryTab('editor');
+    const newQuery = form.query
+      ? form.query + (form.query.endsWith(' ') ? '' : ' ') + metricName
+      : metricName;
+    onUpdate({ query: newQuery });
+    setShowMetricBrowser(false);
   };
 
-  const metricName = useMemo(() => {
-    const match = form.query.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)/);
-    return match ? match[1] : 'metric';
-  }, [form.query]);
+  const handleQueryLibrarySelect = (query: string) => {
+    onUpdate({ query });
+    setShowQueryLibrary(false);
+  };
 
   return (
     <EuiAccordion
-      id="metrics-query"
-      buttonContent={<strong>PromQL Query</strong>}
+      id="prom-query-section"
+      buttonContent={<strong>Query</strong>}
+      initialIsOpen
+      paddingSize="m"
       extraAction={
         <EuiButton size="s" onClick={onRunPreview} aria-label="Run preview">
           Run preview
         </EuiButton>
       }
-      initialIsOpen
-      paddingSize="m"
     >
-      <EuiTabs size="s">
-        <EuiTab isSelected={queryTab === 'editor'} onClick={() => setQueryTab('editor')}>Query Editor</EuiTab>
-        <EuiTab isSelected={queryTab === 'browser'} onClick={() => setQueryTab('browser')}>Metric Browser</EuiTab>
-      </EuiTabs>
-      <EuiSpacer size="s" />
-      {queryTab === 'editor' ? (
-        <PromQLEditor value={form.query} onChange={(v) => onUpdate({ query: v })} height={80} />
-      ) : (
-        <MetricBrowser onSelectMetric={handleMetricSelect} currentQuery={form.query} />
-      )}
+      {/* Toolbar: language badge, datasource, query library, metric browser */}
+      <EuiPanel paddingSize="s" hasBorder style={{ borderRadius: 4 }}>
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
+          <EuiFlexItem grow={false}>
+            <EuiBetaBadge label="PromQL" tooltipContent="Prometheus Query Language" size="s" />
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiPopover
+              button={
+                <EuiButtonEmpty
+                  size="xs"
+                  iconType="database"
+                  iconSide="left"
+                  onClick={() => setShowDatasourcePicker(!showDatasourcePicker)}
+                  aria-label="Pick data source"
+                >
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                    <EuiFlexItem grow={false}>{selectedDs.name}</EuiFlexItem>
+                    <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiButtonEmpty>
+              }
+              isOpen={showDatasourcePicker}
+              closePopover={() => setShowDatasourcePicker(false)}
+              panelPaddingSize="s"
+            >
+              {MOCK_DATASOURCES.map((ds) => (
+                <EuiButtonEmpty
+                  key={ds.id}
+                  size="xs"
+                  onClick={() => { onUpdate({ datasourceId: ds.id }); setShowDatasourcePicker(false); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left' }}
+                >
+                  {ds.name}
+                </EuiButtonEmpty>
+              ))}
+            </EuiPopover>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiPopover
+              button={
+                <EuiButtonEmpty
+                  size="xs"
+                  iconType="starEmpty"
+                  iconSide="left"
+                  onClick={() => setShowQueryLibrary(!showQueryLibrary)}
+                  aria-label="Query library"
+                >
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                    <EuiFlexItem grow={false}>Query library</EuiFlexItem>
+                    <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiButtonEmpty>
+              }
+              isOpen={showQueryLibrary}
+              closePopover={() => setShowQueryLibrary(false)}
+              panelPaddingSize="s"
+            >
+              {MOCK_SAMPLE_QUERIES.map((sq, i) => (
+                <EuiButtonEmpty
+                  key={i}
+                  size="xs"
+                  onClick={() => handleQueryLibrarySelect(sq.query)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left' }}
+                >
+                  {sq.label}
+                </EuiButtonEmpty>
+              ))}
+            </EuiPopover>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiPopover
+              button={
+                <EuiButtonEmpty
+                  size="xs"
+                  onClick={() => setShowMetricBrowser(!showMetricBrowser)}
+                  aria-label="Metric browser"
+                >
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                    <EuiFlexItem grow={false}>Metric browser</EuiFlexItem>
+                    <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiButtonEmpty>
+              }
+              isOpen={showMetricBrowser}
+              closePopover={() => setShowMetricBrowser(false)}
+              panelPaddingSize="s"
+              style={{ width: 600 }}
+            >
+              <div style={{ width: 560, maxHeight: 400, overflow: 'auto' }}>
+                <MetricBrowser onSelectMetric={handleMetricSelect} currentQuery={form.query} />
+              </div>
+            </EuiPopover>
+          </EuiFlexItem>
+        </EuiFlexGroup>
 
+        <EuiSpacer size="s" />
+
+        {/* PromQL editor */}
+        <div style={{ position: 'relative' }}>
+          <PromQLEditor
+            value={form.query}
+            onChange={(v) => onUpdate({ query: v })}
+            height={56}
+            showLineNumbers
+            hideToolbar
+          />
+          <div style={{ position: 'absolute', top: 4, right: 4, zIndex: 2, display: 'flex', gap: 2 }}>
+            <EuiToolTip content="Copy query">
+              <EuiButtonIcon
+                iconType="copy"
+                size="s"
+                color="subdued"
+                onClick={() => navigator.clipboard.writeText(form.query)}
+                aria-label="Copy query"
+              />
+            </EuiToolTip>
+            <EuiToolTip content="Expand editor">
+              <EuiButtonIcon
+                iconType="expand"
+                size="s"
+                color="subdued"
+                onClick={() => {}}
+                aria-label="Expand editor"
+              />
+            </EuiToolTip>
+          </div>
+        </div>
+      </EuiPanel>
+
+      {/* Preview Results */}
       {showPreview && (
         <>
           <EuiSpacer size="m" />
           <EuiAccordion
-            id="metrics-preview-results"
+            id="prom-preview-results"
             buttonContent={
               <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
                 <EuiFlexItem grow={false}><strong>Results ({PREVIEW_VALUES.length})</strong></EuiFlexItem>
@@ -269,11 +413,11 @@ const QuerySection: React.FC<{
             initialIsOpen
             paddingSize="s"
           >
-            <EuiText size="xs" color="subdued">{metricName}</EuiText>
+            <EuiText size="xs" color="subdued">http_requests_total</EuiText>
             <EuiSpacer size="s" />
             <ReactEChartsCore
               echarts={echarts}
-              option={buildPreviewChartOption(metricName)}
+              option={buildPreviewChartOption()}
               style={{ height: 200, width: '100%' }}
               notMerge
               lazyUpdate
@@ -285,117 +429,104 @@ const QuerySection: React.FC<{
   );
 };
 
-/** Section 3: Alert Condition */
-const AlertConditionSection: React.FC<{
+/** Section 3: Trigger Condition */
+const TriggerConditionSection: React.FC<{
   form: MetricsMonitorFormState;
   onUpdate: (patch: Partial<MetricsMonitorFormState>) => void;
-  showPreview: boolean;
-}> = ({ form, onUpdate, showPreview }) => {
-  const updateThreshold = <K extends keyof ThresholdCondition>(key: K, value: ThresholdCondition[K]) => {
-    onUpdate({ threshold: { ...form.threshold, [key]: value } });
-  };
-
-  const metricName = useMemo(() => {
-    const match = form.query.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)/);
-    return match ? match[1] : 'metric';
-  }, [form.query]);
-
-  return (
-    <EuiAccordion id="metrics-alert-condition" buttonContent={<strong>Alert Condition</strong>} initialIsOpen paddingSize="m">
-      <EuiFlexGroup gutterSize="s" wrap>
-        <EuiFlexItem style={{ minWidth: 160 }}>
-          <EuiFormRow label="Operator" display="rowCompressed">
-            <EuiSelect
-              options={OPERATOR_OPTIONS}
-              value={form.threshold.operator}
-              onChange={(e) => updateThreshold('operator', e.target.value as ThresholdCondition['operator'])}
-              compressed
-              aria-label="Threshold operator"
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem style={{ minWidth: 100 }}>
-          <EuiFormRow label="Value" display="rowCompressed">
-            <EuiFieldNumber
-              value={form.threshold.value}
-              onChange={(e) => updateThreshold('value', parseFloat(e.target.value) || 0)}
-              compressed
-              aria-label="Threshold value"
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem style={{ minWidth: 60 }}>
-          <EuiFormRow label="Unit" display="rowCompressed">
-            <EuiFieldText
-              value={form.threshold.unit}
-              onChange={(e) => updateThreshold('unit', e.target.value)}
-              placeholder="%"
-              compressed
-              aria-label="Threshold unit"
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem style={{ minWidth: 160 }}>
-          <EuiFormRow label="For Duration" display="rowCompressed">
-            <EuiSelect
-              options={DURATION_OPTIONS}
-              value={form.threshold.forDuration}
-              onChange={(e) => updateThreshold('forDuration', e.target.value)}
-              compressed
-              aria-label="For duration"
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-
-      <EuiSpacer size="s" />
-      <EuiCallOut size="s" color="primary" iconType="iInCircle">
-        <EuiText size="xs">
-          Alert fires when: <code>{form.query || '<query>'} {form.threshold.operator} {form.threshold.value}{form.threshold.unit}</code> for {form.threshold.forDuration}
-        </EuiText>
-      </EuiCallOut>
-
-      {showPreview && (
-        <>
-          <EuiSpacer size="m" />
-          <EuiText size="xs"><strong>Results</strong></EuiText>
-          <EuiText size="xs" color="subdued">{metricName}</EuiText>
-          <EuiSpacer size="xs" />
-          <ReactEChartsCore
-            echarts={echarts}
-            option={buildThresholdChartOption(form.threshold.value)}
-            style={{ height: 200, width: '100%' }}
-            notMerge
-            lazyUpdate
+}> = ({ form, onUpdate }) => (
+  <EuiAccordion
+    id="prom-trigger-condition"
+    buttonContent={<strong>Trigger condition</strong>}
+    initialIsOpen
+    paddingSize="m"
+  >
+    <EuiFlexGroup gutterSize="s" wrap>
+      <EuiFlexItem style={{ minWidth: 160 }}>
+        <EuiFormRow label="Operator" display="rowCompressed">
+          <EuiSelect
+            options={OPERATOR_OPTIONS}
+            value={form.operator}
+            onChange={(e) => onUpdate({ operator: e.target.value as MetricsMonitorFormState['operator'] })}
+            compressed
+            aria-label="Threshold operator"
           />
-        </>
-      )}
-    </EuiAccordion>
-  );
-};
+        </EuiFormRow>
+      </EuiFlexItem>
+      <EuiFlexItem style={{ minWidth: 100 }}>
+        <EuiFormRow label="Value" display="rowCompressed">
+          <EuiFieldNumber
+            value={form.thresholdValue}
+            onChange={(e) => onUpdate({ thresholdValue: parseFloat(e.target.value) || 0 })}
+            compressed
+            aria-label="Threshold value"
+          />
+        </EuiFormRow>
+      </EuiFlexItem>
+      <EuiFlexItem style={{ minWidth: 160 }}>
+        <EuiFormRow label="For duration" display="rowCompressed">
+          <EuiSelect
+            options={FOR_DURATION_OPTIONS}
+            value={form.forDuration}
+            onChange={(e) => onUpdate({ forDuration: e.target.value })}
+            compressed
+            aria-label="For duration"
+          />
+        </EuiFormRow>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+
+    <EuiSpacer size="s" />
+
+    {/* Condition summary callout */}
+    <EuiCallOut size="s" color="primary" iconType="iInCircle">
+      <EuiText size="xs">
+        Alert fires when: <code>{form.query || '<query>'} {form.operator} {form.thresholdValue}</code> for {form.forDuration}
+      </EuiText>
+    </EuiCallOut>
+
+    <EuiSpacer size="m" />
+
+    {/* Threshold visualization */}
+    <EuiText size="xs"><strong>Results</strong></EuiText>
+    <EuiText size="xs" color="subdued">http_requests_total</EuiText>
+    <EuiSpacer size="xs" />
+    <ReactEChartsCore
+      echarts={echarts}
+      option={buildThresholdChartOption(form.thresholdValue)}
+      style={{ height: 200, width: '100%' }}
+      notMerge
+      lazyUpdate
+    />
+  </EuiAccordion>
+);
 
 /** Section 4: Evaluation Settings */
 const EvaluationSettingsSection: React.FC<{
   form: MetricsMonitorFormState;
   onUpdate: (patch: Partial<MetricsMonitorFormState>) => void;
 }> = ({ form, onUpdate }) => (
-  <EuiAccordion id="metrics-eval-settings" buttonContent={<strong>Evaluation Settings</strong>} initialIsOpen paddingSize="m">
+  <EuiAccordion
+    id="prom-evaluation-settings"
+    buttonContent={<strong>Evaluation settings</strong>}
+    initialIsOpen
+    paddingSize="m"
+  >
     <EuiFlexGroup gutterSize="s" wrap>
       <EuiFlexItem style={{ minWidth: 160 }}>
-        <EuiFormRow label="Eval Interval" helpText="How often evaluated" display="rowCompressed">
+        <EuiFormRow label="Eval interval" helpText="How often evaluated" display="rowCompressed">
           <EuiSelect
-            options={INTERVAL_OPTIONS}
-            value={form.evaluationInterval}
-            onChange={(e) => onUpdate({ evaluationInterval: e.target.value })}
+            options={EVAL_INTERVAL_OPTIONS}
+            value={form.evalInterval}
+            onChange={(e) => onUpdate({ evalInterval: e.target.value })}
             compressed
             aria-label="Evaluation interval"
           />
         </EuiFormRow>
       </EuiFlexItem>
       <EuiFlexItem style={{ minWidth: 160 }}>
-        <EuiFormRow label="Pending Period" helpText="Before firing" display="rowCompressed">
+        <EuiFormRow label="Pending period" helpText="Before firing" display="rowCompressed">
           <EuiSelect
-            options={DURATION_OPTIONS}
+            options={EVAL_INTERVAL_OPTIONS}
             value={form.pendingPeriod}
             onChange={(e) => onUpdate({ pendingPeriod: e.target.value })}
             compressed
@@ -404,9 +535,9 @@ const EvaluationSettingsSection: React.FC<{
         </EuiFormRow>
       </EuiFlexItem>
       <EuiFlexItem style={{ minWidth: 160 }}>
-        <EuiFormRow label="Firing Period" helpText="Min firing time" display="rowCompressed">
+        <EuiFormRow label="Firing period" helpText="Min firing time" display="rowCompressed">
           <EuiSelect
-            options={DURATION_OPTIONS}
+            options={EVAL_INTERVAL_OPTIONS}
             value={form.firingPeriod}
             onChange={(e) => onUpdate({ firingPeriod: e.target.value })}
             compressed
@@ -421,82 +552,71 @@ const EvaluationSettingsSection: React.FC<{
 /** Section 5: Labels */
 const LabelsSection: React.FC<{
   labels: LabelEntry[];
-  onChange: (labels: LabelEntry[]) => void;
-}> = ({ labels, onChange }) => {
-  const addLabel = () => onChange([...labels, { key: '', value: '' }]);
-  const removeLabel = (i: number) => onChange(labels.filter((_, idx) => idx !== i));
-  const updateLabel = (i: number, field: 'key' | 'value', val: string) => {
+  onUpdate: (labels: LabelEntry[]) => void;
+}> = ({ labels, onUpdate }) => {
+  const addLabel = () => onUpdate([...labels, { key: '', value: '', isDynamic: false }]);
+  const removeLabel = (i: number) => onUpdate(labels.filter((_, idx) => idx !== i));
+  const updateLabel = (i: number, patch: Partial<LabelEntry>) => {
     const next = [...labels];
-    next[i] = { ...next[i], [field]: val };
-    onChange(next);
-  };
-  const toggleDynamic = (i: number) => {
-    const next = [...labels];
-    next[i] = { ...next[i], isDynamic: !next[i].isDynamic };
-    onChange(next);
+    next[i] = { ...next[i], ...patch };
+    onUpdate(next);
   };
 
   return (
-    <EuiAccordion id="metrics-labels" buttonContent={<strong>Labels</strong>} initialIsOpen paddingSize="m">
+    <EuiAccordion
+      id="prom-labels"
+      buttonContent={<strong>Labels</strong>}
+      initialIsOpen
+      paddingSize="m"
+    >
       <EuiText size="xs" color="subdued">Categorize and route alerts</EuiText>
       <EuiSpacer size="s" />
       {labels.map((label, i) => (
         <EuiFlexGroup key={i} gutterSize="s" alignItems="center" responsive={false} style={{ marginBottom: 4 }}>
           <EuiFlexItem grow={2}>
             <EuiFieldText
-              placeholder="Key"
+              placeholder="e.g. severity, team, service"
               value={label.key}
-              onChange={(e) => updateLabel(i, 'key', e.target.value)}
+              onChange={(e) => updateLabel(i, { key: e.target.value })}
               compressed
               aria-label={`Label key ${i + 1}`}
             />
           </EuiFlexItem>
-          <EuiFlexItem grow={false}><EuiText size="s">=</EuiText></EuiFlexItem>
           <EuiFlexItem grow={3}>
             <EuiFieldText
               placeholder={label.isDynamic ? '{{ $value }}' : 'Value'}
               value={label.value}
-              onChange={(e) => updateLabel(i, 'value', e.target.value)}
+              onChange={(e) => updateLabel(i, { value: e.target.value })}
               compressed
               aria-label={`Label value ${i + 1}`}
             />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiToolTip content={label.isDynamic ? 'Dynamic (template)' : 'Static value'}>
-              <EuiButtonIcon
-                iconType={label.isDynamic ? 'bolt' : 'tag'}
-                aria-label="Toggle dynamic"
-                onClick={() => toggleDynamic(i)}
-                color={label.isDynamic ? 'primary' : 'text'}
-                size="s"
+            <EuiToolTip content={label.isDynamic ? 'Dynamic (Go template)' : 'Static value'}>
+              <EuiSwitch
+                label=""
+                checked={label.isDynamic}
+                onChange={(e) => updateLabel(i, { isDynamic: e.target.checked })}
+                compressed
+                aria-label={`Toggle dynamic for label ${i + 1}`}
               />
             </EuiToolTip>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiButtonIcon iconType="trash" aria-label="Remove label" onClick={() => removeLabel(i)} color="danger" size="s" />
+            <EuiButtonIcon
+              iconType="trash"
+              color="danger"
+              size="s"
+              onClick={() => removeLabel(i)}
+              aria-label={`Delete label ${label.key || i + 1}`}
+            />
           </EuiFlexItem>
         </EuiFlexGroup>
       ))}
-      <EuiFlexGroup gutterSize="s" responsive={false}>
-        <EuiFlexItem grow={false}>
-          <EuiButtonEmpty size="xs" iconType="plusInCircle" onClick={addLabel}>Add label</EuiButtonEmpty>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiFlexGroup gutterSize="xs" responsive={false}>
-            {COMMON_LABEL_KEYS.filter(k => !labels.some(l => l.key === k)).slice(0, 4).map(k => (
-              <EuiFlexItem grow={false} key={k}>
-                <EuiBadge
-                  color="hollow"
-                  onClick={() => onChange([...labels, { key: k, value: '' }])}
-                  onClickAriaLabel={`Add ${k} label`}
-                >
-                  + {k}
-                </EuiBadge>
-              </EuiFlexItem>
-            ))}
-          </EuiFlexGroup>
-        </EuiFlexItem>
-      </EuiFlexGroup>
+      <EuiSpacer size="xs" />
+      <EuiButtonEmpty size="xs" iconType="plusInCircle" onClick={addLabel}>
+        Add label
+      </EuiButtonEmpty>
     </EuiAccordion>
   );
 };
@@ -504,21 +624,21 @@ const LabelsSection: React.FC<{
 /** Section 6: Annotations */
 const AnnotationsSection: React.FC<{
   annotations: AnnotationEntry[];
-  onChange: (annotations: AnnotationEntry[]) => void;
-}> = ({ annotations, onChange }) => {
-  const addAnnotation = () => onChange([...annotations, { key: '', value: '' }]);
-  const removeAnnotation = (i: number) => onChange(annotations.filter((_, idx) => idx !== i));
-  const updateAnnotation = (i: number, field: 'key' | 'value', val: string) => {
+  onUpdate: (annotations: AnnotationEntry[]) => void;
+}> = ({ annotations, onUpdate }) => {
+  const addAnnotation = () => onUpdate([...annotations, { key: '', value: '' }]);
+  const removeAnnotation = (i: number) => onUpdate(annotations.filter((_, idx) => idx !== i));
+  const updateAnnotation = (i: number, patch: Partial<AnnotationEntry>) => {
     const next = [...annotations];
-    next[i] = { ...next[i], [field]: val };
-    onChange(next);
+    next[i] = { ...next[i], ...patch };
+    onUpdate(next);
   };
 
   return (
     <EuiAccordion
-      id="metrics-annotations"
+      id="prom-annotations"
       buttonContent={
-        <EuiFlexGroup alignItems="center" responsive={false} gutterSize="s">
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
           <EuiFlexItem grow={false}><strong>Annotations</strong></EuiFlexItem>
           <EuiFlexItem grow={false}><EuiBadge color="hollow">Optional</EuiBadge></EuiFlexItem>
         </EuiFlexGroup>
@@ -530,61 +650,87 @@ const AnnotationsSection: React.FC<{
         <EuiFlexGroup key={i} gutterSize="s" alignItems="center" responsive={false} style={{ marginBottom: 4 }}>
           <EuiFlexItem grow={2}>
             <EuiFieldText
-              placeholder="Key (e.g. summary)"
+              placeholder="e.g. summary, description, runbook_url"
               value={ann.key}
-              onChange={(e) => updateAnnotation(i, 'key', e.target.value)}
+              onChange={(e) => updateAnnotation(i, { key: e.target.value })}
               compressed
               aria-label={`Annotation key ${i + 1}`}
             />
           </EuiFlexItem>
-          <EuiFlexItem grow={false}><EuiText size="s">=</EuiText></EuiFlexItem>
-          <EuiFlexItem grow={3}>
+          <EuiFlexItem grow={4}>
             <EuiFieldText
-              placeholder="Value"
+              placeholder="Supports Go template syntax"
               value={ann.value}
-              onChange={(e) => updateAnnotation(i, 'value', e.target.value)}
+              onChange={(e) => updateAnnotation(i, { value: e.target.value })}
               compressed
               aria-label={`Annotation value ${i + 1}`}
             />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiButtonIcon iconType="trash" aria-label="Remove annotation" onClick={() => removeAnnotation(i)} color="danger" size="s" />
+            <EuiButtonIcon
+              iconType="trash"
+              color="danger"
+              size="s"
+              onClick={() => removeAnnotation(i)}
+              aria-label={`Delete annotation ${ann.key || i + 1}`}
+            />
           </EuiFlexItem>
         </EuiFlexGroup>
       ))}
-      <EuiButtonEmpty size="xs" iconType="plusInCircle" onClick={addAnnotation}>Add annotation</EuiButtonEmpty>
+      <EuiSpacer size="xs" />
+      <EuiButtonEmpty size="xs" iconType="plusInCircle" onClick={addAnnotation}>
+        Add annotation
+      </EuiButtonEmpty>
     </EuiAccordion>
   );
 };
 
-/** Section 7: Actions */
+/** Section 7: Matched Notification Actions */
 const ActionsSection: React.FC<{
   actions: ActionState[];
   onDeleteAction: (id: string) => void;
   onAddAction: () => void;
 }> = ({ actions, onDeleteAction, onAddAction }) => (
-  <section>
-    <EuiFlexGroup alignItems="center" responsive={false} gutterSize="s">
-      <EuiFlexItem grow={false}><EuiTitle size="xs"><h3>Actions ({actions.length})</h3></EuiTitle></EuiFlexItem>
+  <section aria-label="Matched notification actions">
+    <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+      <EuiFlexItem grow={false}>
+        <EuiTitle size="xs"><h3>Matched notification actions ({actions.length})</h3></EuiTitle>
+      </EuiFlexItem>
     </EuiFlexGroup>
     <EuiSpacer size="s" />
-    {actions.map((action, i) => (
-      <EuiAccordion
-        key={action.id}
-        id={`metrics-action-${action.id}`}
-        buttonContent={<span>{i + 1}. {action.name}</span>}
-        extraAction={
-          <EuiButtonEmpty size="xs" color="danger" onClick={() => onDeleteAction(action.id)} aria-label={`Delete ${action.name}`}>
-            Delete
-          </EuiButtonEmpty>
-        }
-        paddingSize="s"
-      >
-        <EuiText size="xs" color="subdued">Action configuration placeholder</EuiText>
-      </EuiAccordion>
+    {actions.map((action, idx) => (
+      <React.Fragment key={action.id}>
+        {idx > 0 && <EuiSpacer size="xs" />}
+        <EuiPanel paddingSize="s" hasBorder>
+          <EuiAccordion
+            id={`action-${action.id}`}
+            buttonContent={<span>{idx + 1}. {action.name}</span>}
+            paddingSize="s"
+            extraAction={
+              <EuiButtonEmpty
+                size="xs"
+                color="danger"
+                onClick={() => onDeleteAction(action.id)}
+                aria-label={`Delete action ${action.name}`}
+              >
+                Delete
+              </EuiButtonEmpty>
+            }
+          >
+            <EuiText size="xs" color="subdued">
+              Action configuration — destination, message template, throttling, etc.
+            </EuiText>
+          </EuiAccordion>
+        </EuiPanel>
+      </React.Fragment>
     ))}
     <EuiSpacer size="s" />
-    <EuiButtonEmpty size="s" iconType="plusInCircle" onClick={onAddAction}>
+    <EuiButtonEmpty
+      size="s"
+      iconType="plusInCircle"
+      onClick={onAddAction}
+      aria-label="Add another action"
+    >
       Add another action
     </EuiButtonEmpty>
   </section>
@@ -595,31 +741,51 @@ const RulePreviewSection: React.FC<{
   form: MetricsMonitorFormState;
 }> = ({ form }) => {
   const yaml = useMemo(() => {
-    const labels = form.labels.filter(l => l.key && l.value);
-    const annotations = form.annotations.filter(a => a.key && a.value);
+    const labels = form.labels.filter((l) => l.key && l.value);
+    const annotations = form.annotations.filter((a) => a.key && a.value);
     let out = `- alert: ${form.monitorName || '<monitor-name>'}\n`;
-    out += `  expr: ${form.query || '<promql-expression>'} ${form.threshold.operator} ${form.threshold.value}\n`;
-    out += `  for: ${form.threshold.forDuration}\n`;
+    out += `  expr: ${form.query || '<promql-expression>'} ${form.operator} ${form.thresholdValue}\n`;
+    out += `  for: ${form.forDuration}\n`;
     if (labels.length > 0) {
       out += `  labels:\n`;
-      for (const l of labels) out += `    ${l.key}: ${l.isDynamic ? l.value : `"${l.value}"`}\n`;
+      for (const l of labels) {
+        out += `    ${l.key}: ${l.isDynamic ? l.value : `"${l.value}"`}\n`;
+      }
     }
     if (annotations.length > 0) {
       out += `  annotations:\n`;
-      for (const a of annotations) out += `    ${a.key}: "${a.value}"\n`;
+      for (const a of annotations) {
+        out += `    ${a.key}: "${a.value}"\n`;
+      }
     }
     return out;
   }, [form]);
 
   return (
     <EuiAccordion
-      id="metrics-rule-preview"
+      id="prom-rule-preview"
       buttonContent={<strong>Rule Preview (YAML)</strong>}
       initialIsOpen={false}
       paddingSize="m"
     >
-      <EuiPanel color="subdued" paddingSize="s">
-        <pre style={{ fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', margin: 0 }}>{yaml}</pre>
+      <EuiPanel paddingSize="s" color="subdued">
+        <div style={{ display: 'flex', fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace", fontSize: 12, lineHeight: '20px' }}>
+          <div
+            aria-hidden="true"
+            style={{
+              width: 32, minWidth: 32, textAlign: 'right', paddingRight: 8,
+              color: '#98A2B3', userSelect: 'none', borderRight: '1px solid #D3DAE6',
+              marginRight: 8,
+            }}
+          >
+            {yaml.trimEnd().split('\n').map((_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0, flex: 1 }}>
+            {yaml}
+          </pre>
+        </div>
       </EuiPanel>
     </EuiAccordion>
   );
@@ -633,15 +799,18 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
   const [form, setForm] = useState<MetricsMonitorFormState>({
     monitorName: '',
     description: '',
-    query: '',
-    threshold: { operator: '>', value: 0, unit: '%', forDuration: '5m' },
-    evaluationInterval: '1m',
+    query: DEFAULT_PROMQL,
+    datasourceId: MOCK_DATASOURCES[0].id,
+    operator: '>',
+    thresholdValue: 0,
+    forDuration: '5m',
+    evalInterval: '1m',
     pendingPeriod: '5m',
     firingPeriod: '5m',
-    labels: [{ key: 'severity', value: 'critical' }],
+    labels: [{ key: 'severity', value: 'critical', isDynamic: false }],
     annotations: [
-      { key: 'summary', value: '' },
-      { key: 'description', value: '' },
+      { key: 'summary', value: '', isDynamic: false } as AnnotationEntry,
+      { key: 'description', value: '', isDynamic: false } as AnnotationEntry,
     ],
     actions: [
       { id: `action-${Date.now()}-0`, name: 'slack_message' },
@@ -655,13 +824,18 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
   }, []);
 
   const deleteAction = useCallback((id: string) => {
-    setForm((prev) => ({ ...prev, actions: prev.actions.filter((a) => a.id !== id) }));
+    setForm((prev) => ({
+      ...prev,
+      actions: prev.actions.filter((a) => a.id !== id),
+    }));
   }, []);
 
   const addAction = useCallback(() => {
-    const name = `action_${form.actions.length + 1}`;
-    setForm((prev) => ({ ...prev, actions: [...prev.actions, { id: `action-${Date.now()}`, name }] }));
-  }, [form.actions.length]);
+    setForm((prev) => ({
+      ...prev,
+      actions: [...prev.actions, { id: `action-${Date.now()}`, name: `action_${prev.actions.length + 1}` }],
+    }));
+  }, []);
 
   const handleRunPreview = useCallback(() => {
     setShowPreview(true);
@@ -676,7 +850,7 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
         <EuiSpacer size="s" />
         <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
           <EuiFlexItem grow={false}>
-            <EuiBadge color="accent">Metrics</EuiBadge>
+            <EuiBadge color="accent">Prometheus</EuiBadge>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiText size="xs" color="subdued">PromQL-based alerting rule</EuiText>
@@ -685,20 +859,50 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
       </EuiFlyoutHeader>
 
       <EuiFlyoutBody>
+        {/* Section 1: Monitor Details */}
         <MonitorDetailsSection form={form} onUpdate={updateForm} />
-        <EuiSpacer size="l" />
-        <QuerySection form={form} onUpdate={updateForm} showPreview={showPreview} onRunPreview={handleRunPreview} />
-        <EuiSpacer size="l" />
-        <AlertConditionSection form={form} onUpdate={updateForm} showPreview={showPreview} />
-        <EuiSpacer size="l" />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 2: Query */}
+        <QuerySection
+          form={form}
+          onUpdate={updateForm}
+          showPreview={showPreview}
+          onRunPreview={handleRunPreview}
+        />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 3: Trigger Condition */}
+        <TriggerConditionSection form={form} onUpdate={updateForm} />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 4: Evaluation Settings */}
         <EvaluationSettingsSection form={form} onUpdate={updateForm} />
-        <EuiSpacer size="l" />
-        <LabelsSection labels={form.labels} onChange={(labels) => updateForm({ labels })} />
-        <EuiSpacer size="l" />
-        <AnnotationsSection annotations={form.annotations} onChange={(annotations) => updateForm({ annotations })} />
-        <EuiSpacer size="l" />
-        <ActionsSection actions={form.actions} onDeleteAction={deleteAction} onAddAction={addAction} />
-        <EuiSpacer size="l" />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 5: Labels */}
+        <LabelsSection
+          labels={form.labels}
+          onUpdate={(labels) => updateForm({ labels })}
+        />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 6: Annotations */}
+        <AnnotationsSection
+          annotations={form.annotations}
+          onUpdate={(annotations) => updateForm({ annotations })}
+        />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 7: Matched Notification Actions */}
+        <ActionsSection
+          actions={form.actions}
+          onDeleteAction={deleteAction}
+          onAddAction={addAction}
+        />
+        <EuiHorizontalRule margin="l" />
+
+        {/* Section 8: Rule Preview (YAML) */}
         <RulePreviewSection form={form} />
       </EuiFlyoutBody>
 

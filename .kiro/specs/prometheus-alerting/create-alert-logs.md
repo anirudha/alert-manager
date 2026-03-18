@@ -2,7 +2,7 @@
 
 ## Page Layout
 
-The page is a single-column form layout with collapsible sections, a sticky footer with Cancel and Create buttons. Each section is divided by a line. Optional fields label should be on the same line as the field label.
+The page is a single-column form layout with collapsible sections, a sticky footer with Cancel and Create buttons. Each section is divided by a line. Optional fields label should be on the same line as the field label. When users open the flyout, the first input field will be focused.
 
 ---
 
@@ -22,11 +22,13 @@ Collapsible section (expanded by default).
 Collapsible section (expanded by default). Contains a "Run preview" button in the section header (right-aligned).
 
 ### Query Editor
-- THe query editor is wrapped in a single container.
-- Top of the container contains 3 items:
-    - Badge that displays the current language **PPL**, 
+
+- The query editor is wrapped in a single container.
+- Top of the container contains these items:
+    - Badge that displays the current language **PPL** (use OuiBetaBadge style badge)
     - Button for picking data source, it should display and selected an OpenSearch data source by default. With OUI left icon **database** and OUI right icon **arrowDown**
     - Button for picking sample queries named **Query library** with OUI left icon **addBookmark**  and OUI right icon **arrowDown**
+    - Use OUI empty buttons
 - Code editor area with syntax-highlighted query text (use monospace font, show 2 lines by default)
 - Code editor should show the line number
 - A small copy/expand icon in the top-right corner of the editor

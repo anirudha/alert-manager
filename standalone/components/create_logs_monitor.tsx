@@ -29,6 +29,7 @@ import {
   EuiIcon,
   EuiText,
   EuiBadge,
+  EuiBetaBadge,
   EuiAccordion,
   EuiFlyout,
   EuiFlyoutHeader,
@@ -39,8 +40,7 @@ import {
   EuiBasicTable,
   EuiHorizontalRule,
   EuiPopover,
-  EuiListGroup,
-  EuiListGroupItem,
+  EuiToolTip,
 } from '@opensearch-project/oui';
 
 echarts.use([BarChart, GridComponent, TooltipComponent, MarkLineComponent, CanvasRenderer]);
@@ -141,6 +141,12 @@ const DEFAULT_ACTION_MESSAGE = `Monitor {{ctx.monitor.name}} just entered alert 
 
 const DEFAULT_PPL_QUERY = `source = logs-* | where @timestamp > NOW() - INTERVAL 5 MINUTE
 | stats count() as EVENTS_LAST_HOUR_v2 by span(@timestamp, 1h)`;
+
+const SAMPLE_PPL_QUERIES = [
+  { label: 'Events last hour', query: `source = logs-* | where @timestamp > NOW() - INTERVAL 1 HOUR\n| stats count() as EVENTS_LAST_HOUR by span(@timestamp, 1h)` },
+  { label: 'Error count by service', query: `source = logs-* | where level = 'ERROR'\n| stats count() as error_count by service` },
+  { label: 'Login failures', query: `source = logs-* | where eventType = 'login' AND status = 'false'\n| stats count() as failed_logins by span(@timestamp, 1h)` },
+];
 
 function createDefaultTrigger(index: number): TriggerState {
   return {
@@ -252,9 +258,15 @@ const QuerySection: React.FC<{
   onRunPreview: () => void;
 }> = ({ form, onUpdate, showPreview, onRunPreview }) => {
   const [showDsPicker, setShowDsPicker] = useState(false);
+  const [showQueryLibrary, setShowQueryLibrary] = useState(false);
   const datasourceOptions = ['OpenSearch', 'OpenSearch-logs', 'OpenSearch-metrics'];
 
   const lineCount = form.query.split('\n').length;
+
+  const handleQueryLibrarySelect = (query: string) => {
+    onUpdate({ query });
+    setShowQueryLibrary(false);
+  };
 
   return (
     <EuiAccordion
@@ -268,28 +280,23 @@ const QuerySection: React.FC<{
         </EuiButton>
       }
     >
-      {/* Single container wrapping top bar + code editor */}
-      <EuiPanel paddingSize="none" hasBorder style={{ borderRadius: 4, overflow: 'hidden' }}>
-        {/* Top bar: PPL badge, datasource picker, query library */}
-        <EuiFlexGroup
-          gutterSize="s"
-          alignItems="center"
-          responsive={false}
-          style={{ padding: '6px 8px', borderBottom: '1px solid #D3DAE6' }}
-        >
+      {/* Toolbar + editor in a single bordered panel */}
+      <EuiPanel paddingSize="s" hasBorder style={{ borderRadius: 4 }}>
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
           <EuiFlexItem grow={false}>
-            <EuiBadge color="hollow">PPL</EuiBadge>
+            <EuiBetaBadge label="PPL" tooltipContent="Piped Processing Language" size="s" />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiPopover
               button={
                 <EuiButtonEmpty
                   size="xs"
+                  iconType="database"
+                  iconSide="left"
                   onClick={() => setShowDsPicker(!showDsPicker)}
                   aria-label="Select data source"
                 >
                   <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-                    <EuiFlexItem grow={false}><EuiIcon type="database" size="s" /></EuiFlexItem>
                     <EuiFlexItem grow={false}>{form.selectedDatasource}</EuiFlexItem>
                     <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
                   </EuiFlexGroup>
@@ -297,84 +304,119 @@ const QuerySection: React.FC<{
               }
               isOpen={showDsPicker}
               closePopover={() => setShowDsPicker(false)}
-              panelPaddingSize="none"
-              anchorPosition="downLeft"
+              panelPaddingSize="s"
             >
-              <EuiListGroup flush style={{ width: 200 }}>
-                {datasourceOptions.map((ds) => (
-                  <EuiListGroupItem
-                    key={ds}
-                    label={ds}
-                    onClick={() => {
-                      onUpdate({ selectedDatasource: ds });
-                      setShowDsPicker(false);
-                    }}
-                    isActive={form.selectedDatasource === ds}
-                    aria-label={`Select ${ds} data source`}
-                  />
-                ))}
-              </EuiListGroup>
+              {datasourceOptions.map((ds) => (
+                <EuiButtonEmpty
+                  key={ds}
+                  size="xs"
+                  onClick={() => { onUpdate({ selectedDatasource: ds }); setShowDsPicker(false); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left' }}
+                >
+                  {ds}
+                </EuiButtonEmpty>
+              ))}
             </EuiPopover>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiButtonEmpty size="xs" aria-label="Query library">
-              <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-                <EuiFlexItem grow={false}><EuiIcon type="addBookmark" size="s" /></EuiFlexItem>
-                <EuiFlexItem grow={false}>Query library</EuiFlexItem>
-                <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
-              </EuiFlexGroup>
-            </EuiButtonEmpty>
+            <EuiPopover
+              button={
+                <EuiButtonEmpty
+                  size="xs"
+                  iconType="addBookmark"
+                  iconSide="left"
+                  onClick={() => setShowQueryLibrary(!showQueryLibrary)}
+                  aria-label="Query library"
+                >
+                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                    <EuiFlexItem grow={false}>Query library</EuiFlexItem>
+                    <EuiFlexItem grow={false}><EuiIcon type="arrowDown" size="s" /></EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiButtonEmpty>
+              }
+              isOpen={showQueryLibrary}
+              closePopover={() => setShowQueryLibrary(false)}
+              panelPaddingSize="s"
+            >
+              {SAMPLE_PPL_QUERIES.map((sq, i) => (
+                <EuiButtonEmpty
+                  key={i}
+                  size="xs"
+                  onClick={() => handleQueryLibrarySelect(sq.query)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left' }}
+                >
+                  {sq.label}
+                </EuiButtonEmpty>
+              ))}
+            </EuiPopover>
           </EuiFlexItem>
         </EuiFlexGroup>
 
+        <EuiSpacer size="s" />
+
         {/* Code editor with line numbers */}
-        <div style={{ display: 'flex', position: 'relative' }}>
-          {/* Line number gutter */}
-          <div
-            aria-hidden="true"
-            style={{
-              padding: '8px 0',
-              minWidth: 36,
-              textAlign: 'right',
-              fontFamily: 'monospace',
-              fontSize: 13,
-              lineHeight: '20px',
-              color: '#98A2B3',
-              backgroundColor: '#F5F7FA',
-              borderRight: '1px solid #D3DAE6',
-              userSelect: 'none',
-              flexShrink: 0,
-            }}
-          >
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i} style={{ paddingRight: 8 }}>{i + 1}</div>
-            ))}
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', border: '1px solid #D3DAE6', borderRadius: 4, overflow: 'hidden' }}>
+            {/* Line number gutter */}
+            <div
+              aria-hidden="true"
+              style={{
+                padding: '8px 0',
+                minWidth: 36,
+                textAlign: 'right',
+                fontFamily: 'monospace',
+                fontSize: 13,
+                lineHeight: '20px',
+                color: '#98A2B3',
+                backgroundColor: '#F5F7FA',
+                borderRight: '1px solid #D3DAE6',
+                userSelect: 'none',
+                flexShrink: 0,
+              }}
+            >
+              {Array.from({ length: lineCount }, (_, i) => (
+                <div key={i} style={{ paddingRight: 8 }}>{i + 1}</div>
+              ))}
+            </div>
+            {/* Textarea */}
+            <textarea
+              value={form.query}
+              onChange={(e) => onUpdate({ query: e.target.value })}
+              rows={Math.max(2, lineCount)}
+              style={{
+                flex: 1,
+                fontFamily: 'monospace',
+                fontSize: 13,
+                lineHeight: '20px',
+                padding: '8px 12px',
+                border: 'none',
+                outline: 'none',
+                resize: 'vertical',
+                backgroundColor: 'transparent',
+              }}
+              aria-label="PPL query editor"
+            />
           </div>
-          {/* Textarea */}
-          <textarea
-            value={form.query}
-            onChange={(e) => onUpdate({ query: e.target.value })}
-            rows={Math.max(2, lineCount)}
-            style={{
-              flex: 1,
-              fontFamily: 'monospace',
-              fontSize: 13,
-              lineHeight: '20px',
-              padding: '8px 12px',
-              border: 'none',
-              outline: 'none',
-              resize: 'vertical',
-              backgroundColor: 'transparent',
-            }}
-            aria-label="PPL query editor"
-          />
-          <EuiButtonIcon
-            iconType="expand"
-            size="s"
-            aria-label="Expand editor"
-            style={{ position: 'absolute', top: 4, right: 4 }}
-            onClick={() => {}}
-          />
+          <div style={{ position: 'absolute', top: 4, right: 4, zIndex: 2, display: 'flex', gap: 2 }}>
+            <EuiToolTip content="Copy query">
+              <EuiButtonIcon
+                iconType="copy"
+                size="s"
+                color="subdued"
+                onClick={() => navigator.clipboard.writeText(form.query)}
+                aria-label="Copy query"
+              />
+            </EuiToolTip>
+            <EuiToolTip content="Expand editor">
+              <EuiButtonIcon
+                iconType="expand"
+                size="s"
+                color="subdued"
+                onClick={() => {}}
+                aria-label="Expand editor"
+              />
+            </EuiToolTip>
+          </div>
         </div>
       </EuiPanel>
 
@@ -475,24 +517,21 @@ const TriggerItem: React.FC<{
   index: number;
   onUpdate: (id: string, patch: Partial<TriggerState>) => void;
   onDelete: (id: string) => void;
-  canDelete: boolean;
-}> = ({ trigger, index, onUpdate, onDelete, canDelete }) => (
+}> = ({ trigger, index, onUpdate, onDelete }) => (
   <EuiAccordion
     id={`trigger-${trigger.id}`}
     buttonContent={<strong>{trigger.name || `Trigger ${index + 1}`}</strong>}
     initialIsOpen
     paddingSize="m"
     extraAction={
-      canDelete ? (
-        <EuiButtonEmpty
-          size="xs"
-          color="danger"
-          onClick={() => onDelete(trigger.id)}
-          aria-label={`Delete ${trigger.name}`}
-        >
-          Delete
-        </EuiButtonEmpty>
-      ) : undefined
+      <EuiButtonEmpty
+        size="xs"
+        color="danger"
+        onClick={() => onDelete(trigger.id)}
+        aria-label={`Delete ${trigger.name}`}
+      >
+        Delete
+      </EuiButtonEmpty>
     }
   >
     <EuiFormRow label="Trigger name" fullWidth>
@@ -632,7 +671,6 @@ const TriggersSection: React.FC<{
             index={idx}
             onUpdate={onUpdateTrigger}
             onDelete={onDeleteTrigger}
-            canDelete={triggers.length > 1}
           />
         </EuiPanel>
       </React.Fragment>
