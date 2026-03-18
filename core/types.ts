@@ -22,6 +22,12 @@ export interface Datasource {
   workspaceName?: string;
   /** The parent datasource ID if this is a workspace-derived entry */
   parentDatasourceId?: string;
+  /**
+   * Name of this datasource as registered in the OpenSearch SQL plugin.
+   * Used by DirectQueryPrometheusBackend to route API calls through:
+   *   /_plugins/_directquery/_resources/{directQueryName}/...
+   */
+  directQueryName?: string;
   auth?: {
     type: 'basic' | 'apikey' | 'sigv4';
     credentials?: Record<string, string>;
@@ -44,12 +50,21 @@ export interface PrometheusWorkspace {
 // Pagination
 // ============================================================================
 
+export interface DatasourceWarning {
+  datasourceId: string;
+  datasourceName: string;
+  datasourceType: DatasourceType;
+  error: string;
+}
+
 export interface PaginatedResponse<T> {
   results: T[];
   total: number;
   page: number;
   pageSize: number;
   hasMore: boolean;
+  /** Per-datasource errors for partially-failed fetches. Absent when all succeed. */
+  warnings?: DatasourceWarning[];
 }
 
 export interface PaginationParams {
@@ -214,6 +229,54 @@ export interface OpenSearchBackend {
   deleteDestination(ds: Datasource, destId: string): Promise<boolean>;
 }
 
+// ============================================================================
+// Prometheus Alertmanager types
+// (mirrors /api/v2 shapes from prom/alertmanager)
+// ============================================================================
+
+export interface AlertmanagerSilence {
+  id?: string;
+  status?: { state: 'active' | 'pending' | 'expired' };
+  createdBy: string;
+  comment: string;
+  startsAt: string;
+  endsAt: string;
+  matchers: Array<{
+    name: string;
+    value: string;
+    isRegex: boolean;
+    isEqual: boolean;
+  }>;
+}
+
+export interface AlertmanagerAlert {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt: string;
+  endsAt: string;
+  generatorURL: string;
+  fingerprint: string;
+  status: { state: 'active' | 'suppressed' | 'unprocessed'; silencedBy: string[]; inhibitedBy: string[] };
+  receivers: Array<{ name: string }>;
+}
+
+export interface AlertmanagerStatus {
+  cluster: { status: string; peers: Array<{ name: string; address: string }> };
+  config: { original: string };
+  uptime: string;
+  versionInfo: Record<string, string>;
+}
+
+export interface AlertmanagerReceiver {
+  name: string;
+}
+
+export interface AlertmanagerAlertGroup {
+  labels: Record<string, string>;
+  receiver: { name: string };
+  alerts: AlertmanagerAlert[];
+}
+
 /** Prometheus / AMP backend */
 export interface PrometheusBackend {
   readonly type: 'prometheus';
@@ -221,11 +284,34 @@ export interface PrometheusBackend {
   // Rules (read-only from Prometheus API; AMP supports write via ruler API)
   getRuleGroups(ds: Datasource): Promise<PromRuleGroup[]>;
 
-  // Active alerts
+  // Active alerts from Prometheus server
   getAlerts(ds: Datasource): Promise<PromAlert[]>;
 
   // Workspace discovery
   listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]>;
+
+  // ---- Alertmanager operations (optional — only available when alertmanagerUrl is set) ----
+
+  /** Get alerts from Alertmanager (richer than Prometheus /api/v1/alerts — includes routing info) */
+  getAlertmanagerAlerts?(): Promise<AlertmanagerAlert[]>;
+
+  /** List active silences */
+  getSilences?(): Promise<AlertmanagerSilence[]>;
+
+  /** Create a new silence (returns the silence ID) */
+  createSilence?(silence: AlertmanagerSilence): Promise<string>;
+
+  /** Delete (expire) a silence by ID */
+  deleteSilence?(silenceId: string): Promise<boolean>;
+
+  /** Get Alertmanager status */
+  getAlertmanagerStatus?(): Promise<AlertmanagerStatus>;
+
+  /** Get Alertmanager receivers (notification targets) */
+  getAlertmanagerReceivers?(): Promise<AlertmanagerReceiver[]>;
+
+  /** Get Alertmanager alert groups */
+  getAlertmanagerAlertGroups?(): Promise<AlertmanagerAlertGroup[]>;
 }
 
 export interface DatasourceService {

@@ -4,6 +4,6 @@
     "module": "CommonJS",
     "outDir": "./dist"
   },
-  "include": ["./server.ts", "../core/**/*.ts", "../server/routes/handlers.ts"],
+  "include": ["./server.ts", "../core/**/*.ts", "../server/routes/handlers.ts", "../server/routes/monitor_handlers.ts", "../common/**/*.ts"],
   "exclude": ["node_modules", "dist", "./**/*.tsx"]
 }

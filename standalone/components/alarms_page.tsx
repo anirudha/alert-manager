@@ -320,6 +320,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<Array<{ datasourceName: string; error: string }>>([]);
 
   // Paginated data
   const [alerts, setAlerts] = useState<UnifiedAlert[]>([]);
@@ -366,6 +367,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
         // Discover workspaces for all Prometheus datasources
         const promDs = (ds || []).filter(d => d.type === 'prometheus');
+        const nonPromIds = (ds || []).filter(d => d.type !== 'prometheus').map(d => d.id);
+
         if (promDs.length > 0) {
           setLoadingWorkspaces(true);
           const allWs: Datasource[] = [];
@@ -378,11 +381,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           setWorkspaceOptions(allWs);
           setLoadingWorkspaces(false);
 
-          // Auto-select the first Prometheus production workspace as default
+          // Auto-select all datasources: non-prometheus + first prometheus workspace
           const prodWs = allWs.find(w => w.workspaceName === 'production') || allWs[0];
-          if (prodWs) {
-            setSelectedDsIds([prodWs.id]);
+          const autoIds = [...nonPromIds, ...(prodWs ? [prodWs.id] : [])];
+          if (autoIds.length > 0) {
+            setSelectedDsIds(autoIds);
           }
+        } else if (nonPromIds.length > 0) {
+          // No Prometheus datasources — auto-select all OpenSearch datasources
+          setSelectedDsIds(nonPromIds);
         }
       } catch (e) {
         console.error('Failed to load datasources', e);
@@ -403,11 +410,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     }
     setDataLoading(true);
     setError(null);
+    setWarnings([]);
     try {
       const res = await apiClient.listAlertsPaginated(dsIds, page, pageSize);
       setAlerts(res.results || []);
       setAlertsTotal(res.total || 0);
       setAlertsHasMore(res.hasMore || false);
+      if (res.warnings && res.warnings.length > 0) {
+        setWarnings(res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error })));
+      }
     } catch (e: any) {
       setError(e.message || 'Failed to fetch alerts');
     } finally {
@@ -424,11 +435,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     }
     setDataLoading(true);
     setError(null);
+    setWarnings([]);
     try {
       const res = await apiClient.listRulesPaginated(dsIds, page, pageSize);
       setRules(res.results || []);
       setRulesTotal(res.total || 0);
       setRulesHasMore(res.hasMore || false);
+      if (res.warnings && res.warnings.length > 0) {
+        setWarnings(res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error })));
+      }
     } catch (e: any) {
       setError(e.message || 'Failed to fetch rules');
     } finally {
@@ -718,6 +733,14 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         {error && (
           <EuiCallOut title="Error loading data" color="danger" iconType="alert" size="s" style={{ marginBottom: 12 }}>
             <p>{error}</p>
+          </EuiCallOut>
+        )}
+
+        {warnings.length > 0 && (
+          <EuiCallOut title="Some datasources could not be reached" color="warning" iconType="alert" size="s" style={{ marginBottom: 12 }}>
+            {warnings.map((w, i) => (
+              <p key={i}><strong>{w.datasourceName}</strong>: {w.error}</p>
+            ))}
           </EuiCallOut>
         )}
 
