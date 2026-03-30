@@ -28,7 +28,6 @@ import {
   EuiButtonIcon,
   EuiIcon,
   EuiText,
-  EuiBadge,
   EuiBetaBadge,
   EuiAccordion,
   EuiFlyout,
@@ -851,16 +850,9 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
   return (
     <EuiFlyout onClose={onCancel} size="l" ownFocus aria-labelledby="createLogsMonitorTitle">
       <EuiFlyoutHeader hasBorder>
-        <EuiTitle size="m"><h2 id="createLogsMonitorTitle">Create Monitor</h2></EuiTitle>
+        <EuiTitle size="m"><h2 id="createLogsMonitorTitle">Create Logs Monitor</h2></EuiTitle>
         <EuiSpacer size="s" />
-        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiBadge color="primary">Logs</EuiBadge>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">Log-based alerting monitor</EuiText>
-          </EuiFlexItem>
-        </EuiFlexGroup>
+        <EuiText size="xs" color="subdued">Log-based alerting monitor</EuiText>
       </EuiFlyoutHeader>
 
       <EuiFlyoutBody>

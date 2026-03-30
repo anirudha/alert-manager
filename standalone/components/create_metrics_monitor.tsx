@@ -846,16 +846,9 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
   return (
     <EuiFlyout onClose={onCancel} size="l" ownFocus aria-labelledby="createMetricsMonitorTitle">
       <EuiFlyoutHeader hasBorder>
-        <EuiTitle size="m"><h2 id="createMetricsMonitorTitle">Create Monitor</h2></EuiTitle>
+        <EuiTitle size="m"><h2 id="createMetricsMonitorTitle">Create Metrics Monitor</h2></EuiTitle>
         <EuiSpacer size="s" />
-        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiBadge color="accent">Prometheus</EuiBadge>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">PromQL-based alerting rule</EuiText>
-          </EuiFlexItem>
-        </EuiFlexGroup>
+        <EuiText size="xs" color="subdued">PromQL-based alerting rule</EuiText>
       </EuiFlyoutHeader>
 
       <EuiFlyoutBody>

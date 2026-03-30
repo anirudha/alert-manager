@@ -941,20 +941,15 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({ onSave, onBatchSav
   return (
     <EuiFlyout onClose={onCancel} size="l" ownFocus aria-labelledby="createMonitorFlyoutTitle">
       <EuiFlyoutHeader hasBorder>
-        <EuiTitle size="m"><h2 id="createMonitorFlyoutTitle">Create Monitor</h2></EuiTitle>
+        <EuiTitle size="m">
+          <h2 id="createMonitorFlyoutTitle">
+            Create {backendType === 'prometheus' ? 'Metrics' : 'Logs'} Monitor
+          </h2>
+        </EuiTitle>
         <EuiSpacer size="s" />
-        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiBadge color={backendType === 'prometheus' ? 'accent' : 'primary'}>
-              {backendType === 'prometheus' ? 'Prometheus' : 'OpenSearch'}
-            </EuiBadge>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">
-              {backendType === 'prometheus' ? 'PromQL-based alerting rule' : 'Query-level monitor with triggers'}
-            </EuiText>
-          </EuiFlexItem>
-        </EuiFlexGroup>
+        <EuiText size="xs" color="subdued">
+          {backendType === 'prometheus' ? 'PromQL-based alerting rule' : 'Query-level monitor with triggers'}
+        </EuiText>
       </EuiFlyoutHeader>
 
       <EuiFlyoutBody>
