@@ -99,13 +99,11 @@ A "Delete" button (red text) is right-aligned in the trigger header.
 | Suppress | Checkbox (unchecked)         | —                 |
 | Expires | Number input + Unit dropdown  | `24` + `hour(s)`  |
 
----
+### Notification actions (2)
 
-## Section 5: Notification actions (2)
+Shown as a sub-section within the trigger with a count in the header.
 
-Not collapsible — shown as a list with a count in the header.
-
-### Action List
+#### Action List
 
 Each action is a collapsible accordion row with a "Delete" button (red text) on the right.
 
@@ -126,7 +124,7 @@ Each action should contain the following
   - Period start: {{ctx.periodStart}}
   - Period end: {{ctx.periodEnd}}   |
 
-### Add Action
+#### Add Action
 
 - A link-style button below the list: **Add another action** (blue text, outlined)
 

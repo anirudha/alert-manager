@@ -58,6 +58,7 @@ interface TriggerState {
   suppressEnabled: boolean;
   suppressExpiry: number;
   suppressExpiryUnit: string;
+  actions: ActionState[];
 }
 
 interface ActionState {
@@ -77,7 +78,6 @@ export interface LogsMonitorFormState {
   runEveryValue: number;
   runEveryUnit: string;
   triggers: TriggerState[];
-  actions: ActionState[];
 }
 
 export interface CreateLogsMonitorProps {
@@ -158,6 +158,10 @@ function createDefaultTrigger(index: number): TriggerState {
     suppressEnabled: false,
     suppressExpiry: 24,
     suppressExpiryUnit: 'hour(s)',
+    actions: [
+      { id: `action-${Date.now()}-0`, name: 'slack_message', notificationChannel: 'oncall_slack', subject: '', message: '' },
+      { id: `action-${Date.now()}-1`, name: 'pager-duty_message', notificationChannel: 'oncall_slack', subject: '', message: '' },
+    ],
   };
 }
 
@@ -516,7 +520,10 @@ const TriggerItem: React.FC<{
   index: number;
   onUpdate: (id: string, patch: Partial<TriggerState>) => void;
   onDelete: (id: string) => void;
-}> = ({ trigger, index, onUpdate, onDelete }) => (
+  onUpdateAction: (triggerId: string, actionId: string, patch: Partial<ActionState>) => void;
+  onDeleteAction: (triggerId: string, actionId: string) => void;
+  onAddAction: (triggerId: string) => void;
+}> = ({ trigger, index, onUpdate, onDelete, onUpdateAction, onDeleteAction, onAddAction }) => (
   <EuiAccordion
     id={`trigger-${trigger.id}`}
     buttonContent={<strong>{trigger.name || `Trigger ${index + 1}`}</strong>}
@@ -648,61 +655,14 @@ const TriggerItem: React.FC<{
         </>
       )}
     </EuiFlexGroup>
-  </EuiAccordion>
-);
+    <EuiSpacer size="m" />
 
-/** Section 4: Triggers */
-const TriggersSection: React.FC<{
-  triggers: TriggerState[];
-  onUpdateTrigger: (id: string, patch: Partial<TriggerState>) => void;
-  onDeleteTrigger: (id: string) => void;
-  onAddTrigger: () => void;
-}> = ({ triggers, onUpdateTrigger, onDeleteTrigger, onAddTrigger }) => (
-  <section aria-label="Triggers">
-    <EuiTitle size="xs"><h3>Triggers ({triggers.length})</h3></EuiTitle>
+    {/* Notification actions */}
+    <EuiTitle size="xxs"><h4>Notification actions ({trigger.actions.length})</h4></EuiTitle>
     <EuiSpacer size="s" />
-    {triggers.map((trigger, idx) => (
-      <React.Fragment key={trigger.id}>
-        {idx > 0 && <EuiSpacer size="m" />}
-        <EuiPanel paddingSize="s" hasBorder>
-          <TriggerItem
-            trigger={trigger}
-            index={idx}
-            onUpdate={onUpdateTrigger}
-            onDelete={onDeleteTrigger}
-          />
-        </EuiPanel>
-      </React.Fragment>
-    ))}
-    <EuiSpacer size="s" />
-    <EuiButtonEmpty
-      size="s"
-      iconType="plusInCircle"
-      onClick={onAddTrigger}
-      aria-label="Add another trigger"
-    >
-      Add another trigger
-    </EuiButtonEmpty>
-  </section>
-);
-
-/** Section 5: Actions */
-const ActionsSection: React.FC<{
-  actions: ActionState[];
-  onUpdateAction: (id: string, patch: Partial<ActionState>) => void;
-  onDeleteAction: (id: string) => void;
-  onAddAction: () => void;
-}> = ({ actions, onUpdateAction, onDeleteAction, onAddAction }) => (
-  <section aria-label="Notification actions">
-    <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-      <EuiFlexItem grow={false}>
-        <EuiTitle size="xs"><h3>Notification actions ({actions.length})</h3></EuiTitle>
-      </EuiFlexItem>
-    </EuiFlexGroup>
-    <EuiSpacer size="s" />
-    {actions.map((action, idx) => (
+    {trigger.actions.map((action, actionIdx) => (
       <React.Fragment key={action.id}>
-        {idx > 0 && <EuiSpacer size="xs" />}
+        {actionIdx > 0 && <EuiSpacer size="xs" />}
         <EuiPanel paddingSize="s" hasBorder>
           <EuiAccordion
             id={`action-${action.id}`}
@@ -712,7 +672,7 @@ const ActionsSection: React.FC<{
               <EuiButtonEmpty
                 size="xs"
                 color="danger"
-                onClick={() => onDeleteAction(action.id)}
+                onClick={() => onDeleteAction(trigger.id, action.id)}
                 aria-label={`Delete action ${action.name}`}
               >
                 Delete
@@ -723,7 +683,7 @@ const ActionsSection: React.FC<{
               <EuiSelect
                 options={NOTIFICATION_CHANNEL_OPTIONS}
                 value={action.notificationChannel}
-                onChange={(e) => onUpdateAction(action.id, { notificationChannel: e.target.value })}
+                onChange={(e) => onUpdateAction(trigger.id, action.id, { notificationChannel: e.target.value })}
                 compressed
                 fullWidth
                 aria-label="Notification channel"
@@ -734,7 +694,7 @@ const ActionsSection: React.FC<{
               <EuiFieldText
                 placeholder="Enter a subject"
                 value={action.subject}
-                onChange={(e) => onUpdateAction(action.id, { subject: e.target.value })}
+                onChange={(e) => onUpdateAction(trigger.id, action.id, { subject: e.target.value })}
                 compressed
                 fullWidth
                 aria-label="Action subject"
@@ -750,7 +710,7 @@ const ActionsSection: React.FC<{
               <EuiTextArea
                 placeholder={DEFAULT_ACTION_MESSAGE}
                 value={action.message}
-                onChange={(e) => onUpdateAction(action.id, { message: e.target.value })}
+                onChange={(e) => onUpdateAction(trigger.id, action.id, { message: e.target.value })}
                 rows={6}
                 fullWidth
                 compressed
@@ -765,10 +725,49 @@ const ActionsSection: React.FC<{
     <EuiButtonEmpty
       size="s"
       iconType="plusInCircle"
-      onClick={onAddAction}
+      onClick={() => onAddAction(trigger.id)}
       aria-label="Add another action"
     >
       Add another action
+    </EuiButtonEmpty>
+  </EuiAccordion>
+);
+const TriggersSection: React.FC<{
+  triggers: TriggerState[];
+  onUpdateTrigger: (id: string, patch: Partial<TriggerState>) => void;
+  onDeleteTrigger: (id: string) => void;
+  onAddTrigger: () => void;
+  onUpdateAction: (triggerId: string, actionId: string, patch: Partial<ActionState>) => void;
+  onDeleteAction: (triggerId: string, actionId: string) => void;
+  onAddAction: (triggerId: string) => void;
+}> = ({ triggers, onUpdateTrigger, onDeleteTrigger, onAddTrigger, onUpdateAction, onDeleteAction, onAddAction }) => (
+  <section aria-label="Triggers">
+    <EuiTitle size="xs"><h3>Triggers ({triggers.length})</h3></EuiTitle>
+    <EuiSpacer size="s" />
+    {triggers.map((trigger, idx) => (
+      <React.Fragment key={trigger.id}>
+        {idx > 0 && <EuiSpacer size="m" />}
+        <EuiPanel paddingSize="s" hasBorder>
+          <TriggerItem
+            trigger={trigger}
+            index={idx}
+            onUpdate={onUpdateTrigger}
+            onDelete={onDeleteTrigger}
+            onUpdateAction={onUpdateAction}
+            onDeleteAction={onDeleteAction}
+            onAddAction={onAddAction}
+          />
+        </EuiPanel>
+      </React.Fragment>
+    ))}
+    <EuiSpacer size="s" />
+    <EuiButtonEmpty
+      size="s"
+      iconType="plusInCircle"
+      onClick={onAddTrigger}
+      aria-label="Add another trigger"
+    >
+      Add another trigger
     </EuiButtonEmpty>
   </section>
 );
@@ -787,10 +786,6 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
     runEveryValue: 1,
     runEveryUnit: 'minute(s)',
     triggers: [createDefaultTrigger(0)],
-    actions: [
-      { id: `action-${Date.now()}-0`, name: 'slack_message', notificationChannel: 'oncall_slack', subject: '', message: '' },
-      { id: `action-${Date.now()}-1`, name: 'pager-duty_message', notificationChannel: 'oncall_slack', subject: '', message: '' },
-    ],
   });
   const [showPreview, setShowPreview] = useState(false);
 
@@ -819,27 +814,38 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
     }));
   }, []);
 
-  const deleteAction = useCallback((id: string) => {
+  const updateAction = useCallback((triggerId: string, actionId: string, patch: Partial<ActionState>) => {
     setForm((prev) => ({
       ...prev,
-      actions: prev.actions.filter((a) => a.id !== id),
+      triggers: prev.triggers.map((t) =>
+        t.id === triggerId
+          ? { ...t, actions: t.actions.map((a) => (a.id === actionId ? { ...a, ...patch } : a)) }
+          : t
+      ),
     }));
   }, []);
 
-  const updateAction = useCallback((id: string, patch: Partial<ActionState>) => {
+  const deleteAction = useCallback((triggerId: string, actionId: string) => {
     setForm((prev) => ({
       ...prev,
-      actions: prev.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+      triggers: prev.triggers.map((t) =>
+        t.id === triggerId
+          ? { ...t, actions: t.actions.filter((a) => a.id !== actionId) }
+          : t
+      ),
     }));
   }, []);
 
-  const addAction = useCallback(() => {
-    const name = `action_${form.actions.length + 1}`;
+  const addAction = useCallback((triggerId: string) => {
     setForm((prev) => ({
       ...prev,
-      actions: [...prev.actions, { id: `action-${Date.now()}`, name, notificationChannel: 'oncall_slack', subject: '', message: '' }],
+      triggers: prev.triggers.map((t) => {
+        if (t.id !== triggerId) return t;
+        const name = `action_${t.actions.length + 1}`;
+        return { ...t, actions: [...t.actions, { id: `action-${Date.now()}`, name, notificationChannel: 'oncall_slack', subject: '', message: '' }] };
+      }),
     }));
-  }, [form.actions.length]);
+  }, []);
 
   const handleRunPreview = useCallback(() => {
     setShowPreview(true);
@@ -872,10 +878,6 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
           onUpdateTrigger={updateTrigger}
           onDeleteTrigger={deleteTrigger}
           onAddTrigger={addTrigger}
-        />
-        <EuiHorizontalRule margin="l" />
-        <ActionsSection
-          actions={form.actions}
           onUpdateAction={updateAction}
           onDeleteAction={deleteAction}
           onAddAction={addAction}
