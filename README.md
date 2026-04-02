@@ -104,11 +104,11 @@ Open http://localhost:5603 in your browser.
 
 ### 3. With Observability Stack (one-liner)
 
-Run Alert Manager against the [Observability Stack](https://github.com/opensearch-project/observability-stack) for a fully-wired setup with pre-canned monitors, Prometheus alerting rules, and Alertmanager routing:
+Run Alert Manager against the [Observability Stack](https://github.com/lezzago/observability-stack/tree/update-alerting) for a fully-wired setup with pre-canned monitors, Prometheus alerting rules, and Alertmanager routing:
 
 ```bash
-# Start the observability stack first (from the observability-stack repo):
-#   docker compose up -d
+# Clone and start the observability stack (update-alerting branch):
+git clone -b update-alerting https://github.com/lezzago/observability-stack.git && cd observability-stack && docker compose up -d
 
 # Then run Alert Manager — defaults match the observability stack out of the box:
 npx @anirudhaj/alarms
