@@ -1,219 +1,209 @@
-# Alert Detail Page — UI Specification for Log-Based Alerts
+# Alert Detail Page — UI Mockup Specification for log-based alerts
 
-## Overview
+## Page Layout
 
-A full-page detail view for a single alert (navigated from the Alarms list via breadcrumb). This page provides comprehensive context about a firing log-based alert: current status, signal visualization with threshold, correlated signals, history, configuration, and related resources. The layout is a single-column page (not a flyout) using OUI components and echarts for visualizations.
-
----
-
-## Page Header
-
-### Breadcrumb
-
-- Format: `Alarms > {alert-name}`
-- "Alarms" is a clickable link that navigates back to the alarms list page
-- `{alert-name}` is plain text (current page)
-
-### Title Row
-
-- Alert name displayed as an `EuiTitle` size `l` (e.g. `prod-api-error-rate`)
-- Below the title, a status row containing:
-  - State indicator: `EuiHealth` with color mapped to state (e.g. red dot + "In alarm since Mar 30, 22:47 UTC (27 min)")
-  - Duration is computed from `startTime` to now, displayed in parentheses
-  - Right-aligned action buttons:
-    - **Acknowledge** — `EuiButton` outline style, icon `check`. Disabled if already acknowledged.
-    - **Mute** — `EuiButton` outline style, icon `bellSlash`. Toggles to "Unmute" if already muted.
+The page is a single-column layout flyout detail view. It can be opened within a page that reference the specific alert. It has a flyout header with status and actions, a row of summary cards, tabbed content sections, and no footer. Uses OUI components throughout and echarts for chart visualizations.
 
 ---
 
-## Summary Cards
+## Flyout Header section
 
-A horizontal row of four `EuiPanel` cards with `hasBorder`, displayed using `EuiFlexGroup` with equal-width `EuiFlexItem`s. Use compressed `EuiDescriptionList` inside each card.
+### Title
 
-| Card             | Title Line       | Value Line                  |
-|------------------|------------------|-----------------------------|
-| Current value    | "Current value"  | e.g. `12.4%` + subtitle `error rate` |
-| Threshold        | "Threshold"      | e.g. `> 5%` + subtitle `for 5 min`   |
-| Duration         | "Duration"       | e.g. `3 of 3 periods` + subtitle `breaching` |
-| Actions          | "Actions"        | e.g. `SNS: ops-oncall`               |
+- Alert name displayed (e.g. `prod-api-error-rate`)
 
-- Values use `EuiText` size `m` with bold for the primary value
-- Subtitles use `EuiText` size `xs` color `subdued`
+### Status Row
+
+Horizontal layout with status and labels on the left and action buttons on the far right.
+
+| Element              | Type / Style                          | Notes                                              |
+|----------------------|---------------------------------------|----------------------------------------------------|
+| State indicator      | EuiHealth (red dot) + text            | e.g. `In alarm since Mar 30, 22:47 UTC (27 min)`  |
+| Duration             | Computed from `startTime` to now      | Displayed in parentheses after the timestamp        |
+| Labels           |   | OuiBadge (hollow)       |
+| Acknowledge button   | EuiButton, outline, icon `check`      | Right-aligned. Disabled if already acknowledged.    |
+| Mute button          | EuiButton, outline, icon `bellSlash`  | Right-aligned. Toggles to "Unmute" if muted.        |
 
 ---
 
 ## Tab Navigation
 
-`EuiTabs` with four tabs:
+Tabs should be part of the flyout header, the content of the tabs is the content of the flyout.
 
-| Tab ID            | Label                | Default |
-|-------------------|----------------------|---------|
-| `signal`          | Signal               | Active  |
-| `history`         | History              | —       |
-| `configuration`   | Configuration        | —       |
-| `related`         | Related resources    | —       |
+Four tabs. "Signal" is selected by default with an underline indicator.
+
+
+| Tab ID            | Label                |
+|-------------------|----------------------|
+| `overview`          | Overview               |
+| `history`         | History              |
+| `configuration`   | Configuration        |
+| `related`         | Related resources    |
 
 ---
 
-## Tab: Signal (default)
+## Section 4: Overview Tab (default)
+
+### Quick stats
+
+A horizontal row of four panels with borders, equal width.
+
+| Card             | Primary Value        | Subtitle              |
+|------------------|----------------------|-----------------------|
+| Current value    | `12.4%`              | `error rate`          |
+| Threshold        | `> 5%`               | `for 5 min`           |
+| Duration         | `3 of 3 periods`     | `breaching`           |
+| Actions          | `SNS: ops-oncall`    | —                     |
+
+- Display a visualization of how the alert is breaching the threshold
+- Primary value uses bold text, medium size
+- Subtitle uses small text, subdued color
 
 ### Metric Chart
 
-Wrapped in an `EuiPanel` with `hasBorder`.
+Wrapped in a single panel with border.
 
 #### Chart Header
 
-- Left: metric label as `EuiText` size `s` bold (e.g. `Metric: AWS/ApiGateway 5XXError`)
-- Right: time range selector — a group of `EuiButtonGroup` options: `1h`, `3h`, `6h` (default selected), `1d`
+- Left side: metric label in bold small text (e.g. `Metric: AWS/ApiGateway 5XXError`)
+- Right side: time range button group with options `1h`, `3h`, `6h` (selected by default), `1d`
 
 #### Chart (echarts)
 
-- Type: area line chart rendered with echarts
+- Type: area line chart
 - X-axis: timestamps (e.g. `21:00`, `21:30`, `22:00`, `22:30`, `23:00`)
 - Y-axis: percentage values (e.g. `0%`, `5%`, `10%`, `15%`)
 - Data line: solid blue line with light blue area fill beneath
 - Threshold line: horizontal red dashed line at the threshold value, labeled `THRESHOLD` on the right end
-- The area above the threshold where the data line exceeds it should have a subtle red fill to highlight the breach
-- echarts tooltip on hover showing timestamp and value
+- Area above threshold where data exceeds it should have a subtle red fill
+- Tooltip on hover showing timestamp and value
+- Full-width within the panel
 
 #### Alarm Annotation
 
-- Below the chart, inside the same panel: an `EuiCallOut` with `color="warning"` and icon `alert`
-- Text: `Alarm triggered at {time} — {description}` (e.g. "Alarm triggered at 22:47 — error rate crossed 5% threshold")
+- Below the chart, inside the same panel
+- Warning-style callout with alert icon
+- Text: e.g. `Alarm triggered at 22:47 — error rate crossed 5% threshold`
 
-### Correlated Signals
+### Summary
 
-Wrapped in a separate `EuiPanel` with `hasBorder`, below the metric chart.
+- Generated summary of what happended and possible causes in human readable format.
 
-#### Header
+### Recommendation
 
-- Left: `EuiTitle` size `xs` — "Correlated signals"
-- Right: `EuiButtonEmpty` — "View all >" link
-
-#### Table
-
-`EuiBasicTable` with compressed styling. Columns:
-
-| Column       | Width   | Render                                                        |
-|--------------|---------|---------------------------------------------------------------|
-| Status icon  | `30px`  | `EuiHealth` dot — red for "In alarm", green for "OK"          |
-| Name         | auto    | Alert name as `EuiButtonEmpty` link (e.g. `prod-api-latency-p99`) |
-| State        | `100px` | `EuiBadge` — `danger` for "In alarm", `success` for "OK"     |
-| Time         | `100px` | Timestamp or `—` if OK                                        |
-| Detail       | auto    | Short description (e.g. `p99 > 2000ms`, `> 90% pool`)        |
-
-- Rows are sorted: alarms first, then OK
-- Clicking a correlated signal name navigates to that alert's detail page
+- Generated list of recommended actions users can take to remediate the alert.
 
 ---
 
-## Tab: History
+### Related alerts
 
-An `EuiBasicTable` showing the alert's state transition history, sorted newest first.
+Separate panel with border, below the metric chart.
+
+#### Header
+
+- Left: title text — "Related signals"
+- Right: link-style button — "View all >"
+
+#### Table
+
+| Column        | Width    | Description                                                    |
+|---------------|----------|----------------------------------------------------------------|
+| Status icon   | `30px`   | Health dot — red for "In alarm", green for "OK"                |
+| Name          | auto     | Alert name as clickable link (e.g. `prod-api-latency-p99`)    |
+| State         | `100px`  | Badge — danger for "In alarm", success for "OK"                |
+| Time          | `100px`  | Timestamp when alarm triggered, or `—` if OK                   |
+| Detail        | auto     | Short description (e.g. `p99 > 2000ms`, `> 90% pool`)         |
+
+- Rows sorted: alarms first, then OK
+- Clicking a name navigates to that alert's detail page
+
+---
+
+## Section 5: History Tab
+
+### Alert timeline
+
+It should display a timeline visulziation of the alert's state
+
+
+### State history
+Table showing the alert's state transition history, sorted newest first.
 
 | Column     | Description                                    |
 |------------|------------------------------------------------|
 | Timestamp  | Date/time of the state change                  |
-| State      | `EuiHealth` with color-coded state label       |
+| State      | Color-coded health indicator with state label  |
 | Value      | The metric value at the time of transition     |
 | Message    | Description of what happened                   |
 
-- Data sourced from `UnifiedRule.alertHistory`
-- Empty state: `EuiEmptyPrompt` with "No history available"
+- Standard table styling with alternating row shading
+- Empty state: prompt with "No history available"
 
 ---
 
-## Tab: Configuration
+## Section 6: Configuration Tab
 
-Displays the monitor's configuration in read-only form using `EuiDescriptionList` type `column` compressed, organized in accordion sections:
+Read-only display of the monitor's configuration, organized in collapsible accordion sections.
 
-### Query Definition
+### Query Definition (expanded by default)
 
-- `EuiAccordion` expanded by default
-- `EuiCodeBlock` showing the query (JSON for OpenSearch, PromQL for Prometheus)
-- Below: condition text (e.g. `ctx.results[0].hits.total.value > 100`)
+- Code block showing the query (JSON for OpenSearch, PromQL for Prometheus)
+- Below the code block: condition text in subdued small text (e.g. `ctx.results[0].hits.total.value > 100`)
 
-### Conditions & Evaluation
+### Conditions & Evaluation (expanded by default)
 
-- `EuiAccordion` expanded by default
-- Fields: Evaluation Interval, Pending Period, Firing Period (if applicable), Lookback Period (if applicable), Threshold
+| Field                | Value Example        |
+|----------------------|----------------------|
+| Evaluation Interval  | `1 minutes`          |
+| Pending Period       | `5 minutes`          |
+| Firing Period        | `5 minutes`          |
+| Lookback Period      | `15 minutes`         |
+| Threshold            | `> 5%`               |
 
-### Labels
+### Labels (expanded by default)
 
-- `EuiAccordion` expanded by default
-- Rendered as `EuiBadge` with `color="hollow"` for each `key: value` pair
+- Each label rendered as a hollow badge: `key: value`
+- If no labels: subdued text "No labels"
 
-### Notification Routing
+### Notification Routing (collapsed by default)
 
-- `EuiAccordion` collapsed by default
-- `EuiBasicTable` with columns: Channel, Destination, Severities, Throttle
+| Column       | Description                          |
+|--------------|--------------------------------------|
+| Channel      | e.g. `Slack`, `Email`, `Webhook`     |
+| Destination  | e.g. `#ops-alerts`                   |
+| Severities   | Badges for each severity level       |
+| Throttle     | e.g. `10 minutes` or `—`            |
 
-### Suppression Rules
+### Suppression Rules (collapsed by default)
 
-- `EuiAccordion` collapsed by default
-- Each rule as an `EuiPanel` showing name, reason, schedule, and active/inactive badge
-
----
-
-## Tab: Related Resources
-
-A list of related resources displayed as `EuiPanel` cards:
-
-- Associated monitor (link to monitor detail flyout)
-- Datasource info (name, type, ID)
-- Runbook URL (if present in annotations, rendered as external link)
-- Dashboard links (if present in annotations)
-
-Empty state: `EuiEmptyPrompt` with "No related resources found"
+- Each rule displayed as a panel showing:
+  - Name (bold)
+  - Reason (subdued text)
+  - Schedule (if applicable)
+  - Active/Inactive badge
 
 ---
 
-## Data Model
+## Section 7: Related Resources Tab
 
-This page consumes a `UnifiedRule` object (fetched by alert/monitor ID) which already contains:
+A list of related resource panels:
 
-- `name`, `status`, `severity`, `healthStatus`
-- `query`, `condition`, `threshold`
-- `evaluationInterval`, `pendingPeriod`, `firingPeriod`, `lookbackPeriod`
-- `labels`, `annotations`
-- `alertHistory: AlertHistoryEntry[]`
-- `conditionPreviewData: Array<{ timestamp: number; value: number }>`
-- `notificationRouting: NotificationRouting[]`
-- `suppressionRules: SuppressionRule[]`
-- `description`, `aiSummary`
+- Associated monitor — link to open monitor detail flyout
+- Datasource info — name, type, ID
+- Runbook URL — external link (if present in annotations)
+- Dashboard links — external links (if present in annotations)
 
-### Correlated Signals
-
-Correlated signals are derived by querying other alerts/rules that share common labels (e.g. same `service`, `environment`, or `region`). The API should return a list of `UnifiedAlert` or `UnifiedRule` objects that match overlapping label sets.
-
----
-
-## Component File
-
-- Path: `standalone/components/alert_detail_page.tsx`
-- The component receives the alert/rule data and API client as props
-- Navigation: integrated into the existing routing in `alarms_page.tsx` — clicking an alert name navigates to this page instead of opening the flyout
+- Empty state: prompt with "No related resources found"
 
 ---
 
 ## Interactions
 
-| Action              | Behavior                                                    |
-|---------------------|-------------------------------------------------------------|
-| Click "Acknowledge" | Calls `apiClient.acknowledgeAlert(id)`, updates state badge |
-| Click "Mute"        | Calls `apiClient.silenceAlert(id)`, toggles button label    |
-| Click breadcrumb    | Navigates back to alarms list                               |
-| Change time range   | Re-renders the echarts signal chart with the selected range  |
-| Click correlated signal | Navigates to that alert's detail page                   |
-| Click "View all >"  | Navigates to alerts list filtered by shared labels           |
-
----
-
-## Accessibility
-
-- Breadcrumb uses `nav` with `aria-label="Breadcrumb"`
-- All action buttons have descriptive `aria-label` attributes
-- Chart has `aria-label` describing the metric being visualized
-- Table uses proper column headers
-- Tab navigation uses `EuiTabs` which handles keyboard navigation natively
-- State indicators use both color and text labels (not color alone)
+| Action                    | Behavior                                                         |
+|---------------------------|------------------------------------------------------------------|
+| Click "Acknowledge"       | Calls API to acknowledge alert, updates state badge              |
+| Click "Mute"             | Calls API to silence alert, toggles button label to "Unmute"     |
+| Click breadcrumb "Alarms" | Navigates back to alarms list                                   |
+| Change time range         | Re-renders the echarts signal chart with the selected range      |
+| Click correlated signal   | Navigates to that alert's detail page                            |
+| Click "View all >"       | Navigates to alerts list filtered by shared labels               |

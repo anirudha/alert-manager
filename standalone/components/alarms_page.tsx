@@ -839,9 +839,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           <AlertDetailFlyout
             alert={selectedAlert}
             datasources={datasources}
+            rules={rules}
+            allAlerts={alerts}
             onClose={() => setSelectedAlert(null)}
             onAcknowledge={(id) => { handleAcknowledgeAlert(id); setSelectedAlert(null); }}
             onSilence={(id) => { handleSilenceAlert(id); setSelectedAlert(null); }}
+            onViewAlert={(a) => setSelectedAlert(a)}
           />
         )}
       </EuiPageBody>
