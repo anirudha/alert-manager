@@ -15,8 +15,6 @@ export { validatePromQL, prettifyPromQL } from './promql_validator';
 export type { PromQLError, PromQLValidationResult } from './promql_validator';
 export { serializeMonitor, serializeMonitors, deserializeMonitor } from './serializer';
 export type { MonitorConfig } from './serializer';
-export { NotificationRoutingService } from './routing';
-export type { RoutingRuleConfig } from './routing';
 export { SuppressionRuleService } from './suppression';
 export type { SuppressionRuleConfig } from './suppression';
 export { matchesSearch, matchesFilters, sortRules, filterAlerts, emptyFilters } from './filter';

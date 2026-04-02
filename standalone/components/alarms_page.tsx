@@ -97,18 +97,9 @@ export class AlarmsApiClient {
     return this.http.get('/api/monitors/export');
   }
 
-  // Routing rules
-  async listRoutingRules(): Promise<any> {
-    return this.http.get('/api/routing-rules');
-  }
-  async createRoutingRule(data: any): Promise<any> {
-    return this.http.post('/api/routing-rules', data);
-  }
-  async updateRoutingRule(id: string, data: any): Promise<any> {
-    return this.http.put(`/api/routing-rules/${id}`, data);
-  }
-  async deleteRoutingRule(id: string): Promise<any> {
-    return this.http.delete(`/api/routing-rules/${id}`);
+  // Alertmanager config (read-only, parsed from live config via OpenSearch Direct Query)
+  async getAlertmanagerConfig(): Promise<any> {
+    return this.http.get('/api/alertmanager/config');
   }
 
   // Suppression rules
