@@ -4,11 +4,36 @@
   "private": true,
   "description": "Alarms plugin with dual distribution: OSD plugin or standalone",
   "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
     "build": "yarn plugin-helpers build",
     "build:standalone": "cd standalone && npm install && npm run build",
     "start:standalone": "cd standalone && npm run start",
     "dev:standalone": "cd standalone && npm run dev",
     "plugin-helpers": "../../scripts/use_node ../../scripts/plugin_helpers",
     "osd": "../../scripts/use_node ../../scripts/osd"
+  },
+  "main": ".eslintrc.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anirudha/alert-manager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/anirudha/alert-manager/issues"
+  },
+  "homepage": "https://github.com/anirudha/alert-manager#readme",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.5.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "typescript": "^6.0.2"
   }
 }
