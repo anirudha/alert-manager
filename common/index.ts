@@ -1,3 +1,8 @@
-export const PLUGIN_ID = 'alarms';
-export const PLUGIN_NAME = 'Alarms';
-export const API_BASE = '/api/alarms';
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export const PLUGIN_ID = 'alertManager';
+export const PLUGIN_NAME = 'Alert Manager';
+export const API_BASE = '/api/alert_manager';

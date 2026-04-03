@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Prometheus backend that routes all API calls through OpenSearch Direct Query
  * resource APIs instead of connecting to Prometheus directly.

@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Zero-dependency HTTP client wrapping Node.js built-in http/https modules.
  * Handles basic auth, self-signed TLS certs, timeouts, and JSON parsing.

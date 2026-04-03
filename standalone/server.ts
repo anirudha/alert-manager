@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Standalone Express server for the Alert Manager.
  * Supports OpenSearch Alerting and Prometheus/AMP backends with mock mode.

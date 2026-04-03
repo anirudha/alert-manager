@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * OSD route adapter — wires framework-agnostic handlers to OSD's IRouter.
  */

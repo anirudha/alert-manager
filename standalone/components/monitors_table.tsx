@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Enhanced Monitors Table — search, filter, sort, column customization,
  * saved searches, bulk delete, and JSON export.

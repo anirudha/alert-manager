@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Create Monitor — flyout workflow for creating either a Prometheus (PromQL)
  * or OpenSearch monitor. The user picks the target datasource first, which

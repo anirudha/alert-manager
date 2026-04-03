@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import {
   PluginInitializerContext,
   CoreSetup,
@@ -24,7 +29,7 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
   }
 
   public setup(core: CoreSetup) {
-    this.logger.debug('alarms: Setup');
+    this.logger.debug('alertManager: Setup');
     const router = core.http.createRouter();
 
     const logger: AlarmsLogger = {
@@ -53,7 +58,7 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
   }
 
   public start(core: CoreStart) {
-    this.logger.debug('alarms: Started');
+    this.logger.debug('alertManager: Started');
     return {};
   }
 

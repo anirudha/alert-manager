@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Alert Manager UI — single-datasource selection with server-side pagination.
  * Prometheus datasources are decomposed into selectable workspaces.

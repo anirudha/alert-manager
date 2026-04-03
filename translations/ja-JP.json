@@ -76,6 +76,6 @@
     }
   },
   "messages": {
-    "alarms.buttonText": "Translate me to Japanese"
+    "alertManager.buttonText": "アラートマネージャー"
   }
 }

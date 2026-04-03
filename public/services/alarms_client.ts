@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * HTTP client for the Alert Manager API.
  * Works in both OSD and standalone mode via the HttpClient abstraction.

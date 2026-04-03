@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Metric Browser — browse available metrics with cardinality info,
  * query time estimates, and optimization suggestions.

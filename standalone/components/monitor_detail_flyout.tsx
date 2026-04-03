@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Monitor Detail Flyout — comprehensive view of a single monitor's
  * configuration, behavior, and impact with quick actions.

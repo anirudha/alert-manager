@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Notification Routing Panel — read-only view of live Alertmanager configuration.
  * Fetches the parsed config from GET /api/alertmanager/config (routed through

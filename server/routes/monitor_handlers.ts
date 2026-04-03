@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Route handlers for monitor CRUD, import/export, routing, suppression, and alert actions.
  */

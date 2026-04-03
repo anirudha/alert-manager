@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Alert Manager UI — shared between OSD plugin and standalone mode.
  * Uses unified views + backend-native drill-down.

@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { emptyFilters, matchesSearch, matchesFilters, sortRules, filterAlerts } from '../filter';
 
 describe('emptyFilters', () => {

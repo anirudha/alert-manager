@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Real OpenSearch Alerting backend — talks to _plugins/_alerting REST APIs.
  *

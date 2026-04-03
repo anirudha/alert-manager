@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Alert service — orchestrates OpenSearch and Prometheus backends,
  * and provides a unified view for the UI.

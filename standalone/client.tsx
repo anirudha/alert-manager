@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Standalone React entry point — no OSD dependencies.
  * Uses the standalone AlarmsPage and its co-located API client.

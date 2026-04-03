@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Mock backends — simulate real OpenSearch Alerting and Prometheus API responses.
  */

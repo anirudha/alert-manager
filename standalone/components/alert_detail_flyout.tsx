@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Alert Detail Flyout — drill-down view for a single alert
  * showing full context, labels, annotations, and actions.

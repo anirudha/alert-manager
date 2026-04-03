@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Alerts Dashboard — visualization-first view of alert history
  * with summary stats, charts, and drill-down table.

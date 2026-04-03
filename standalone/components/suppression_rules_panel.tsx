@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Suppression Rules Panel — manage suppression rules with CRUD and conflict detection.
  */

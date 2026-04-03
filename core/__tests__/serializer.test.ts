@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { serializeMonitor, serializeMonitors, deserializeMonitor, MonitorConfig } from '../serializer';
 import { UnifiedRule } from '../types';
 

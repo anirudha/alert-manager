@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * PromQL Editor — syntax highlighting, autocomplete, validation,
  * function hints, prettify, and error highlighting.

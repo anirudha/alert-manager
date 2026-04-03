@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * AI Monitor Wizard — auto-generates monitors for common OTEL/Prometheus applications.
  * Scans discovered metrics, groups by application category, and offers preconfigured

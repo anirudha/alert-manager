@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * OSD-specific app wrapper — bridges OSD services to the shared AlarmsPage.
  */
