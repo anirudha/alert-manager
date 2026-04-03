@@ -417,6 +417,120 @@ const StateBreakdown: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
 // Alerts by Service mini-table
 // ============================================================================
 
+/** Group alerts by datasource type (opensearch vs prometheus). */
+const AlertsByDatasource: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
+  const groups = countBy(alerts, (a) => a.datasourceType || 'unknown');
+  const sorted = Object.entries(groups)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  if (sorted.length === 0)
+    return (
+      <EuiText size="s" color="subdued">
+        No data
+      </EuiText>
+    );
+  const maxCount = sorted[0][1];
+  return (
+    <div style={{ fontSize: 12 }}>
+      {sorted.map(([name, count]) => (
+        <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span
+            style={{
+              width: 90,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+              color: '#343741',
+            }}
+          >
+            {name}
+          </span>
+          <div
+            style={{
+              flex: 1,
+              height: 8,
+              background: '#EDF0F5',
+              borderRadius: 4,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${(count / maxCount) * 100}%`,
+                height: '100%',
+                background: '#006BB4',
+                borderRadius: 4,
+              }}
+            />
+          </div>
+          <span style={{ fontWeight: 600, minWidth: 20, textAlign: 'right' as const }}>
+            {count}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/** Group alerts by monitor name (extracted from alert name before " — "). */
+const AlertsByMonitor: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
+  const groups = countBy(alerts, (a) => {
+    const dashIdx = a.name.indexOf(' — ');
+    return dashIdx > 0 ? a.name.substring(0, dashIdx) : a.name;
+  });
+  const sorted = Object.entries(groups)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  if (sorted.length === 0)
+    return (
+      <EuiText size="s" color="subdued">
+        No data
+      </EuiText>
+    );
+  const maxCount = sorted[0][1];
+  return (
+    <div style={{ fontSize: 12 }}>
+      {sorted.map(([name, count]) => (
+        <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span
+            style={{
+              width: 90,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+              color: '#343741',
+            }}
+            title={name}
+          >
+            {name}
+          </span>
+          <div
+            style={{
+              flex: 1,
+              height: 8,
+              background: '#EDF0F5',
+              borderRadius: 4,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${(count / maxCount) * 100}%`,
+                height: '100%',
+                background: '#006BB4',
+                borderRadius: 4,
+              }}
+            />
+          </div>
+          <span style={{ fontWeight: 600, minWidth: 20, textAlign: 'right' as const }}>
+            {count}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const AlertsByGroup: React.FC<{ alerts: UnifiedAlert[]; groupKey: string }> = ({
   alerts,
   groupKey,
@@ -1218,19 +1332,19 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               <EuiFlexItem>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>By Service</h3>
+                    <h3>By Source</h3>
                   </EuiTitle>
                   <EuiSpacer size="s" />
-                  <AlertsByGroup alerts={filteredAlerts} groupKey="service" />
+                  <AlertsByDatasource alerts={filteredAlerts} />
                 </EuiPanel>
               </EuiFlexItem>
               <EuiFlexItem>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>By Team</h3>
+                    <h3>By Monitor</h3>
                   </EuiTitle>
                   <EuiSpacer size="s" />
-                  <AlertsByGroup alerts={filteredAlerts} groupKey="team" />
+                  <AlertsByMonitor alerts={filteredAlerts} />
                 </EuiPanel>
               </EuiFlexItem>
             </EuiFlexGroup>

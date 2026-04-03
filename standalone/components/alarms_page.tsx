@@ -375,7 +375,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [alertsHasMore, setAlertsHasMore] = useState(false);
 
   const [rules, setRules] = useState<UnifiedRule[]>([]);
-  const [rulesTotal, setRulesTotal] = useState(0);
+  const [rulesTotal, setRulesTotal] = useState(-1); // -1 = not yet loaded
   const [rulesPage, setRulesPage] = useState(1);
   const [rulesPageSize, setRulesPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [rulesHasMore, setRulesHasMore] = useState(false);
@@ -787,7 +787,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const tabs = [
     { id: 'alerts' as TabId, name: `Alerts (${alertsTotal})` },
-    { id: 'rules' as TabId, name: `Rules (${rulesTotal})` },
+    { id: 'rules' as TabId, name: rulesTotal >= 0 ? `Rules (${rulesTotal})` : 'Rules' },
     { id: 'routing' as TabId, name: 'Routing' },
     { id: 'suppression' as TabId, name: 'Suppression' },
   ];
