@@ -10,11 +10,21 @@ import {
   MultiBackendAlertService,
   SuppressionRuleService,
   SuppressionRuleConfig,
+  Logger,
 } from '../../core';
 import { validateMonitorForm } from '../../core/validators';
 import { serializeMonitors, deserializeMonitor } from '../../core/serializer';
 
 type Result = { status: number; body: any };
+
+/** Sanitize error for client response. */
+function safeError(e: unknown): string {
+  const full = String(e);
+  if (full.includes('not found') || full.includes('required') || full.includes('must be')) {
+    return full;
+  }
+  return 'An internal error occurred';
+}
 
 // ============================================================================
 // Monitor CRUD
@@ -30,7 +40,7 @@ export async function handleCreateMonitor(
     const monitor = await alertSvc.createOSMonitor(dsId, body);
     return { status: 201, body: monitor };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -45,7 +55,7 @@ export async function handleUpdateMonitor(
     if (!monitor) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: monitor };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -60,7 +70,7 @@ export async function handleDeleteMonitor(
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -101,7 +111,7 @@ export async function handleExportMonitors(
     const configs = serializeMonitors(response.results);
     return { status: 200, body: { monitors: configs } };
   } catch (e) {
-    return { status: 500, body: { error: String(e) } };
+    return { status: 500, body: { error: safeError(e) } };
   }
 }
 

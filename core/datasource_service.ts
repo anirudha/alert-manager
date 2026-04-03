@@ -62,7 +62,7 @@ export class InMemoryDatasourceService implements DatasourceService {
 
     try {
       if (datasource.type === 'opensearch') {
-        const resp = await this.httpClient.request({
+        const resp = await this.httpClient.request<{ status?: string }>({
           method: 'GET',
           url: `${datasource.url.replace(/\/+$/, '')}/_cluster/health`,
           auth: buildAuthFromDatasource(datasource),

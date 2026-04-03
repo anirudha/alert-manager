@@ -34,6 +34,17 @@ import {
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RESULTS = 5_000;
 
+/** Typed timeout error for reliable detection without string matching. */
+class TimeoutError extends Error {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number
+  ) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
 export class MultiBackendAlertService {
   private osBackend?: OpenSearchBackend;
   private promBackend?: PrometheusBackend;
@@ -340,7 +351,7 @@ export class MultiBackendAlertService {
       if (onProgress) onProgress(result);
       return result;
     } catch (err) {
-      const isTimeout = String(err).includes('timed out');
+      const isTimeout = err instanceof TimeoutError;
       const result = makeResult(isTimeout ? 'timeout' : 'error', [], String(err));
       this.logger.error(`Failed to fetch alerts from ${ds.name}: ${err}`);
       if (onProgress) onProgress(result);
@@ -378,7 +389,7 @@ export class MultiBackendAlertService {
       if (onProgress) onProgress(result);
       return result;
     } catch (err) {
-      const isTimeout = String(err).includes('timed out');
+      const isTimeout = err instanceof TimeoutError;
       const result = makeResult(isTimeout ? 'timeout' : 'error', [], String(err));
       this.logger.error(`Failed to fetch rules from ${ds.name}: ${err}`);
       if (onProgress) onProgress(result);
@@ -450,15 +461,27 @@ export class MultiBackendAlertService {
 
   private withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(message)), ms);
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          reject(new TimeoutError(message, ms));
+        }
+      }, ms);
       promise.then(
         (val) => {
-          clearTimeout(timer);
-          resolve(val);
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(val);
+          }
         },
         (err) => {
-          clearTimeout(timer);
-          reject(err);
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            reject(err);
+          }
         }
       );
     });

@@ -7,9 +7,20 @@
  * Route handlers — pure functions that work with any HTTP framework.
  * Exposes backend-native API shapes + unified views.
  */
-import { DatasourceService, Datasource, MultiBackendAlertService } from '../../core';
+import { DatasourceService, Datasource, MultiBackendAlertService, Logger } from '../../core';
 
 type Result = { status: number; body: any };
+
+/** Sanitize error for client response — log full detail, return safe message. */
+function safeError(e: unknown, logger?: Logger): string {
+  const full = String(e);
+  if (logger) logger.error(full);
+  // Only expose messages that are clearly user-facing (validation errors, not found, etc.)
+  if (full.includes('not found') || full.includes('required') || full.includes('must be')) {
+    return full;
+  }
+  return 'An internal error occurred';
+}
 
 // ============================================================================
 // Datasource Handlers
@@ -70,7 +81,7 @@ export async function handleGetOSMonitors(
   try {
     return { status: 200, body: { monitors: await alertSvc.getOSMonitors(dsId) } };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -84,7 +95,7 @@ export async function handleGetOSMonitor(
     if (!m) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: m };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -96,7 +107,7 @@ export async function handleCreateOSMonitor(
   try {
     return { status: 201, body: await alertSvc.createOSMonitor(dsId, body) };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -111,7 +122,7 @@ export async function handleUpdateOSMonitor(
     if (!m) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: m };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -125,7 +136,7 @@ export async function handleDeleteOSMonitor(
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -140,7 +151,7 @@ export async function handleGetOSAlerts(
   try {
     return { status: 200, body: await alertSvc.getOSAlerts(dsId) };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -156,7 +167,7 @@ export async function handleAcknowledgeOSAlerts(
       body: await alertSvc.acknowledgeOSAlerts(dsId, monitorId, body.alerts || []),
     };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -172,7 +183,7 @@ export async function handleGetPromRuleGroups(
     const groups = await alertSvc.getPromRuleGroups(dsId);
     return { status: 200, body: { status: 'success', data: { groups } } };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -184,7 +195,7 @@ export async function handleGetPromAlerts(
     const alerts = await alertSvc.getPromAlerts(dsId);
     return { status: 200, body: { status: 'success', data: { alerts } } };
   } catch (e) {
-    return { status: 400, body: { error: String(e) } };
+    return { status: 400, body: { error: safeError(e) } };
   }
 }
 
@@ -203,7 +214,7 @@ export async function handleGetUnifiedAlerts(
     const response = await alertSvc.getUnifiedAlerts({ dsIds, timeoutMs, maxResults });
     return { status: 200, body: response };
   } catch (e) {
-    return { status: 500, body: { error: String(e) } };
+    return { status: 500, body: { error: safeError(e) } };
   }
 }
 
@@ -218,6 +229,6 @@ export async function handleGetUnifiedRules(
     const response = await alertSvc.getUnifiedRules({ dsIds, timeoutMs, maxResults });
     return { status: 200, body: response };
   } catch (e) {
-    return { status: 500, body: { error: String(e) } };
+    return { status: 500, body: { error: safeError(e) } };
   }
 }
