@@ -456,8 +456,18 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   }
 
   /**
-   * Execute a PromQL range query via DirectQuery and return time-series data.
+   * Execute a PromQL range query and return time-series data.
    * Uses: GET /api/v1/query_range?query=...&start=...&end=...&step=...
+   *
+   * NOTE: This works with direct Prometheus connections but NOT via OpenSearch
+   * DirectQuery proxy. The SQL plugin's DirectQuery resource proxy only supports
+   * metadata resource types (RULES, ALERTS, LABELS, SERIES, METADATA, ALERTMANAGER_*)
+   * defined in DirectQueryResourceType enum. QUERY and QUERY_RANGE are not supported
+   * because they are execution endpoints, not resource lookups.
+   * See: sql/direct-query-core/.../DirectQueryResourceType.java
+   *
+   * When this fails (400 "Invalid resource type"), the caller should fall back to
+   * extracting data from rule.alerts[].value.
    */
   async queryRange(
     ds: Datasource,

@@ -713,15 +713,15 @@ export class MultiBackendAlertService {
   }
 
   /**
-   * Fetch PromQL range query data for condition preview.
-   * Queries the last 1 hour with 60-second step.
-   */
-  /**
    * Fetch condition preview data for Prometheus rules.
    *
-   * Attempts queryRange via DirectQuery first. If the API doesn't support it
-   * (OpenSearch DirectQuery only proxies /rules and /alerts, not /query_range),
-   * falls back to extracting current evaluation data from the rule's embedded
+   * Attempts queryRange first (works with direct Prometheus connections).
+   * When using OpenSearch DirectQuery, queryRange is NOT supported because
+   * the SQL plugin only proxies metadata resource types (RULES, ALERTS, LABELS,
+   * SERIES, METADATA, ALERTMANAGER_*) — QUERY and QUERY_RANGE are execution
+   * endpoints not included in DirectQueryResourceType enum.
+   *
+   * Falls back to extracting current evaluation data from the rule's embedded
    * alerts and lastEvaluation timestamp.
    */
   private async fetchPromPreviewData(
