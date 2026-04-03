@@ -102,6 +102,38 @@ MOCK_MODE=false npx @anirudhaj/alarms
 
 Open http://localhost:5603 in your browser.
 
+### 3. With Observability Stack (one-liner)
+
+Run Alert Manager against the [Observability Stack](https://github.com/lezzago/observability-stack/tree/update-alerting) for a fully-wired setup with pre-canned monitors, Prometheus alerting rules, and Alertmanager routing:
+
+```bash
+# Clone and start the observability stack (update-alerting branch):
+git clone -b update-alerting https://github.com/lezzago/observability-stack.git && cd observability-stack && docker compose up -d
+
+# Then run Alert Manager — defaults match the observability stack out of the box:
+npx @anirudhaj/alarms
+```
+
+This auto-discovers the Prometheus Direct Query datasource registered by the stack, giving you unified visibility into:
+- **OpenSearch monitors** — Cluster health, log error spikes, trace error rates, pipeline health
+- **Prometheus rules** — Stack health, OTel Collector health, application health
+- **Alertmanager** — Silences, alert groups, routing configuration
+
+Open http://localhost:5603 in your browser.
+
+#### Environment variables
+
+All defaults are tuned to work with the observability stack out of the box. Override only what you need:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENSEARCH_URL` | `https://localhost:9200` | OpenSearch REST endpoint |
+| `OPENSEARCH_USERNAME` | `admin` | Basic auth username |
+| `OPENSEARCH_PASSWORD` | *(observability-stack default)* | Override if you changed the stack password |
+| `PORT` | `5603` | Server listen port |
+| `MOCK_MODE` | `false` | Set to `true` for seeded demo data without a real backend |
+| `NODE_TLS_REJECT_UNAUTHORIZED` | — | Set to `0` to accept self-signed certificates |
+
 ## Code Summary
 
 |                          |                                                                 |

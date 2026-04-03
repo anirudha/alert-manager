@@ -4,6 +4,7 @@
  */
 import express from 'express';
 import path from 'path';
+import yaml from 'js-yaml';
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
@@ -11,7 +12,6 @@ import {
   MockPrometheusBackend,
   HttpOpenSearchBackend,
   DirectQueryPrometheusBackend,
-  NotificationRoutingService,
   SuppressionRuleService,
   Logger,
   OpenSearchBackend,
@@ -42,10 +42,6 @@ import {
   handleDeleteMonitor,
   handleImportMonitors,
   handleExportMonitors,
-  handleListRoutingRules,
-  handleCreateRoutingRule,
-  handleUpdateRoutingRule,
-  handleDeleteRoutingRule,
   handleListSuppressionRules,
   handleCreateSuppressionRule,
   handleUpdateSuppressionRule,
@@ -61,7 +57,7 @@ const MOCK_MODE = process.env.MOCK_MODE === 'true';
 // All values are read from environment variables with safe defaults.
 const OPENSEARCH_URL = process.env.OPENSEARCH_URL || 'https://localhost:9200';
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME || 'admin';
-const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'MyStr0ngP@ssw0rd2024';
+const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'My_password_123!@#';
 
 const logger: Logger = {
   info: (msg) => console.log(`[INFO] ${msg}`),
@@ -149,8 +145,7 @@ async function initBackends(): Promise<void> {
   datasourceService.setPrometheusBackend(promBackend);
 }
 
-// Routing and suppression services
-const routingService = new NotificationRoutingService();
+// Suppression service
 const suppressionService = new SuppressionRuleService();
 
 const app = express();
@@ -328,6 +323,82 @@ app.get('/api/alertmanager/alert-groups', async (_req, res) => {
   }
 });
 
+// Parsed Alertmanager configuration (route tree, receivers, inhibit rules).
+// Fetches status via OpenSearch Direct Query proxy, parses YAML server-side.
+app.get('/api/alertmanager/config', async (_req, res) => {
+  try {
+    if (!promBackend.getAlertmanagerStatus) {
+      return res.json({ available: false, error: 'Alertmanager not configured' });
+    }
+    const status = await promBackend.getAlertmanagerStatus();
+
+    let parsedConfig: any = {};
+    try {
+      parsedConfig = yaml.load(status.config?.original || '') || {};
+    } catch (yamlErr: any) {
+      return res.json({
+        available: true,
+        configParseError: yamlErr.message,
+        raw: status.config?.original || '',
+        cluster: status.cluster,
+        uptime: status.uptime,
+        versionInfo: status.versionInfo,
+      });
+    }
+
+    const receivers = (parsedConfig.receivers || []).map((r: any) => ({
+      name: r.name,
+      integrations: extractReceiverIntegrations(r),
+    }));
+
+    res.json({
+      available: true,
+      cluster: {
+        status: status.cluster?.status || 'unknown',
+        peers: status.cluster?.peers || [],
+        peerCount: (status.cluster?.peers || []).length,
+      },
+      uptime: status.uptime,
+      versionInfo: status.versionInfo || {},
+      config: {
+        global: parsedConfig.global || {},
+        route: parsedConfig.route || null,
+        receivers,
+        inhibitRules: parsedConfig.inhibit_rules || [],
+      },
+    });
+  } catch (e: any) {
+    res.json({ available: false, error: e.message });
+  }
+});
+
+function extractReceiverIntegrations(receiver: any): Array<{ type: string; summary: string }> {
+  const integrations: Array<{ type: string; summary: string }> = [];
+  const configKeys = [
+    'webhook_configs', 'slack_configs', 'email_configs', 'pagerduty_configs',
+    'opsgenie_configs', 'victorops_configs', 'pushover_configs', 'wechat_configs',
+    'sns_configs', 'telegram_configs', 'msteams_configs', 'webex_configs',
+  ];
+  for (const key of configKeys) {
+    if (receiver[key] && Array.isArray(receiver[key])) {
+      for (const cfg of receiver[key]) {
+        const typeName = key.replace('_configs', '');
+        let summary = '';
+        if (typeName === 'webhook') summary = cfg.url || cfg.url_file || 'webhook';
+        else if (typeName === 'slack') summary = cfg.channel || 'slack';
+        else if (typeName === 'email') summary = cfg.to || 'email';
+        else if (typeName === 'pagerduty') summary = 'pagerduty';
+        else summary = typeName;
+        integrations.push({ type: typeName, summary });
+      }
+    }
+  }
+  if (integrations.length === 0) {
+    integrations.push({ type: 'none', summary: 'No integrations' });
+  }
+  return integrations;
+}
+
 // ============================================================================
 // Unified Views (cross-backend, for the UI)
 // ============================================================================
@@ -404,27 +475,6 @@ app.post('/api/monitors/import', async (req, res) => {
 });
 app.get('/api/monitors/export', async (_req, res) => {
   const r = await handleExportMonitors(alertService);
-  res.status(r.status).json(r.body);
-});
-
-// ============================================================================
-// Routing Rules Routes
-// ============================================================================
-
-app.get('/api/routing-rules', (_req, res) => {
-  const r = handleListRoutingRules(routingService);
-  res.status(r.status).json(r.body);
-});
-app.post('/api/routing-rules', (req, res) => {
-  const r = handleCreateRoutingRule(routingService, req.body);
-  res.status(r.status).json(r.body);
-});
-app.put('/api/routing-rules/:id', (req, res) => {
-  const r = handleUpdateRoutingRule(routingService, req.params.id, req.body);
-  res.status(r.status).json(r.body);
-});
-app.delete('/api/routing-rules/:id', (req, res) => {
-  const r = handleDeleteRoutingRule(routingService, req.params.id);
   res.status(r.status).json(r.body);
 });
 

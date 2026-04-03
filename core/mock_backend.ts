@@ -7,6 +7,7 @@ import {
   OpenSearchBackend,
   PrometheusBackend,
   PrometheusWorkspace,
+  AlertmanagerStatus,
   OSMonitor,
   OSAlert,
   OSAlertState,
@@ -417,5 +418,55 @@ export class MockPrometheusBackend implements PrometheusBackend {
       }
     }
     this.activeAlerts.set(dsId, active);
+  }
+
+  async getAlertmanagerStatus(): Promise<AlertmanagerStatus> {
+    return {
+      cluster: {
+        status: 'ready',
+        peers: [{ name: 'alertmanager-0', address: '10.0.0.1:9094' }],
+      },
+      config: {
+        original: [
+          'global:',
+          '  resolve_timeout: 5m',
+          'route:',
+          '  receiver: default-receiver',
+          '  group_by: [alertname, cluster, service]',
+          '  group_wait: 30s',
+          '  group_interval: 5m',
+          '  repeat_interval: 4h',
+          '  routes:',
+          '    - receiver: critical-slack',
+          '      match:',
+          '        severity: critical',
+          '      group_wait: 10s',
+          '      continue: false',
+          '    - receiver: warning-email',
+          '      match:',
+          '        severity: warning',
+          '      group_wait: 1m',
+          '      continue: true',
+          'receivers:',
+          '  - name: default-receiver',
+          '    webhook_configs:',
+          '      - url: http://localhost:5603/api/webhooks/alertmanager',
+          '  - name: critical-slack',
+          '    slack_configs:',
+          '      - channel: "#critical-alerts"',
+          '  - name: warning-email',
+          '    email_configs:',
+          '      - to: oncall@example.com',
+          'inhibit_rules:',
+          '  - source_match:',
+          '      severity: critical',
+          '    target_match:',
+          '      severity: warning',
+          '    equal: [alertname, cluster, service]',
+        ].join('\n'),
+      },
+      uptime: new Date(Date.now() - 48 * 3600_000).toISOString(),
+      versionInfo: { version: '0.27.0', branch: 'HEAD', buildDate: '2024-03-15' },
+    };
   }
 }

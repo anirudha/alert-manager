@@ -3,9 +3,7 @@
  */
 import {
   MultiBackendAlertService,
-  NotificationRoutingService,
   SuppressionRuleService,
-  RoutingRuleConfig,
   SuppressionRuleConfig,
 } from '../../core';
 import { validateMonitorForm } from '../../core/validators';
@@ -74,37 +72,6 @@ export async function handleExportMonitors(alertSvc: MultiBackendAlertService, q
     const configs = serializeMonitors(response.results);
     return { status: 200, body: { monitors: configs } };
   } catch (e) { return { status: 500, body: { error: String(e) } }; }
-}
-
-// ============================================================================
-// Routing Rules
-// ============================================================================
-
-export function handleListRoutingRules(svc: NotificationRoutingService): Result {
-  return { status: 200, body: { rules: svc.list() } };
-}
-
-export function handleGetRoutingRule(svc: NotificationRoutingService, id: string): Result {
-  const rule = svc.get(id);
-  if (!rule) return { status: 404, body: { error: 'Routing rule not found' } };
-  return { status: 200, body: rule };
-}
-
-export function handleCreateRoutingRule(svc: NotificationRoutingService, body: Omit<RoutingRuleConfig, 'id'>): Result {
-  const rule = svc.create(body);
-  return { status: 201, body: rule };
-}
-
-export function handleUpdateRoutingRule(svc: NotificationRoutingService, id: string, body: Partial<RoutingRuleConfig>): Result {
-  const rule = svc.update(id, body);
-  if (!rule) return { status: 404, body: { error: 'Routing rule not found' } };
-  return { status: 200, body: rule };
-}
-
-export function handleDeleteRoutingRule(svc: NotificationRoutingService, id: string): Result {
-  const ok = svc.delete(id);
-  if (!ok) return { status: 404, body: { error: 'Routing rule not found' } };
-  return { status: 200, body: { deleted: true } };
 }
 
 // ============================================================================
