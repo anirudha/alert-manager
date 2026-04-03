@@ -1,0 +1,19 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
+ * Test and development exports — mock backends and enrichment helpers.
+ * Import from 'core/testing' instead of 'core' to make the dev-only
+ * dependency explicit.
+ */
+export { MockOpenSearchBackend, MockPrometheusBackend } from './mock_backend';
+export {
+  generateMockAlertHistory,
+  generateMockNotificationRouting,
+  generateMockPreviewData,
+  generateMockSuppressionRules,
+  getAiSummary,
+  getDescription,
+} from './mock_enrichment';

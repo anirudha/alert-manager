@@ -16,10 +16,9 @@ import { defineRoutes } from './routes';
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
-  MockOpenSearchBackend,
-  MockPrometheusBackend,
   Logger as AlarmsLogger,
 } from '../core';
+import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
 
 export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart> {
   private readonly logger: Logger;

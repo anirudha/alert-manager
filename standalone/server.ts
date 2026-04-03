@@ -13,8 +13,6 @@ import yaml from 'js-yaml';
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
-  MockOpenSearchBackend,
-  MockPrometheusBackend,
   HttpOpenSearchBackend,
   DirectQueryPrometheusBackend,
   SuppressionRuleService,
@@ -22,6 +20,7 @@ import {
   OpenSearchBackend,
   PrometheusBackend,
 } from '../core';
+import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
 import {
   handleListDatasources,
   handleGetDatasource,

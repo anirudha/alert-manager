@@ -20,10 +20,10 @@ import {
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
-  MockOpenSearchBackend,
   SuppressionRuleService,
   Logger,
 } from '../../../core';
+import { MockOpenSearchBackend } from '../../../core/testing';
 
 // ---------------------------------------------------------------------------
 // Helpers
