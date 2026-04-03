@@ -27,6 +27,8 @@ import {
   handleGetPromAlerts,
   handleGetUnifiedAlerts,
   handleGetUnifiedRules,
+  handleGetRuleDetail,
+  handleGetAlertDetail,
 } from './handlers';
 
 export function defineRoutes(
@@ -307,6 +309,37 @@ export function defineRoutes(
       return result.status === 200
         ? res.ok({ body: result.body })
         : res.badRequest({ body: result.body });
+    }
+  );
+
+  // Detail view routes (on-demand, for flyout panels)
+  router.get(
+    {
+      path: '/api/alerting/rules/{dsId}/{ruleId}',
+      validate: {
+        params: schema.object({ dsId: schema.string(), ruleId: schema.string() }),
+      },
+    },
+    async (_ctx, req, res) => {
+      const result = await handleGetRuleDetail(alertService, req.params.dsId, req.params.ruleId);
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
+    }
+  );
+
+  router.get(
+    {
+      path: '/api/alerting/alerts/{dsId}/{alertId}',
+      validate: {
+        params: schema.object({ dsId: schema.string(), alertId: schema.string() }),
+      },
+    },
+    async (_ctx, req, res) => {
+      const result = await handleGetAlertDetail(alertService, req.params.dsId, req.params.alertId);
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 }

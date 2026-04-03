@@ -39,6 +39,8 @@ import {
   handleGetPromAlerts,
   handleGetUnifiedAlerts,
   handleGetUnifiedRules,
+  handleGetRuleDetail,
+  handleGetAlertDetail,
 } from '../server/routes/handlers';
 import {
   handleCreateMonitor,
@@ -550,6 +552,20 @@ app.post('/api/alerts/:id/acknowledge', async (req, res) => {
 });
 app.post('/api/alerts/:id/silence', async (req, res) => {
   const r = await handleSilenceAlert(suppressionService, req.params.id, req.body);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Detail View Endpoints (on-demand, loaded when user opens flyout)
+// ============================================================================
+
+app.get('/api/rules/:dsId/:ruleId', async (req, res) => {
+  const r = await handleGetRuleDetail(alertService, req.params.dsId, req.params.ruleId);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/alerts/:dsId/:alertId', async (req, res) => {
+  const r = await handleGetAlertDetail(alertService, req.params.dsId, req.params.alertId);
   res.status(r.status).json(r.body);
 });
 

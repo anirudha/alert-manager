@@ -239,3 +239,35 @@ export async function handleGetUnifiedRules(
     return { status: 500, body: { error: safeError(e) } };
   }
 }
+
+// ============================================================================
+// Detail View Handlers (on-demand, loaded when user opens flyout)
+// ============================================================================
+
+export async function handleGetRuleDetail(
+  alertSvc: MultiBackendAlertService,
+  dsId: string,
+  ruleId: string
+): Promise<Result> {
+  try {
+    const rule = await alertSvc.getRuleDetail(dsId, ruleId);
+    if (!rule) return { status: 404, body: { error: 'Rule not found' } };
+    return { status: 200, body: rule };
+  } catch (e) {
+    return { status: 400, body: { error: safeError(e) } };
+  }
+}
+
+export async function handleGetAlertDetail(
+  alertSvc: MultiBackendAlertService,
+  dsId: string,
+  alertId: string
+): Promise<Result> {
+  try {
+    const alert = await alertSvc.getAlertDetail(dsId, alertId);
+    if (!alert) return { status: 404, body: { error: 'Alert not found' } };
+    return { status: 200, body: alert };
+  } catch (e) {
+    return { status: 400, body: { error: safeError(e) } };
+  }
+}

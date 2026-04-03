@@ -27,7 +27,11 @@ import {
   UnifiedAlertSeverity,
   UnifiedAlertState,
   UnifiedFetchOptions,
+  UnifiedAlert,
+  UnifiedRule,
   UnifiedRuleSummary,
+  AlertHistoryEntry,
+  NotificationRouting,
   MonitorType,
   MonitorStatus,
 } from './types';
@@ -318,6 +322,163 @@ export class MultiBackendAlertService {
       hasMore: start + pageSize < total,
       ...(warnings.length > 0 ? { warnings } : {}),
     };
+  }
+
+  // =========================================================================
+  // Detail views — loaded on demand when user opens a flyout
+  // =========================================================================
+
+  /**
+   * Get full detail for a single rule/monitor. Fetches real metadata from
+   * the backend (alert history, destinations, annotations). Fields that
+   * cannot be fetched from the API are marked as mock placeholders.
+   */
+  async getRuleDetail(dsId: string, ruleId: string): Promise<UnifiedRule | null> {
+    const ds = await this.datasourceService.get(dsId);
+    if (!ds) return null;
+
+    if (ds.type === 'opensearch' && this.osBackend) {
+      return this.getOSRuleDetail(ds, ruleId);
+    } else if (ds.type === 'prometheus' && this.promBackend) {
+      return this.getPromRuleDetail(ds, ruleId);
+    }
+    return null;
+  }
+
+  private async getOSRuleDetail(ds: Datasource, monitorId: string): Promise<UnifiedRule | null> {
+    const monitor = await this.osBackend!.getMonitor(ds, monitorId);
+    if (!monitor) return null;
+
+    const summary = osMonitorToUnifiedRuleSummary(monitor, ds.id);
+
+    // Fetch real alert history for this monitor
+    let alertHistory: AlertHistoryEntry[] = [];
+    try {
+      const { alerts } = await this.osBackend!.getAlerts(ds);
+      const monitorAlerts = alerts.filter((a) => a.monitor_id === monitorId).slice(0, 20);
+      alertHistory = monitorAlerts.map((a) => ({
+        timestamp: new Date(a.start_time).toISOString(),
+        state: osStateToUnified(a.state),
+        value: a.severity,
+        message: a.error_message || (a.state === 'ACTIVE' ? 'Threshold exceeded' : 'Resolved'),
+      }));
+    } catch {
+      // Alert history fetch is best-effort
+    }
+
+    // Build notification routing from trigger actions + destinations
+    let notificationRouting: NotificationRouting[] = [];
+    try {
+      const destinations = await this.osBackend!.getDestinations(ds);
+      const destMap = new Map(destinations.map((d) => [d.id, d]));
+      for (const trigger of monitor.triggers) {
+        for (const action of trigger.actions) {
+          const dest = destMap.get(action.destination_id);
+          notificationRouting.push({
+            channel: dest?.type || 'unknown',
+            destination: dest?.name || action.name || action.destination_id,
+            throttle: action.throttle
+              ? `${action.throttle.value} ${action.throttle.unit}`
+              : undefined,
+          });
+        }
+      }
+    } catch {
+      // Destination fetch is best-effort
+    }
+
+    // Build description from trigger message template
+    const trigger = monitor.triggers[0];
+    const description =
+      trigger?.actions?.[0]?.message_template?.source ||
+      `${summary.monitorType} monitor targeting ${monitor.inputs[0]?.search?.indices?.join(', ') || 'unknown indices'}`;
+
+    return {
+      ...summary,
+      description,
+      // MOCK: AI summary not available from OS alerting API
+      aiSummary: '[Not available] AI summaries require integration with an LLM service.',
+      firingPeriod: undefined,
+      lookbackPeriod: undefined,
+      alertHistory,
+      // MOCK: Condition preview requires time-series query execution
+      conditionPreviewData: [],
+      notificationRouting,
+      // Suppression rules from the in-memory service (not from OS API)
+      suppressionRules: [],
+      raw: monitor,
+    };
+  }
+
+  private async getPromRuleDetail(ds: Datasource, ruleId: string): Promise<UnifiedRule | null> {
+    const groups = await this.promBackend!.getRuleGroups(ds);
+
+    // ruleId format: "{dsId}-{groupName}-{ruleName}"
+    for (const group of groups) {
+      for (const rule of group.rules) {
+        if (rule.type !== 'alerting') continue;
+        const alertingRule = rule as PromAlertingRule;
+        const id = `${ds.id}-${group.name}-${alertingRule.name}`;
+        if (id !== ruleId) continue;
+
+        const summary = promRuleToUnified(alertingRule, group.name, ds.id);
+
+        // Real alert history from the rule's embedded alerts
+        const alertHistory: AlertHistoryEntry[] = (alertingRule.alerts || []).map((a) => ({
+          timestamp: a.activeAt,
+          state: promStateToUnified(a.state),
+          value: a.value,
+          message: a.annotations.summary || a.annotations.description || a.state,
+        }));
+
+        // Description from annotations
+        const description =
+          alertingRule.annotations.description ||
+          alertingRule.annotations.summary ||
+          `PromQL rule: ${alertingRule.query}`;
+
+        return {
+          ...summary,
+          description,
+          // MOCK: AI summary not available from Prometheus API
+          aiSummary: '[Not available] AI summaries require integration with an LLM service.',
+          firingPeriod: undefined,
+          lookbackPeriod: undefined,
+          alertHistory,
+          // MOCK: Condition preview requires PromQL range query execution
+          conditionPreviewData: [],
+          notificationRouting: [],
+          suppressionRules: [],
+          raw: alertingRule,
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get full detail for a single alert including raw backend data.
+   */
+  async getAlertDetail(dsId: string, alertId: string): Promise<UnifiedAlert | null> {
+    const ds = await this.datasourceService.get(dsId);
+    if (!ds) return null;
+
+    if (ds.type === 'opensearch' && this.osBackend) {
+      const { alerts } = await this.osBackend.getAlerts(ds);
+      const alert = alerts.find((a) => a.id === alertId);
+      if (!alert) return null;
+      const summary = osAlertToUnified(alert, ds.id);
+      return { ...summary, raw: alert };
+    } else if (ds.type === 'prometheus' && this.promBackend) {
+      const promAlerts = await this.promBackend.getAlerts(ds);
+      const alert = promAlerts.find(
+        (a) => `${ds.id}-${a.labels.alertname}-${a.labels.instance || ''}` === alertId
+      );
+      if (!alert) return null;
+      const summary = promAlertToUnified(alert, ds.id);
+      return { ...summary, raw: alert };
+    }
+    return null;
   }
 
   // =========================================================================
