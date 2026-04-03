@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { parseDuration, formatDuration, validateMonitorForm, MonitorFormState } from '../validators';
+import {
+  parseDuration,
+  formatDuration,
+  validateMonitorForm,
+  MonitorFormState,
+} from '../validators';
 
 describe('parseDuration', () => {
   it('parses seconds', () => {

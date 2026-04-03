@@ -35,13 +35,10 @@ export function defineRoutes(
   alertService: MultiBackendAlertService
 ) {
   // Datasource routes
-  router.get(
-    { path: '/api/alerting/datasources', validate: false },
-    async (_ctx, _req, res) => {
-      const result = await handleListDatasources(datasourceService);
-      return res.ok({ body: result.body });
-    }
-  );
+  router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
+    const result = await handleListDatasources(datasourceService);
+    return res.ok({ body: result.body });
+  });
 
   router.get(
     {
@@ -50,7 +47,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleGetDatasource(datasourceService, req.params.id);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.notFound({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 
@@ -85,8 +84,14 @@ export function defineRoutes(
       },
     },
     async (_ctx, req, res) => {
-      const result = await handleUpdateDatasource(datasourceService, req.params.id, req.body as any);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.notFound({ body: result.body });
+      const result = await handleUpdateDatasource(
+        datasourceService,
+        req.params.id,
+        req.body as any
+      );
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 
@@ -97,7 +102,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleDeleteDatasource(datasourceService, req.params.id);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.notFound({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 
@@ -113,21 +120,15 @@ export function defineRoutes(
   );
 
   // Unified view routes
-  router.get(
-    { path: '/api/alerting/unified/alerts', validate: false },
-    async (_ctx, _req, res) => {
-      const result = await handleGetUnifiedAlerts(alertService);
-      return res.ok({ body: result.body });
-    }
-  );
+  router.get({ path: '/api/alerting/unified/alerts', validate: false }, async (_ctx, _req, res) => {
+    const result = await handleGetUnifiedAlerts(alertService);
+    return res.ok({ body: result.body });
+  });
 
-  router.get(
-    { path: '/api/alerting/unified/rules', validate: false },
-    async (_ctx, _req, res) => {
-      const result = await handleGetUnifiedRules(alertService);
-      return res.ok({ body: result.body });
-    }
-  );
+  router.get({ path: '/api/alerting/unified/rules', validate: false }, async (_ctx, _req, res) => {
+    const result = await handleGetUnifiedRules(alertService);
+    return res.ok({ body: result.body });
+  });
 
   // OpenSearch monitor/alert routes
   router.get(
@@ -137,7 +138,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleGetOSMonitors(alertService, req.params.dsId);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.badRequest({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.badRequest({ body: result.body });
     }
   );
 
@@ -148,7 +151,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleGetOSMonitor(alertService, req.params.dsId, req.params.monitorId);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.notFound({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 
@@ -166,11 +171,21 @@ export function defineRoutes(
   router.put(
     {
       path: '/api/alerting/opensearch/{dsId}/monitors/{monitorId}',
-      validate: { params: schema.object({ dsId: schema.string(), monitorId: schema.string() }), body: schema.any() },
+      validate: {
+        params: schema.object({ dsId: schema.string(), monitorId: schema.string() }),
+        body: schema.any(),
+      },
     },
     async (_ctx, req, res) => {
-      const result = await handleUpdateOSMonitor(alertService, req.params.dsId, req.params.monitorId, req.body);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.notFound({ body: result.body });
+      const result = await handleUpdateOSMonitor(
+        alertService,
+        req.params.dsId,
+        req.params.monitorId,
+        req.body
+      );
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 
@@ -180,8 +195,14 @@ export function defineRoutes(
       validate: { params: schema.object({ dsId: schema.string(), monitorId: schema.string() }) },
     },
     async (_ctx, req, res) => {
-      const result = await handleDeleteOSMonitor(alertService, req.params.dsId, req.params.monitorId);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.notFound({ body: result.body });
+      const result = await handleDeleteOSMonitor(
+        alertService,
+        req.params.dsId,
+        req.params.monitorId
+      );
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.notFound({ body: result.body });
     }
   );
 
@@ -192,7 +213,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleGetOSAlerts(alertService, req.params.dsId);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.badRequest({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.badRequest({ body: result.body });
     }
   );
 
@@ -205,7 +228,12 @@ export function defineRoutes(
       },
     },
     async (_ctx, req, res) => {
-      const result = await handleAcknowledgeOSAlerts(alertService, req.params.dsId, req.params.monitorId, req.body);
+      const result = await handleAcknowledgeOSAlerts(
+        alertService,
+        req.params.dsId,
+        req.params.monitorId,
+        req.body
+      );
       return res.ok({ body: result.body });
     }
   );
@@ -218,7 +246,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleGetPromRuleGroups(alertService, req.params.dsId);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.badRequest({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.badRequest({ body: result.body });
     }
   );
 
@@ -229,7 +259,9 @@ export function defineRoutes(
     },
     async (_ctx, req, res) => {
       const result = await handleGetPromAlerts(alertService, req.params.dsId);
-      return result.status === 200 ? res.ok({ body: result.body }) : res.badRequest({ body: result.body });
+      return result.status === 200
+        ? res.ok({ body: result.body })
+        : res.badRequest({ body: result.body });
     }
   );
 }

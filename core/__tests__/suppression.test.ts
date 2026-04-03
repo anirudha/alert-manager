@@ -29,13 +29,37 @@ describe('SuppressionRuleService', () => {
     });
 
     it('lists all rules', () => {
-      service.create({ name: 'A', description: '', matchers: {}, scheduleType: 'one_time', startTime: '', endTime: '', createdBy: 'x' });
-      service.create({ name: 'B', description: '', matchers: {}, scheduleType: 'one_time', startTime: '', endTime: '', createdBy: 'x' });
+      service.create({
+        name: 'A',
+        description: '',
+        matchers: {},
+        scheduleType: 'one_time',
+        startTime: '',
+        endTime: '',
+        createdBy: 'x',
+      });
+      service.create({
+        name: 'B',
+        description: '',
+        matchers: {},
+        scheduleType: 'one_time',
+        startTime: '',
+        endTime: '',
+        createdBy: 'x',
+      });
       expect(service.list()).toHaveLength(2);
     });
 
     it('gets a rule by id', () => {
-      const rule = service.create({ name: 'Test', description: '', matchers: {}, scheduleType: 'one_time', startTime: '', endTime: '', createdBy: 'x' });
+      const rule = service.create({
+        name: 'Test',
+        description: '',
+        matchers: {},
+        scheduleType: 'one_time',
+        startTime: '',
+        endTime: '',
+        createdBy: 'x',
+      });
       expect(service.get(rule.id)).toEqual(rule);
     });
 
@@ -44,7 +68,15 @@ describe('SuppressionRuleService', () => {
     });
 
     it('updates a rule', () => {
-      const rule = service.create({ name: 'Old', description: '', matchers: {}, scheduleType: 'one_time', startTime: '', endTime: '', createdBy: 'x' });
+      const rule = service.create({
+        name: 'Old',
+        description: '',
+        matchers: {},
+        scheduleType: 'one_time',
+        startTime: '',
+        endTime: '',
+        createdBy: 'x',
+      });
       const updated = service.update(rule.id, { name: 'New' });
       expect(updated!.name).toBe('New');
       expect(updated!.id).toBe(rule.id);
@@ -55,7 +87,15 @@ describe('SuppressionRuleService', () => {
     });
 
     it('deletes a rule', () => {
-      const rule = service.create({ name: 'ToDelete', description: '', matchers: {}, scheduleType: 'one_time', startTime: '', endTime: '', createdBy: 'x' });
+      const rule = service.create({
+        name: 'ToDelete',
+        description: '',
+        matchers: {},
+        scheduleType: 'one_time',
+        startTime: '',
+        endTime: '',
+        createdBy: 'x',
+      });
       expect(service.delete(rule.id)).toBe(true);
       expect(service.get(rule.id)).toBeUndefined();
     });

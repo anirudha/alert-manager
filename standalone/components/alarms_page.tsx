@@ -31,12 +31,7 @@ import {
   EuiLoadingSpinner,
   EuiCallOut,
 } from '@opensearch-project/oui';
-import {
-  Datasource,
-  UnifiedAlert,
-  UnifiedRule,
-  PaginatedResponse,
-} from '../../core';
+import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../core';
 import { MonitorsTable } from './monitors_table';
 import { CreateMonitor, MonitorFormState } from './create_monitor';
 import { AlertsDashboard } from './alerts_dashboard';
@@ -65,24 +60,38 @@ export class AlarmsApiClient {
   }
 
   async listWorkspaces(dsId: string): Promise<Datasource[]> {
-    const res = await this.http.get<{ workspaces: Datasource[] }>(`/api/datasources/${dsId}/workspaces`);
+    const res = await this.http.get<{ workspaces: Datasource[] }>(
+      `/api/datasources/${dsId}/workspaces`
+    );
     return res.workspaces;
   }
 
-  async listAlertsPaginated(dsIds: string[], page: number, pageSize: number): Promise<PaginatedResponse<UnifiedAlert>> {
+  async listAlertsPaginated(
+    dsIds: string[],
+    page: number,
+    pageSize: number
+  ): Promise<PaginatedResponse<UnifiedAlert>> {
     const params = new URLSearchParams();
     if (dsIds.length > 0) params.set('dsIds', dsIds.join(','));
     params.set('page', String(page));
     params.set('pageSize', String(pageSize));
-    return this.http.get<PaginatedResponse<UnifiedAlert>>(`/api/paginated/alerts?${params.toString()}`);
+    return this.http.get<PaginatedResponse<UnifiedAlert>>(
+      `/api/paginated/alerts?${params.toString()}`
+    );
   }
 
-  async listRulesPaginated(dsIds: string[], page: number, pageSize: number): Promise<PaginatedResponse<UnifiedRule>> {
+  async listRulesPaginated(
+    dsIds: string[],
+    page: number,
+    pageSize: number
+  ): Promise<PaginatedResponse<UnifiedRule>> {
     const params = new URLSearchParams();
     if (dsIds.length > 0) params.set('dsIds', dsIds.join(','));
     params.set('page', String(page));
     params.set('pageSize', String(pageSize));
-    return this.http.get<PaginatedResponse<UnifiedRule>>(`/api/paginated/rules?${params.toString()}`);
+    return this.http.get<PaginatedResponse<UnifiedRule>>(
+      `/api/paginated/rules?${params.toString()}`
+    );
   }
 
   // Monitor CRUD
@@ -141,7 +150,14 @@ const DatasourceSelector: React.FC<{
   loading: boolean;
   workspaceOptions: Datasource[];
   loadingWorkspaces: boolean;
-}> = ({ datasources, selectedIds, onSelectionChange, loading, workspaceOptions, loadingWorkspaces }) => {
+}> = ({
+  datasources,
+  selectedIds,
+  onSelectionChange,
+  loading,
+  workspaceOptions,
+  loadingWorkspaces,
+}) => {
   // Build combo box options: non-prometheus datasources + prometheus workspace entries
   // EuiComboBox uses `label` as the key, so we build a label->id map
   const { options, labelToId, idToLabel } = useMemo(() => {
@@ -150,11 +166,11 @@ const DatasourceSelector: React.FC<{
     const opts: Array<{ label: string; options?: Array<{ label: string }> }> = [];
 
     // Non-prometheus datasources as direct options
-    const nonProm = datasources.filter(d => d.type !== 'prometheus');
+    const nonProm = datasources.filter((d) => d.type !== 'prometheus');
     if (nonProm.length > 0) {
       opts.push({
         label: 'OpenSearch',
-        options: nonProm.map(d => {
+        options: nonProm.map((d) => {
           lToId[d.name] = d.id;
           iToL[d.id] = d.name;
           return { label: d.name };
@@ -163,13 +179,13 @@ const DatasourceSelector: React.FC<{
     }
 
     // Prometheus workspaces grouped under their parent
-    const promDs = datasources.filter(d => d.type === 'prometheus');
+    const promDs = datasources.filter((d) => d.type === 'prometheus');
     for (const pds of promDs) {
-      const wsForDs = workspaceOptions.filter(w => w.parentDatasourceId === pds.id);
+      const wsForDs = workspaceOptions.filter((w) => w.parentDatasourceId === pds.id);
       if (wsForDs.length > 0) {
         opts.push({
           label: pds.name,
-          options: wsForDs.map(w => {
+          options: wsForDs.map((w) => {
             const displayLabel = `${pds.name} / ${w.workspaceName || w.name}`;
             lToId[displayLabel] = w.id;
             iToL[w.id] = displayLabel;
@@ -209,7 +225,9 @@ const DatasourceSelector: React.FC<{
               <EuiIcon type="database" size="s" />
             </EuiFlexItem>
             <EuiFlexItem grow={false}>
-              <EuiText size="xs"><strong>Datasource(s)</strong></EuiText>
+              <EuiText size="xs">
+                <strong>Datasource(s)</strong>
+              </EuiText>
             </EuiFlexItem>
           </EuiFlexGroup>
         </EuiFlexItem>
@@ -219,7 +237,7 @@ const DatasourceSelector: React.FC<{
             options={options as any}
             selectedOptions={selectedOptions}
             onChange={(selected: Array<{ label: string }>) => {
-              const ids = selected.map(s => labelToId[s.label]).filter(Boolean);
+              const ids = selected.map((s) => labelToId[s.label]).filter(Boolean);
               onSelectionChange(ids);
             }}
             isLoading={loading || loadingWorkspaces}
@@ -255,7 +273,12 @@ const PaginationBar: React.FC<{
   const end = Math.min(page * pageSize, total);
 
   return (
-    <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false} style={{ padding: '8px 0' }}>
+    <EuiFlexGroup
+      alignItems="center"
+      justifyContent="spaceBetween"
+      responsive={false}
+      style={{ padding: '8px 0' }}
+    >
       <EuiFlexItem grow={false}>
         <EuiText size="xs" color="subdued">
           Showing {total > 0 ? start : 0}–{end} of {total} items
@@ -264,28 +287,54 @@ const PaginationBar: React.FC<{
       <EuiFlexItem grow={false}>
         <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
           <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">Rows:</EuiText>
+            <EuiText size="xs" color="subdued">
+              Rows:
+            </EuiText>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              style={{ padding: '2px 4px', fontSize: 12, border: '1px solid #D3DAE6', borderRadius: 4 }}
+              style={{
+                padding: '2px 4px',
+                fontSize: 12,
+                border: '1px solid #D3DAE6',
+                borderRadius: 4,
+              }}
               aria-label="Rows per page"
             >
-              {[10, 20, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+              {[10, 20, 50, 100].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiButtonEmpty size="xs" onClick={() => onPageChange(page - 1)} isDisabled={page <= 1} iconType="arrowLeft" aria-label="Previous page">
+            <EuiButtonEmpty
+              size="xs"
+              onClick={() => onPageChange(page - 1)}
+              isDisabled={page <= 1}
+              iconType="arrowLeft"
+              aria-label="Previous page"
+            >
               Prev
             </EuiButtonEmpty>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiText size="xs">Page {page} of {totalPages}</EuiText>
+            <EuiText size="xs">
+              Page {page} of {totalPages}
+            </EuiText>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiButtonEmpty size="xs" onClick={() => onPageChange(page + 1)} isDisabled={!hasMore} iconType="arrowRight" iconSide="right" aria-label="Next page">
+            <EuiButtonEmpty
+              size="xs"
+              onClick={() => onPageChange(page + 1)}
+              isDisabled={!hasMore}
+              iconType="arrowRight"
+              iconSide="right"
+              aria-label="Next page"
+            >
               Next
             </EuiButtonEmpty>
           </EuiFlexItem>
@@ -335,7 +384,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
 
-  const visibleRules = rules.filter(r => !deletedRuleIds.has(r.id));
+  const visibleRules = rules.filter((r) => !deletedRuleIds.has(r.id));
 
   // All selectable datasources for the create form: non-prometheus + workspace entries
   const creatableDatasources = useMemo(() => {
@@ -362,8 +411,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         setDatasources(ds || []);
 
         // Discover workspaces for all Prometheus datasources
-        const promDs = (ds || []).filter(d => d.type === 'prometheus');
-        const nonPromIds = (ds || []).filter(d => d.type !== 'prometheus').map(d => d.id);
+        const promDs = (ds || []).filter((d) => d.type === 'prometheus');
+        const nonPromIds = (ds || []).filter((d) => d.type !== 'prometheus').map((d) => d.id);
 
         if (promDs.length > 0) {
           setLoadingWorkspaces(true);
@@ -372,13 +421,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             try {
               const ws = await apiClient.listWorkspaces(pds.id);
               allWs.push(...ws);
-            } catch (_e) { /* skip failed workspace discovery */ }
+            } catch (_e) {
+              /* skip failed workspace discovery */
+            }
           }
           setWorkspaceOptions(allWs);
           setLoadingWorkspaces(false);
 
           // Auto-select all datasources: non-prometheus + first prometheus workspace
-          const prodWs = allWs.find(w => w.workspaceName === 'production') || allWs[0];
+          const prodWs = allWs.find((w) => w.workspaceName === 'production') || allWs[0];
           const autoIds = [...nonPromIds, ...(prodWs ? [prodWs.id] : [])];
           if (autoIds.length > 0) {
             setSelectedDsIds(autoIds);
@@ -397,55 +448,65 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   // ---- Fetch data when datasource selection or page changes ----
 
-  const fetchAlerts = useCallback(async (dsIds: string[], page: number, pageSize: number) => {
-    if (dsIds.length === 0) {
-      setAlerts([]);
-      setAlertsTotal(0);
-      setAlertsHasMore(false);
-      return;
-    }
-    setDataLoading(true);
-    setError(null);
-    setWarnings([]);
-    try {
-      const res = await apiClient.listAlertsPaginated(dsIds, page, pageSize);
-      setAlerts(res.results || []);
-      setAlertsTotal(res.total || 0);
-      setAlertsHasMore(res.hasMore || false);
-      if (res.warnings && res.warnings.length > 0) {
-        setWarnings(res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error })));
+  const fetchAlerts = useCallback(
+    async (dsIds: string[], page: number, pageSize: number) => {
+      if (dsIds.length === 0) {
+        setAlerts([]);
+        setAlertsTotal(0);
+        setAlertsHasMore(false);
+        return;
       }
-    } catch (e: any) {
-      setError(e.message || 'Failed to fetch alerts');
-    } finally {
-      setDataLoading(false);
-    }
-  }, [apiClient]);
+      setDataLoading(true);
+      setError(null);
+      setWarnings([]);
+      try {
+        const res = await apiClient.listAlertsPaginated(dsIds, page, pageSize);
+        setAlerts(res.results || []);
+        setAlertsTotal(res.total || 0);
+        setAlertsHasMore(res.hasMore || false);
+        if (res.warnings && res.warnings.length > 0) {
+          setWarnings(
+            res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error }))
+          );
+        }
+      } catch (e: any) {
+        setError(e.message || 'Failed to fetch alerts');
+      } finally {
+        setDataLoading(false);
+      }
+    },
+    [apiClient]
+  );
 
-  const fetchRules = useCallback(async (dsIds: string[], page: number, pageSize: number) => {
-    if (dsIds.length === 0) {
-      setRules([]);
-      setRulesTotal(0);
-      setRulesHasMore(false);
-      return;
-    }
-    setDataLoading(true);
-    setError(null);
-    setWarnings([]);
-    try {
-      const res = await apiClient.listRulesPaginated(dsIds, page, pageSize);
-      setRules(res.results || []);
-      setRulesTotal(res.total || 0);
-      setRulesHasMore(res.hasMore || false);
-      if (res.warnings && res.warnings.length > 0) {
-        setWarnings(res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error })));
+  const fetchRules = useCallback(
+    async (dsIds: string[], page: number, pageSize: number) => {
+      if (dsIds.length === 0) {
+        setRules([]);
+        setRulesTotal(0);
+        setRulesHasMore(false);
+        return;
       }
-    } catch (e: any) {
-      setError(e.message || 'Failed to fetch rules');
-    } finally {
-      setDataLoading(false);
-    }
-  }, [apiClient]);
+      setDataLoading(true);
+      setError(null);
+      setWarnings([]);
+      try {
+        const res = await apiClient.listRulesPaginated(dsIds, page, pageSize);
+        setRules(res.results || []);
+        setRulesTotal(res.total || 0);
+        setRulesHasMore(res.hasMore || false);
+        if (res.warnings && res.warnings.length > 0) {
+          setWarnings(
+            res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error }))
+          );
+        }
+      } catch (e: any) {
+        setError(e.message || 'Failed to fetch rules');
+      } finally {
+        setDataLoading(false);
+      }
+    },
+    [apiClient]
+  );
 
   // Fetch when selection or pagination changes
   useEffect(() => {
@@ -473,44 +534,83 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   // ---- Handlers ----
 
   const handleAcknowledgeAlert = async (alertId: string) => {
-    try { await apiClient.acknowledgeAlert(alertId); } catch (_e) { /* fallback */ }
-    setAlerts(prev => prev.map(a =>
-      a.id === alertId ? { ...a, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() } : a
-    ));
+    try {
+      await apiClient.acknowledgeAlert(alertId);
+    } catch (_e) {
+      /* fallback */
+    }
+    setAlerts((prev) =>
+      prev.map((a) =>
+        a.id === alertId
+          ? { ...a, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
+          : a
+      )
+    );
   };
 
   const handleSilenceAlert = async (alertId: string) => {
-    try { await apiClient.silenceAlert(alertId); } catch (_e) { /* fallback */ }
-    setAlerts(prev => prev.map(a =>
-      a.id === alertId ? { ...a, state: 'resolved' as const, lastUpdated: new Date().toISOString() } : a
-    ));
+    try {
+      await apiClient.silenceAlert(alertId);
+    } catch (_e) {
+      /* fallback */
+    }
+    setAlerts((prev) =>
+      prev.map((a) =>
+        a.id === alertId
+          ? { ...a, state: 'resolved' as const, lastUpdated: new Date().toISOString() }
+          : a
+      )
+    );
   };
 
   const handleDeleteRules = async (ids: string[]) => {
     for (const id of ids) {
-      try { await apiClient.deleteMonitor(id); } catch (_e) { /* continue */ }
+      try {
+        await apiClient.deleteMonitor(id);
+      } catch (_e) {
+        /* continue */
+      }
     }
-    setDeletedRuleIds(prev => {
+    setDeletedRuleIds((prev) => {
       const next = new Set(prev);
-      ids.forEach(id => next.add(id));
+      ids.forEach((id) => next.add(id));
       return next;
     });
   };
 
   const handleSilenceRule = async (id: string) => {
-    const rule = rules.find(r => r.id === id);
+    const rule = rules.find((r) => r.id === id);
     if (rule && rule.status === 'muted') {
-      try { await apiClient.deleteSuppressionRule(id); } catch (_e) { /* fallback */ }
-    } else {
-      try { await apiClient.createSuppressionRule({ name: `Silence ${rule?.name || id}`, matchers: { monitor_id: id }, schedule: { type: 'one_time', start: new Date().toISOString(), end: new Date(Date.now() + 3600000).toISOString() }, enabled: true }); } catch (_e) { /* fallback */ }
-    }
-    setRules(prev => prev.map(r => {
-      if (r.id === id) {
-        const newStatus = r.status === 'muted' ? 'active' : 'muted';
-        return { ...r, status: newStatus as any };
+      try {
+        await apiClient.deleteSuppressionRule(id);
+      } catch (_e) {
+        /* fallback */
       }
-      return r;
-    }));
+    } else {
+      try {
+        await apiClient.createSuppressionRule({
+          name: `Silence ${rule?.name || id}`,
+          matchers: { monitor_id: id },
+          schedule: {
+            type: 'one_time',
+            start: new Date().toISOString(),
+            end: new Date(Date.now() + 3600000).toISOString(),
+          },
+          enabled: true,
+        });
+      } catch (_e) {
+        /* fallback */
+      }
+    }
+    setRules((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const newStatus = r.status === 'muted' ? 'active' : 'muted';
+          return { ...r, status: newStatus as any };
+        }
+        return r;
+      })
+    );
   };
 
   const handleCloneRule = async (monitor: UnifiedRule) => {
@@ -522,15 +622,21 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       lastModified: new Date().toISOString(),
       createdBy: 'current-user',
     };
-    try { await apiClient.createMonitor(clone); } catch (_e) { /* fallback */ }
-    setRules(prev => [clone, ...prev]);
+    try {
+      await apiClient.createMonitor(clone);
+    } catch (_e) {
+      /* fallback */
+    }
+    setRules((prev) => [clone, ...prev]);
   };
 
   const handleImportMonitors = async (configs: any[]) => {
     try {
       await apiClient.importMonitors(configs);
       fetchRules(selectedDsIds, rulesPage, rulesPageSize);
-    } catch (_e) { /* silently handle */ }
+    } catch (_e) {
+      /* silently handle */
+    }
   };
 
   const formStateToRule = (formState: MonitorFormState, index = 0): UnifiedRule => {
@@ -568,7 +674,11 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         evaluationInterval: formState.evaluationInterval,
         pendingPeriod: formState.pendingPeriod,
         firingPeriod: formState.firingPeriod,
-        threshold: { operator: formState.threshold.operator, value: formState.threshold.value, unit: formState.threshold.unit },
+        threshold: {
+          operator: formState.threshold.operator,
+          value: formState.threshold.value,
+          unit: formState.threshold.unit,
+        },
         alertHistory: [],
         conditionPreviewData: [],
         notificationRouting: [],
@@ -578,11 +688,18 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     } else {
       // OpenSearch monitor
       const isPPL = formState.monitorType === 'ppl_monitor';
-      const indices = formState.indices.split(',').map(s => s.trim()).filter(Boolean);
-      const monitorType = formState.monitorType === 'ppl_monitor' ? 'metric' as const
-        : formState.monitorType === 'bucket_level_monitor' ? 'infrastructure' as const
-        : formState.monitorType === 'doc_level_monitor' ? 'log' as const
-        : 'metric' as const;
+      const indices = formState.indices
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const monitorType =
+        formState.monitorType === 'ppl_monitor'
+          ? ('metric' as const)
+          : formState.monitorType === 'bucket_level_monitor'
+            ? ('infrastructure' as const)
+            : formState.monitorType === 'doc_level_monitor'
+              ? ('log' as const)
+              : ('metric' as const);
 
       // PPL monitors have Prometheus-like labels/annotations
       const labelsObj: Record<string, string> = {};
@@ -622,9 +739,17 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           ? `OpenSearch PPL monitor${indices.length > 0 ? ` on ${indices.join(', ')}` : ''}`
           : `OpenSearch ${formState.monitorType} on ${indices.join(', ')}`,
         aiSummary: 'Newly created OpenSearch monitor. No historical data available yet.',
-        evaluationInterval: isPPL ? formState.evaluationInterval : `${formState.schedule.interval} ${formState.schedule.unit.toLowerCase()}`,
+        evaluationInterval: isPPL
+          ? formState.evaluationInterval
+          : `${formState.schedule.interval} ${formState.schedule.unit.toLowerCase()}`,
         pendingPeriod: isPPL ? formState.pendingPeriod : '5 minutes',
-        threshold: isPPL ? { operator: formState.threshold.operator, value: formState.threshold.value, unit: formState.threshold.unit } : undefined,
+        threshold: isPPL
+          ? {
+              operator: formState.threshold.operator,
+              value: formState.threshold.value,
+              unit: formState.threshold.unit,
+            }
+          : undefined,
         alertHistory: [],
         conditionPreviewData: [],
         notificationRouting: [],
@@ -636,17 +761,25 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const handleCreateMonitor = async (formState: MonitorFormState) => {
     const newRule = formStateToRule(formState);
-    try { await apiClient.createMonitor(formState); } catch (_e) { /* local-only fallback */ }
-    setRules(prev => [newRule, ...prev]);
+    try {
+      await apiClient.createMonitor(formState);
+    } catch (_e) {
+      /* local-only fallback */
+    }
+    setRules((prev) => [newRule, ...prev]);
     setShowCreateMonitor(false);
   };
 
   const handleBatchCreateMonitors = async (forms: MonitorFormState[]) => {
     const newRules = forms.map((f, i) => formStateToRule(f, i));
     for (const f of forms) {
-      try { await apiClient.createMonitor(f); } catch (_e) { /* local-only fallback */ }
+      try {
+        await apiClient.createMonitor(f);
+      } catch (_e) {
+        /* local-only fallback */
+      }
     }
-    setRules(prev => [...newRules, ...prev]);
+    setRules((prev) => [...newRules, ...prev]);
     // Don't close flyout — AI wizard shows its own summary step and "Done" button
   };
 
@@ -677,7 +810,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             selectedDsIds={selectedDsIds}
             onDatasourceChange={handleDatasourceChange}
           />
-
         </>
       );
     }
@@ -713,13 +845,17 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>
-            <EuiTitle size="l"><h1>Alert Manager</h1></EuiTitle>
+            <EuiTitle size="l">
+              <h1>Alert Manager</h1>
+            </EuiTitle>
           </EuiPageHeaderSection>
         </EuiPageHeader>
         <EuiSpacer size="m" />
         <EuiTabs>
-          {tabs.map(t => (
-            <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>{t.name}</EuiTab>
+          {tabs.map((t) => (
+            <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
+              {t.name}
+            </EuiTab>
           ))}
         </EuiTabs>
         <EuiSpacer size="s" />
@@ -727,15 +863,29 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         {/* Datasource selector removed — now integrated into filter panels */}
 
         {error && (
-          <EuiCallOut title="Error loading data" color="danger" iconType="alert" size="s" style={{ marginBottom: 12 }}>
+          <EuiCallOut
+            title="Error loading data"
+            color="danger"
+            iconType="alert"
+            size="s"
+            style={{ marginBottom: 12 }}
+          >
             <p>{error}</p>
           </EuiCallOut>
         )}
 
         {warnings.length > 0 && (
-          <EuiCallOut title="Some datasources could not be reached" color="warning" iconType="alert" size="s" style={{ marginBottom: 12 }}>
+          <EuiCallOut
+            title="Some datasources could not be reached"
+            color="warning"
+            iconType="alert"
+            size="s"
+            style={{ marginBottom: 12 }}
+          >
             {warnings.map((w, i) => (
-              <p key={i}><strong>{w.datasourceName}</strong>: {w.error}</p>
+              <p key={i}>
+                <strong>{w.datasourceName}</strong>: {w.error}
+              </p>
             ))}
           </EuiCallOut>
         )}
@@ -755,8 +905,14 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             alert={selectedAlert}
             datasources={datasources}
             onClose={() => setSelectedAlert(null)}
-            onAcknowledge={(id) => { handleAcknowledgeAlert(id); setSelectedAlert(null); }}
-            onSilence={(id) => { handleSilenceAlert(id); setSelectedAlert(null); }}
+            onAcknowledge={(id) => {
+              handleAcknowledgeAlert(id);
+              setSelectedAlert(null);
+            }}
+            onSilence={(id) => {
+              handleSilenceAlert(id);
+              setSelectedAlert(null);
+            }}
           />
         )}
       </EuiPageBody>

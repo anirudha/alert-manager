@@ -15,10 +15,16 @@ import { UnifiedAlertSeverity } from './types';
 const DURATION_UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
 
 export function parseDuration(input: string): { valid: boolean; seconds: number; error?: string } {
-  if (!input || typeof input !== 'string') return { valid: false, seconds: 0, error: 'Duration is required' };
+  if (!input || typeof input !== 'string')
+    return { valid: false, seconds: 0, error: 'Duration is required' };
   const trimmed = input.trim();
   const match = trimmed.match(/^(\d+)\s*([smhd])$/);
-  if (!match) return { valid: false, seconds: 0, error: `Invalid duration format "${trimmed}". Expected <number><s|m|h|d>` };
+  if (!match)
+    return {
+      valid: false,
+      seconds: 0,
+      error: `Invalid duration format "${trimmed}". Expected <number><s|m|h|d>`,
+    };
   const value = parseInt(match[1], 10);
   if (value <= 0) return { valid: false, seconds: 0, error: 'Duration must be positive' };
   return { valid: true, seconds: value * DURATION_UNITS[match[2]] };
@@ -43,8 +49,15 @@ export interface ThresholdCondition {
   forDuration: string;
 }
 
-export interface LabelEntry { key: string; value: string; isDynamic?: boolean; }
-export interface AnnotationEntry { key: string; value: string; }
+export interface LabelEntry {
+  key: string;
+  value: string;
+  isDynamic?: boolean;
+}
+export interface AnnotationEntry {
+  key: string;
+  value: string;
+}
 
 export interface MonitorFormState {
   name: string;
@@ -71,12 +84,14 @@ export function validateMonitorForm(form: MonitorFormState): ValidationResult {
 
   if (!form.name || !form.name.trim()) errors.name = 'Name is required';
   else if (form.name.length > 256) errors.name = 'Name must be 256 characters or fewer';
-  else if (CONTROL_CHAR_RE.test(form.name)) errors.name = 'Name must not contain control characters';
+  else if (CONTROL_CHAR_RE.test(form.name))
+    errors.name = 'Name must not contain control characters';
 
   if (!form.query || !form.query.trim()) errors.query = 'Query is required';
 
   if (form.threshold) {
-    if (!isFinite(form.threshold.value)) errors['threshold.value'] = 'Threshold value must be a finite number';
+    if (!isFinite(form.threshold.value))
+      errors['threshold.value'] = 'Threshold value must be a finite number';
     const forDur = parseDuration(form.threshold.forDuration);
     if (!forDur.valid) errors['threshold.forDuration'] = forDur.error || 'Invalid duration';
   }

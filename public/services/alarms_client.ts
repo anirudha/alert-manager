@@ -47,7 +47,10 @@ interface RulesResponse {
 export class AlarmsApiClient {
   private readonly paths: ApiPaths;
 
-  constructor(private readonly http: HttpClient, mode: 'osd' | 'standalone' = 'osd') {
+  constructor(
+    private readonly http: HttpClient,
+    mode: 'osd' | 'standalone' = 'osd'
+  ) {
     this.paths = mode === 'standalone' ? STANDALONE_PATHS : OSD_PATHS;
   }
 

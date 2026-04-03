@@ -32,7 +32,9 @@ export interface HttpResponse<T = any> {
  * Extract HTTP auth config from a Datasource's auth field.
  * Shared helper so both backends and the datasource service can reuse it.
  */
-export function buildAuthFromDatasource(ds: Datasource): { username: string; password: string } | undefined {
+export function buildAuthFromDatasource(
+  ds: Datasource
+): { username: string; password: string } | undefined {
   if (!ds.auth) return undefined;
   if (ds.auth.type === 'basic' && ds.auth.credentials) {
     return {
@@ -108,7 +110,11 @@ export class HttpClient {
       if (opts.timeoutMs) {
         req.setTimeout(opts.timeoutMs, () => {
           req.destroy();
-          reject(new Error(`HTTP request timed out after ${opts.timeoutMs}ms for ${opts.method} ${opts.url}`));
+          reject(
+            new Error(
+              `HTTP request timed out after ${opts.timeoutMs}ms for ${opts.method} ${opts.url}`
+            )
+          );
         });
       }
 

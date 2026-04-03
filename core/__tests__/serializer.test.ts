@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { serializeMonitor, serializeMonitors, deserializeMonitor, MonitorConfig } from '../serializer';
+import {
+  serializeMonitor,
+  serializeMonitors,
+  deserializeMonitor,
+  MonitorConfig,
+} from '../serializer';
 import { UnifiedRule } from '../types';
 
 const sampleRule = {
@@ -44,7 +49,10 @@ describe('serializeMonitor', () => {
     expect(config.threshold.value).toBe(0.1);
     expect(config.severity).toBe('critical');
     expect(config.labels).toEqual({ team: 'platform', env: 'prod' });
-    expect(config.annotations).toEqual({ summary: 'Error rate is high', runbook: 'https://wiki/errors' });
+    expect(config.annotations).toEqual({
+      summary: 'Error rate is high',
+      runbook: 'https://wiki/errors',
+    });
   });
 
   it('omits routing when empty', () => {
@@ -55,7 +63,14 @@ describe('serializeMonitor', () => {
   it('includes routing when present', () => {
     const rule = {
       ...sampleRule,
-      notificationRouting: [{ channel: 'slack', destination: '#alerts', severity: ['critical' as const], throttle: '5m' }],
+      notificationRouting: [
+        {
+          channel: 'slack',
+          destination: '#alerts',
+          severity: ['critical' as const],
+          throttle: '5m',
+        },
+      ],
     };
     const config = serializeMonitor(rule);
     expect(config.routing).toHaveLength(1);
@@ -106,17 +121,17 @@ describe('deserializeMonitor', () => {
 
   it('rejects missing name', () => {
     const { errors } = deserializeMonitor({ ...validInput, name: undefined });
-    expect(errors.some(e => e.includes('name'))).toBe(true);
+    expect(errors.some((e) => e.includes('name'))).toBe(true);
   });
 
   it('rejects missing query', () => {
     const { errors } = deserializeMonitor({ ...validInput, query: undefined });
-    expect(errors.some(e => e.includes('query'))).toBe(true);
+    expect(errors.some((e) => e.includes('query'))).toBe(true);
   });
 
   it('rejects missing threshold', () => {
     const { errors } = deserializeMonitor({ ...validInput, threshold: undefined });
-    expect(errors.some(e => e.includes('threshold'))).toBe(true);
+    expect(errors.some((e) => e.includes('threshold'))).toBe(true);
   });
 
   it('rejects invalid threshold.value', () => {
@@ -124,7 +139,7 @@ describe('deserializeMonitor', () => {
       ...validInput,
       threshold: { operator: '>', value: Infinity, forDuration: '5m' },
     });
-    expect(errors.some(e => e.includes('threshold.value'))).toBe(true);
+    expect(errors.some((e) => e.includes('threshold.value'))).toBe(true);
   });
 
   it('rejects invalid threshold.forDuration', () => {
@@ -132,12 +147,12 @@ describe('deserializeMonitor', () => {
       ...validInput,
       threshold: { operator: '>', value: 10, forDuration: 'bad' },
     });
-    expect(errors.some(e => e.includes('threshold.forDuration'))).toBe(true);
+    expect(errors.some((e) => e.includes('threshold.forDuration'))).toBe(true);
   });
 
   it('rejects missing evaluation', () => {
     const { errors } = deserializeMonitor({ ...validInput, evaluation: undefined });
-    expect(errors.some(e => e.includes('evaluation'))).toBe(true);
+    expect(errors.some((e) => e.includes('evaluation'))).toBe(true);
   });
 
   it('rejects invalid evaluation.interval', () => {
@@ -145,7 +160,7 @@ describe('deserializeMonitor', () => {
       ...validInput,
       evaluation: { interval: 'bad', pendingPeriod: '5m' },
     });
-    expect(errors.some(e => e.includes('evaluation.interval'))).toBe(true);
+    expect(errors.some((e) => e.includes('evaluation.interval'))).toBe(true);
   });
 
   it('defaults severity to medium when missing', () => {

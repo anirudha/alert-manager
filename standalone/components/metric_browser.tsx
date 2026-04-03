@@ -40,21 +40,32 @@ interface MetricMeta {
 
 function generateMetricMeta(): MetricMeta[] {
   const typeMap: Record<string, 'counter' | 'gauge' | 'histogram' | 'summary'> = {
-    _total: 'counter', _bytes_total: 'counter', _seconds_total: 'counter',
-    _bytes: 'gauge', _ratio: 'gauge', _info: 'gauge',
-    _bucket: 'histogram', _sum: 'histogram', _count: 'histogram',
+    _total: 'counter',
+    _bytes_total: 'counter',
+    _seconds_total: 'counter',
+    _bytes: 'gauge',
+    _ratio: 'gauge',
+    _info: 'gauge',
+    _bucket: 'histogram',
+    _sum: 'histogram',
+    _count: 'histogram',
   };
-  return MOCK_METRICS.map(name => {
+  return MOCK_METRICS.map((name) => {
     let type: MetricMeta['type'] = 'gauge';
     for (const [suffix, t] of Object.entries(typeMap)) {
-      if (name.endsWith(suffix)) { type = t; break; }
+      if (name.endsWith(suffix)) {
+        type = t;
+        break;
+      }
     }
     const labels = MOCK_LABEL_NAMES.filter(() => Math.random() > 0.6).slice(0, 5);
     if (!labels.includes('instance')) labels.unshift('instance');
     if (!labels.includes('job')) labels.push('job');
     const cardinality = Math.floor(Math.random() * 5000) + 10;
     return {
-      name, type, labels,
+      name,
+      type,
+      labels,
       help: `Help text for ${name}`,
       cardinality,
       scrapeInterval: '15s',
@@ -85,16 +96,25 @@ function estimateQueryTime(cardinality: number): string {
 function getOptimizations(metric: MetricMeta, query?: string): string[] {
   const tips: string[] = [];
   if (metric.cardinality > 3000) {
-    tips.push(`High cardinality (${metric.cardinality} series). Add label filters to reduce query scope.`);
+    tips.push(
+      `High cardinality (${metric.cardinality} series). Add label filters to reduce query scope.`
+    );
   }
-  if (metric.type === 'counter' && query && !query.includes('rate') && !query.includes('increase')) {
+  if (
+    metric.type === 'counter' &&
+    query &&
+    !query.includes('rate') &&
+    !query.includes('increase')
+  ) {
     tips.push('Counter metrics should typically be wrapped in rate() or increase().');
   }
   if (metric.type === 'histogram' && query && !query.includes('histogram_quantile')) {
     tips.push('Use histogram_quantile() to compute percentiles from histogram buckets.');
   }
   if (metric.labels.length > 6) {
-    tips.push(`This metric has ${metric.labels.length} labels. Use by() or without() to aggregate.`);
+    tips.push(
+      `This metric has ${metric.labels.length} labels. Use by() or without() to aggregate.`
+    );
   }
   return tips;
 }
@@ -115,29 +135,49 @@ export const MetricBrowser: React.FC<MetricBrowserProps> = ({ onSelectMetric, cu
   const filtered = useMemo(() => {
     if (!search) return METRIC_META;
     const q = search.toLowerCase();
-    return METRIC_META.filter(m => m.name.toLowerCase().includes(q) || m.help.toLowerCase().includes(q));
+    return METRIC_META.filter(
+      (m) => m.name.toLowerCase().includes(q) || m.help.toLowerCase().includes(q)
+    );
   }, [search]);
 
   const typeColors: Record<string, string> = {
-    counter: 'primary', gauge: 'success', histogram: 'accent', summary: 'warning',
+    counter: 'primary',
+    gauge: 'success',
+    histogram: 'accent',
+    summary: 'warning',
   };
 
   const columns = [
     {
-      field: 'name', name: 'Metric', sortable: true, width: '280px',
+      field: 'name',
+      name: 'Metric',
+      sortable: true,
+      width: '280px',
       render: (name: string, item: MetricMeta) => (
-        <EuiButtonEmpty size="xs" flush="left" onClick={() => { setSelectedMetric(item); onSelectMetric(name); }}
-          style={{ fontFamily: 'monospace', fontSize: 12 }}>
+        <EuiButtonEmpty
+          size="xs"
+          flush="left"
+          onClick={() => {
+            setSelectedMetric(item);
+            onSelectMetric(name);
+          }}
+          style={{ fontFamily: 'monospace', fontSize: 12 }}
+        >
           {name}
         </EuiButtonEmpty>
       ),
     },
     {
-      field: 'type', name: 'Type', width: '100px',
+      field: 'type',
+      name: 'Type',
+      width: '100px',
       render: (t: string) => <EuiBadge color={typeColors[t] || 'default'}>{t}</EuiBadge>,
     },
     {
-      field: 'cardinality', name: 'Cardinality', width: '120px', sortable: true,
+      field: 'cardinality',
+      name: 'Cardinality',
+      width: '120px',
+      sortable: true,
       render: (c: number) => (
         <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
           <EuiFlexItem grow={false}>
@@ -154,15 +194,31 @@ export const MetricBrowser: React.FC<MetricBrowserProps> = ({ onSelectMetric, cu
       ),
     },
     {
-      field: 'cardinality', name: 'Est. Query Time', width: '120px',
-      render: (c: number) => <EuiText size="xs" color="subdued">{estimateQueryTime(c)}</EuiText>,
+      field: 'cardinality',
+      name: 'Est. Query Time',
+      width: '120px',
+      render: (c: number) => (
+        <EuiText size="xs" color="subdued">
+          {estimateQueryTime(c)}
+        </EuiText>
+      ),
     },
     {
-      field: 'labels', name: 'Labels', width: '200px',
+      field: 'labels',
+      name: 'Labels',
+      width: '200px',
       render: (labels: string[]) => (
         <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
-          {labels.slice(0, 4).map(l => <EuiFlexItem grow={false} key={l}><EuiBadge color="hollow">{l}</EuiBadge></EuiFlexItem>)}
-          {labels.length > 4 && <EuiFlexItem grow={false}><EuiBadge color="hollow">+{labels.length - 4}</EuiBadge></EuiFlexItem>}
+          {labels.slice(0, 4).map((l) => (
+            <EuiFlexItem grow={false} key={l}>
+              <EuiBadge color="hollow">{l}</EuiBadge>
+            </EuiFlexItem>
+          ))}
+          {labels.length > 4 && (
+            <EuiFlexItem grow={false}>
+              <EuiBadge color="hollow">+{labels.length - 4}</EuiBadge>
+            </EuiFlexItem>
+          )}
         </EuiFlexGroup>
       ),
     },
@@ -187,33 +243,60 @@ export const MetricBrowser: React.FC<MetricBrowserProps> = ({ onSelectMetric, cu
           <EuiPanel paddingSize="s" color="subdued">
             <EuiFlexGroup gutterSize="m" responsive={false}>
               <EuiFlexItem>
-                <EuiText size="s"><strong>{selectedMetric.name}</strong></EuiText>
-                <EuiText size="xs" color="subdued">{selectedMetric.help}</EuiText>
+                <EuiText size="s">
+                  <strong>{selectedMetric.name}</strong>
+                </EuiText>
+                <EuiText size="xs" color="subdued">
+                  {selectedMetric.help}
+                </EuiText>
                 <EuiSpacer size="xs" />
                 <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
-                  <EuiFlexItem grow={false}><EuiBadge color={typeColors[selectedMetric.type]}>{selectedMetric.type}</EuiBadge></EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiBadge color={typeColors[selectedMetric.type]}>
+                      {selectedMetric.type}
+                    </EuiBadge>
+                  </EuiFlexItem>
                   <EuiFlexItem grow={false}>
                     <EuiHealth color={cardinalityColor(selectedMetric.cardinality)}>
-                      {selectedMetric.cardinality.toLocaleString()} series ({cardinalityLabel(selectedMetric.cardinality)})
+                      {selectedMetric.cardinality.toLocaleString()} series (
+                      {cardinalityLabel(selectedMetric.cardinality)})
                     </EuiHealth>
                   </EuiFlexItem>
-                  <EuiFlexItem grow={false}><EuiText size="xs">Scrape: {selectedMetric.scrapeInterval}</EuiText></EuiFlexItem>
-                  <EuiFlexItem grow={false}><EuiText size="xs">Est: {estimateQueryTime(selectedMetric.cardinality)}</EuiText></EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiText size="xs">Scrape: {selectedMetric.scrapeInterval}</EuiText>
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiText size="xs">
+                      Est: {estimateQueryTime(selectedMetric.cardinality)}
+                    </EuiText>
+                  </EuiFlexItem>
                 </EuiFlexGroup>
                 {optimizations.length > 0 && (
                   <>
                     <EuiSpacer size="xs" />
                     {optimizations.map((tip, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 4, padding: '2px 0' }}>
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 4,
+                          padding: '2px 0',
+                        }}
+                      >
                         <EuiIcon type="bulb" color="warning" size="s" style={{ marginTop: 2 }} />
-                        <EuiText size="xs" color="subdued">{tip}</EuiText>
+                        <EuiText size="xs" color="subdued">
+                          {tip}
+                        </EuiText>
                       </div>
                     ))}
                   </>
                 )}
               </EuiFlexItem>
               <EuiFlexItem grow={false}>
-                <EuiButtonEmpty size="xs" iconType="cross" onClick={() => setSelectedMetric(null)}>Close</EuiButtonEmpty>
+                <EuiButtonEmpty size="xs" iconType="cross" onClick={() => setSelectedMetric(null)}>
+                  Close
+                </EuiButtonEmpty>
               </EuiFlexItem>
             </EuiFlexGroup>
           </EuiPanel>
@@ -222,11 +305,7 @@ export const MetricBrowser: React.FC<MetricBrowserProps> = ({ onSelectMetric, cu
       )}
 
       <div style={{ maxHeight: 300, overflow: 'auto' }}>
-        <EuiBasicTable
-          items={filtered.slice(0, 50)}
-          columns={columns}
-          compressed
-        />
+        <EuiBasicTable items={filtered.slice(0, 50)} columns={columns} compressed />
       </div>
       {filtered.length > 50 && (
         <EuiText size="xs" color="subdued" textAlign="center" style={{ padding: 8 }}>

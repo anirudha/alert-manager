@@ -4,10 +4,10 @@
  */
 
 import { i18n } from '@osd/i18n';
-import { 
-  AppMountParameters, 
-  CoreSetup, 
-  CoreStart, 
+import {
+  AppMountParameters,
+  CoreSetup,
+  CoreStart,
   Plugin,
   DEFAULT_NAV_GROUPS,
 } from '../../../src/core/public';

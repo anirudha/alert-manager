@@ -15,7 +15,13 @@ export { DirectQueryPrometheusBackend } from './directquery_prometheus_backend';
 export type { DirectQueryConfig } from './directquery_prometheus_backend';
 export { HttpClient, buildAuthFromDatasource } from './http_client';
 export { parseDuration, formatDuration, validateMonitorForm } from './validators';
-export type { MonitorFormState, ValidationResult, ThresholdCondition, LabelEntry, AnnotationEntry } from './validators';
+export type {
+  MonitorFormState,
+  ValidationResult,
+  ThresholdCondition,
+  LabelEntry,
+  AnnotationEntry,
+} from './validators';
 export { validatePromQL, prettifyPromQL } from './promql_validator';
 export type { PromQLError, PromQLValidationResult } from './promql_validator';
 export { serializeMonitor, serializeMonitors, deserializeMonitor } from './serializer';

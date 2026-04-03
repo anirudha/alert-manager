@@ -9,14 +9,7 @@
  * API reference: https://opensearch.org/docs/latest/observing-your-data/alerting/api/
  */
 import { HttpClient, buildAuthFromDatasource } from './http_client';
-import {
-  Datasource,
-  Logger,
-  OpenSearchBackend,
-  OSMonitor,
-  OSAlert,
-  OSDestination,
-} from './types';
+import { Datasource, Logger, OpenSearchBackend, OSMonitor, OSAlert, OSDestination } from './types';
 
 export class HttpOpenSearchBackend implements OpenSearchBackend {
   readonly type = 'opensearch' as const;
@@ -57,7 +50,11 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     return this.mapMonitor(resp.body._id, resp.body.monitor);
   }
 
-  async updateMonitor(ds: Datasource, monitorId: string, input: Partial<OSMonitor>): Promise<OSMonitor | null> {
+  async updateMonitor(
+    ds: Datasource,
+    monitorId: string,
+    input: Partial<OSMonitor>
+  ): Promise<OSMonitor | null> {
     // Fetch the current monitor so we can merge the partial update
     const current = await this.getMonitor(ds, monitorId);
     if (!current) return null;
@@ -88,9 +85,14 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   }
 
   async runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<any> {
-    const resp = await this.req<any>(ds, 'POST', `/_plugins/_alerting/monitors/${monitorId}/_execute`, {
-      dryrun: dryRun ?? false,
-    });
+    const resp = await this.req<any>(
+      ds,
+      'POST',
+      `/_plugins/_alerting/monitors/${monitorId}/_execute`,
+      {
+        dryrun: dryRun ?? false,
+      }
+    );
     return resp.body;
   }
 
@@ -109,7 +111,7 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
       ds,
       'POST',
       `/_plugins/_alerting/monitors/${monitorId}/_acknowledge/alerts`,
-      { alerts: alertIds },
+      { alerts: alertIds }
     );
     return resp.body;
   }
@@ -146,7 +148,7 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     ds: Datasource,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
-    body?: any,
+    body?: any
   ) {
     return this.http.request<T>({
       method,

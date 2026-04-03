@@ -20,40 +20,61 @@ type Result = { status: number; body: any };
 // Monitor CRUD
 // ============================================================================
 
-export async function handleCreateMonitor(alertSvc: MultiBackendAlertService, body: any): Promise<Result> {
+export async function handleCreateMonitor(
+  alertSvc: MultiBackendAlertService,
+  body: any
+): Promise<Result> {
   try {
     // For Prometheus monitors, create via the first prometheus datasource
     const dsId = body.datasourceId || 'ds-2';
     const monitor = await alertSvc.createOSMonitor(dsId, body);
     return { status: 201, body: monitor };
-  } catch (e) { return { status: 400, body: { error: String(e) } }; }
+  } catch (e) {
+    return { status: 400, body: { error: String(e) } };
+  }
 }
 
-export async function handleUpdateMonitor(alertSvc: MultiBackendAlertService, id: string, body: any): Promise<Result> {
+export async function handleUpdateMonitor(
+  alertSvc: MultiBackendAlertService,
+  id: string,
+  body: any
+): Promise<Result> {
   try {
     const dsId = body.datasourceId || 'ds-2';
     const monitor = await alertSvc.updateOSMonitor(dsId, id, body);
     if (!monitor) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: monitor };
-  } catch (e) { return { status: 400, body: { error: String(e) } }; }
+  } catch (e) {
+    return { status: 400, body: { error: String(e) } };
+  }
 }
 
-export async function handleDeleteMonitor(alertSvc: MultiBackendAlertService, id: string, dsId?: string): Promise<Result> {
+export async function handleDeleteMonitor(
+  alertSvc: MultiBackendAlertService,
+  id: string,
+  dsId?: string
+): Promise<Result> {
   try {
     const targetDsId = dsId || 'ds-2';
     const ok = await alertSvc.deleteOSMonitor(targetDsId, id);
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
-  } catch (e) { return { status: 400, body: { error: String(e) } }; }
+  } catch (e) {
+    return { status: 400, body: { error: String(e) } };
+  }
 }
 
 // ============================================================================
 // Import / Export
 // ============================================================================
 
-export async function handleImportMonitors(alertSvc: MultiBackendAlertService, body: any): Promise<Result> {
+export async function handleImportMonitors(
+  alertSvc: MultiBackendAlertService,
+  body: any
+): Promise<Result> {
   const configs = Array.isArray(body) ? body : body.monitors;
-  if (!Array.isArray(configs)) return { status: 400, body: { error: 'Expected array of monitor configs' } };
+  if (!Array.isArray(configs))
+    return { status: 400, body: { error: 'Expected array of monitor configs' } };
 
   const results: { index: number; success: boolean; errors?: string[] }[] = [];
   for (let i = 0; i < configs.length; i++) {
@@ -64,19 +85,24 @@ export async function handleImportMonitors(alertSvc: MultiBackendAlertService, b
       results.push({ index: i, success: true });
     }
   }
-  const failed = results.filter(r => !r.success);
+  const failed = results.filter((r) => !r.success);
   if (failed.length > 0) {
     return { status: 400, body: { error: 'Validation errors', details: failed } };
   }
   return { status: 200, body: { imported: configs.length } };
 }
 
-export async function handleExportMonitors(alertSvc: MultiBackendAlertService, query?: any): Promise<Result> {
+export async function handleExportMonitors(
+  alertSvc: MultiBackendAlertService,
+  query?: any
+): Promise<Result> {
   try {
     const response = await alertSvc.getUnifiedRules();
     const configs = serializeMonitors(response.results);
     return { status: 200, body: { monitors: configs } };
-  } catch (e) { return { status: 500, body: { error: String(e) } }; }
+  } catch (e) {
+    return { status: 500, body: { error: String(e) } };
+  }
 }
 
 // ============================================================================
@@ -93,12 +119,19 @@ export function handleGetSuppressionRule(svc: SuppressionRuleService, id: string
   return { status: 200, body: rule };
 }
 
-export function handleCreateSuppressionRule(svc: SuppressionRuleService, body: Omit<SuppressionRuleConfig, 'id' | 'createdAt'>): Result {
+export function handleCreateSuppressionRule(
+  svc: SuppressionRuleService,
+  body: Omit<SuppressionRuleConfig, 'id' | 'createdAt'>
+): Result {
   const rule = svc.create(body);
   return { status: 201, body: rule };
 }
 
-export function handleUpdateSuppressionRule(svc: SuppressionRuleService, id: string, body: Partial<SuppressionRuleConfig>): Result {
+export function handleUpdateSuppressionRule(
+  svc: SuppressionRuleService,
+  id: string,
+  body: Partial<SuppressionRuleConfig>
+): Result {
   const rule = svc.update(id, body);
   if (!rule) return { status: 404, body: { error: 'Suppression rule not found' } };
   return { status: 200, body: rule };
@@ -114,12 +147,19 @@ export function handleDeleteSuppressionRule(svc: SuppressionRuleService, id: str
 // Alert Actions
 // ============================================================================
 
-export async function handleAcknowledgeAlert(alertSvc: MultiBackendAlertService, alertId: string): Promise<Result> {
+export async function handleAcknowledgeAlert(
+  alertSvc: MultiBackendAlertService,
+  alertId: string
+): Promise<Result> {
   // In a real implementation, this would update the alert state in the backend
   return { status: 200, body: { id: alertId, state: 'acknowledged' } };
 }
 
-export async function handleSilenceAlert(svc: SuppressionRuleService, alertId: string, body: any): Promise<Result> {
+export async function handleSilenceAlert(
+  svc: SuppressionRuleService,
+  alertId: string,
+  body: any
+): Promise<Result> {
   const duration = body?.duration || '1h';
   const now = new Date();
   const endTime = new Date(now.getTime() + parseDurationMs(duration));

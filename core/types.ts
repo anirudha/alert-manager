@@ -220,7 +220,11 @@ export interface OpenSearchBackend {
   getMonitors(ds: Datasource): Promise<OSMonitor[]>;
   getMonitor(ds: Datasource, monitorId: string): Promise<OSMonitor | null>;
   createMonitor(ds: Datasource, monitor: Omit<OSMonitor, 'id'>): Promise<OSMonitor>;
-  updateMonitor(ds: Datasource, monitorId: string, monitor: Partial<OSMonitor>): Promise<OSMonitor | null>;
+  updateMonitor(
+    ds: Datasource,
+    monitorId: string,
+    monitor: Partial<OSMonitor>
+  ): Promise<OSMonitor | null>;
   deleteMonitor(ds: Datasource, monitorId: string): Promise<boolean>;
   runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<any>;
 
@@ -261,7 +265,11 @@ export interface AlertmanagerAlert {
   endsAt: string;
   generatorURL: string;
   fingerprint: string;
-  status: { state: 'active' | 'suppressed' | 'unprocessed'; silencedBy: string[]; inhibitedBy: string[] };
+  status: {
+    state: 'active' | 'suppressed' | 'unprocessed';
+    silencedBy: string[];
+    inhibitedBy: string[];
+  };
   receivers: Array<{ name: string }>;
 }
 

@@ -5,7 +5,13 @@
 
 module.exports = {
   root: true,
-  extends: ['@elastic/eslint-config-kibana', 'plugin:@elastic/eui/recommended'],
+  extends: [
+    '@elastic/eslint-config-kibana',
+    'plugin:@elastic/eui/recommended',
+    'plugin:react-hooks/recommended',
+    'plugin:jest/recommended',
+    'plugin:prettier/recommended',
+  ],
   rules: {
     '@osd/eslint/require-license-header': [
       'error',

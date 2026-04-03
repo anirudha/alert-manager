@@ -163,10 +163,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     if (activeTab === 'rules') {
       if (!loading && rules.length === 0)
         return (
-          <EuiEmptyPrompt
-            title={<h2>No Rules</h2>}
-            body={<p>No alerting rules configured.</p>}
-          />
+          <EuiEmptyPrompt title={<h2>No Rules</h2>} body={<p>No alerting rules configured.</p>} />
         );
       return <EuiBasicTable items={rules} columns={ruleColumns} loading={loading} />;
     }
@@ -186,11 +183,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         <EuiSpacer size="m" />
         <EuiTabs>
           {tabs.map((t) => (
-            <EuiTab
-              key={t.id}
-              isSelected={activeTab === t.id}
-              onClick={() => setActiveTab(t.id)}
-            >
+            <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
               {t.name}
             </EuiTab>
           ))}

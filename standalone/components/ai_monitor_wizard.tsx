@@ -87,7 +87,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
       {
         id: 'host-cpu-high',
         name: 'High CPU Usage',
-        description: 'CPU utilization exceeds 85% for sustained period, indicating potential resource exhaustion',
+        description:
+          'CPU utilization exceeds 85% for sustained period, indicating potential resource exhaustion',
         query: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)',
         condition: '> 85',
         severity: 'high',
@@ -96,7 +97,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'high', category: 'infrastructure', otel_signal: 'metrics' },
         annotations: {
           summary: 'High CPU usage on {{ $labels.instance }}',
-          description: 'CPU usage is above 85% for more than 5 minutes on {{ $labels.instance }}. Current value: {{ $value }}%',
+          description:
+            'CPU usage is above 85% for more than 5 minutes on {{ $labels.instance }}. Current value: {{ $value }}%',
           runbook_url: 'https://runbooks.example.com/host/high-cpu',
         },
         requiredMetrics: ['node_cpu_seconds_total'],
@@ -114,7 +116,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'high', category: 'infrastructure', otel_signal: 'metrics' },
         annotations: {
           summary: 'High memory usage on {{ $labels.instance }}',
-          description: 'Memory usage is above 85% on {{ $labels.instance }}. Available: {{ $value }}%',
+          description:
+            'Memory usage is above 85% on {{ $labels.instance }}. Available: {{ $value }}%',
           runbook_url: 'https://runbooks.example.com/host/high-memory',
         },
         requiredMetrics: ['node_memory_MemAvailable_bytes', 'node_memory_MemTotal_bytes'],
@@ -132,7 +135,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'critical', category: 'infrastructure', otel_signal: 'metrics' },
         annotations: {
           summary: 'Disk space low on {{ $labels.instance }}:{{ $labels.mountpoint }}',
-          description: 'Filesystem {{ $labels.mountpoint }} is {{ $value }}% full on {{ $labels.instance }}',
+          description:
+            'Filesystem {{ $labels.mountpoint }} is {{ $value }}% full on {{ $labels.instance }}',
           runbook_url: 'https://runbooks.example.com/host/disk-space',
         },
         requiredMetrics: ['node_filesystem_avail_bytes', 'node_filesystem_size_bytes'],
@@ -167,7 +171,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'warning', category: 'network', otel_signal: 'metrics' },
         annotations: {
           summary: 'Network drops on {{ $labels.instance }}:{{ $labels.device }}',
-          description: 'Interface {{ $labels.device }} is dropping {{ $value }} packets/sec on {{ $labels.instance }}',
+          description:
+            'Interface {{ $labels.device }} is dropping {{ $value }} packets/sec on {{ $labels.instance }}',
         },
         requiredMetrics: ['node_network_receive_drop_total'],
         otelSignal: 'metrics',
@@ -187,7 +192,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         id: 'http-error-rate',
         name: 'High Error Rate (5xx)',
         description: 'Server error rate exceeds 5% of total requests',
-        query: 'sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100',
+        query:
+          'sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100',
         condition: '> 5',
         severity: 'critical',
         forDuration: '2m',
@@ -205,7 +211,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         id: 'http-latency-p99',
         name: 'High P99 Latency',
         description: '99th percentile request latency exceeds 2 seconds',
-        query: 'histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))',
+        query:
+          'histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))',
         condition: '> 2',
         severity: 'high',
         forDuration: '5m',
@@ -242,7 +249,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
     id: 'kubernetes',
     name: 'Kubernetes',
     icon: 'logoKubernetes',
-    description: 'Kubernetes cluster metrics from kube-state-metrics following OTEL k8s.* conventions',
+    description:
+      'Kubernetes cluster metrics from kube-state-metrics following OTEL k8s.* conventions',
     otelNamespace: 'k8s',
     metricPrefixes: ['kube_'],
     color: '#326CE5',
@@ -259,7 +267,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'critical', category: 'kubernetes', otel_signal: 'metrics' },
         annotations: {
           summary: 'Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping',
-          description: 'Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour',
+          description:
+            'Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour',
           runbook_url: 'https://runbooks.example.com/k8s/crashloop',
         },
         requiredMetrics: ['kube_pod_container_status_restarts_total'],
@@ -277,7 +286,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'high', category: 'kubernetes', otel_signal: 'metrics' },
         annotations: {
           summary: 'Deployment {{ $labels.deployment }} has no ready replicas',
-          description: 'Deployment {{ $labels.deployment }} in {{ $labels.namespace }} has {{ $value }} replicas',
+          description:
+            'Deployment {{ $labels.deployment }} in {{ $labels.namespace }} has {{ $value }} replicas',
         },
         requiredMetrics: ['kube_deployment_status_replicas'],
         otelSignal: 'metrics',
@@ -305,7 +315,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
         labels: { severity: 'high', category: 'container', otel_signal: 'metrics' },
         annotations: {
           summary: 'Container {{ $labels.container }} CPU high',
-          description: 'Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value }}% CPU',
+          description:
+            'Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value }}% CPU',
         },
         requiredMetrics: ['container_cpu_usage_seconds_total'],
         otelSignal: 'metrics',
@@ -424,7 +435,8 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
     id: 'probes',
     name: 'Synthetic / Probes',
     icon: 'heartbeatFill',
-    description: 'Blackbox exporter probes for endpoint availability and SSL certificate monitoring',
+    description:
+      'Blackbox exporter probes for endpoint availability and SSL certificate monitoring',
     otelNamespace: 'probe',
     metricPrefixes: ['probe_'],
     color: '#E74C3C',
@@ -501,21 +513,17 @@ const APPLICATION_CATALOG: Omit<ApplicationCategory, 'discoveredMetrics'>[] = [
 // ============================================================================
 
 function discoverApplications(metrics: string[]): ApplicationCategory[] {
-  return APPLICATION_CATALOG
-    .map(cat => {
-      const discovered = metrics.filter(m =>
-        cat.metricPrefixes.some(prefix =>
-          prefix === m ? true : m.startsWith(prefix)
-        )
-      );
-      return { ...cat, discoveredMetrics: discovered };
-    })
-    .filter(cat => cat.discoveredMetrics.length > 0);
+  return APPLICATION_CATALOG.map((cat) => {
+    const discovered = metrics.filter((m) =>
+      cat.metricPrefixes.some((prefix) => (prefix === m ? true : m.startsWith(prefix)))
+    );
+    return { ...cat, discoveredMetrics: discovered };
+  }).filter((cat) => cat.discoveredMetrics.length > 0);
 }
 
 function countAvailableTemplates(cat: ApplicationCategory): { available: number; total: number } {
-  const available = cat.templates.filter(t =>
-    t.requiredMetrics.every(rm => cat.discoveredMetrics.includes(rm))
+  const available = cat.templates.filter((t) =>
+    t.requiredMetrics.every((rm) => cat.discoveredMetrics.includes(rm))
   ).length;
   return { available, total: cat.templates.length };
 }
@@ -525,11 +533,19 @@ function countAvailableTemplates(cat: ApplicationCategory): { available: number;
 // ============================================================================
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger', high: 'warning', medium: 'primary', low: 'subdued', info: 'default',
+  critical: 'danger',
+  high: 'warning',
+  medium: 'primary',
+  low: 'subdued',
+  info: 'default',
 };
 
 const SEVERITY_ORDER: Record<string, number> = {
-  critical: 0, high: 1, medium: 2, low: 3, info: 4,
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
 };
 
 // ============================================================================
@@ -548,7 +564,9 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
   const [scanProgress, setScanProgress] = useState(0);
   const [applications, setApplications] = useState<ApplicationCategory[]>([]);
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
-  const [severityOverrides, setSeverityOverrides] = useState<Record<string, UnifiedAlertSeverity>>({});
+  const [severityOverrides, setSeverityOverrides] = useState<Record<string, UnifiedAlertSeverity>>(
+    {}
+  );
   const [labelPrefix, setLabelPrefix] = useState('');
 
   // Simulate scanning
@@ -564,9 +582,9 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
         setApplications(discovered);
         // Pre-select all available templates
         const allIds = new Set<string>();
-        discovered.forEach(cat => {
-          cat.templates.forEach(t => {
-            if (t.requiredMetrics.every(rm => cat.discoveredMetrics.includes(rm))) {
+        discovered.forEach((cat) => {
+          cat.templates.forEach((t) => {
+            if (t.requiredMetrics.every((rm) => cat.discoveredMetrics.includes(rm))) {
               allIds.add(t.id);
             }
           });
@@ -590,19 +608,21 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
   );
 
   const toggleTemplate = (id: string) => {
-    setSelectedTemplates(prev => {
+    setSelectedTemplates((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const toggleCategory = (cat: ApplicationCategory, selectAll: boolean) => {
-    setSelectedTemplates(prev => {
+    setSelectedTemplates((prev) => {
       const next = new Set(prev);
-      cat.templates.forEach(t => {
-        if (t.requiredMetrics.every(rm => cat.discoveredMetrics.includes(rm))) {
-          if (selectAll) next.add(t.id); else next.delete(t.id);
+      cat.templates.forEach((t) => {
+        if (t.requiredMetrics.every((rm) => cat.discoveredMetrics.includes(rm))) {
+          if (selectAll) next.add(t.id);
+          else next.delete(t.id);
         }
       });
       return next;
@@ -611,24 +631,32 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
 
   const isCategoryFullySelected = (cat: ApplicationCategory) =>
     cat.templates
-      .filter(t => t.requiredMetrics.every(rm => cat.discoveredMetrics.includes(rm)))
-      .every(t => selectedTemplates.has(t.id));
+      .filter((t) => t.requiredMetrics.every((rm) => cat.discoveredMetrics.includes(rm)))
+      .every((t) => selectedTemplates.has(t.id));
 
   const isCategoryPartiallySelected = (cat: ApplicationCategory) => {
-    const available = cat.templates.filter(t => t.requiredMetrics.every(rm => cat.discoveredMetrics.includes(rm)));
-    const selected = available.filter(t => selectedTemplates.has(t.id));
+    const available = cat.templates.filter((t) =>
+      t.requiredMetrics.every((rm) => cat.discoveredMetrics.includes(rm))
+    );
+    const selected = available.filter((t) => selectedTemplates.has(t.id));
     return selected.length > 0 && selected.length < available.length;
   };
 
   const handleCreate = () => {
     const monitors: AlertTemplate[] = [];
-    applications.forEach(cat => {
-      cat.templates.forEach(t => {
+    applications.forEach((cat) => {
+      cat.templates.forEach((t) => {
         if (selectedTemplates.has(t.id)) {
           const override = severityOverrides[t.id];
-          const finalTemplate = override ? { ...t, severity: override, labels: { ...t.labels, severity: override } } : t;
+          const finalTemplate = override
+            ? { ...t, severity: override, labels: { ...t.labels, severity: override } }
+            : t;
           if (labelPrefix) {
-            finalTemplate.labels = { ...finalTemplate.labels, monitor_source: 'ai-wizard', prefix: labelPrefix };
+            finalTemplate.labels = {
+              ...finalTemplate.labels,
+              monitor_source: 'ai-wizard',
+              prefix: labelPrefix,
+            };
           } else {
             finalTemplate.labels = { ...finalTemplate.labels, monitor_source: 'ai-wizard' };
           }
@@ -645,7 +673,9 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
     <div style={{ textAlign: 'center', padding: '40px 20px' }}>
       <EuiLoadingSpinner size="xl" />
       <EuiSpacer size="l" />
-      <EuiTitle size="s"><h3>Scanning Prometheus Metrics</h3></EuiTitle>
+      <EuiTitle size="s">
+        <h3>Scanning Prometheus Metrics</h3>
+      </EuiTitle>
       <EuiSpacer size="s" />
       <EuiText size="s" color="subdued">
         Discovering OTEL-compatible metrics and matching against known application patterns...
@@ -653,7 +683,9 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
       <EuiSpacer size="l" />
       <EuiProgress value={scanProgress} max={100} size="l" color="primary" />
       <EuiSpacer size="s" />
-      <EuiText size="xs" color="subdued">{Math.round(scanProgress)}% — Analyzing metric namespaces</EuiText>
+      <EuiText size="xs" color="subdued">
+        {Math.round(scanProgress)}% — Analyzing metric namespaces
+      </EuiText>
     </div>
   );
 
@@ -661,13 +693,15 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
     <div>
       <EuiCallOut title="Metrics Discovery Complete" color="success" iconType="check" size="s">
         <EuiText size="xs">
-          Found <strong>{totalDiscoveredMetrics} metrics</strong> across <strong>{applications.length} application categories</strong>.
-          {' '}<strong>{totalAvailableAlerts} preconfigured alerts</strong> are available based on your metrics.
+          Found <strong>{totalDiscoveredMetrics} metrics</strong> across{' '}
+          <strong>{applications.length} application categories</strong>.{' '}
+          <strong>{totalAvailableAlerts} preconfigured alerts</strong> are available based on your
+          metrics.
         </EuiText>
       </EuiCallOut>
       <EuiSpacer size="m" />
 
-      {applications.map(cat => {
+      {applications.map((cat) => {
         const { available, total } = countAvailableTemplates(cat);
         const fullySelected = isCategoryFullySelected(cat);
         const partiallySelected = isCategoryPartiallySelected(cat);
@@ -689,8 +723,12 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
                   <EuiIcon type={cat.icon} size="l" color={cat.color} />
                 </EuiFlexItem>
                 <EuiFlexItem>
-                  <EuiText size="s"><strong>{cat.name}</strong></EuiText>
-                  <EuiText size="xs" color="subdued">{cat.description}</EuiText>
+                  <EuiText size="s">
+                    <strong>{cat.name}</strong>
+                  </EuiText>
+                  <EuiText size="xs" color="subdued">
+                    {cat.description}
+                  </EuiText>
                 </EuiFlexItem>
                 <EuiFlexItem grow={false}>
                   <EuiFlexGroup gutterSize="xs" responsive={false}>
@@ -715,14 +753,18 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
 
               {/* Discovered metrics preview */}
               <EuiFlexGroup gutterSize="xs" wrap responsive={false} style={{ marginBottom: 8 }}>
-                {cat.discoveredMetrics.slice(0, 6).map(m => (
+                {cat.discoveredMetrics.slice(0, 6).map((m) => (
                   <EuiFlexItem grow={false} key={m}>
-                    <EuiBadge color="hollow" style={{ fontSize: 10 }}>{m}</EuiBadge>
+                    <EuiBadge color="hollow" style={{ fontSize: 10 }}>
+                      {m}
+                    </EuiBadge>
                   </EuiFlexItem>
                 ))}
                 {cat.discoveredMetrics.length > 6 && (
                   <EuiFlexItem grow={false}>
-                    <EuiText size="xs" color="subdued">+{cat.discoveredMetrics.length - 6} more</EuiText>
+                    <EuiText size="xs" color="subdued">
+                      +{cat.discoveredMetrics.length - 6} more
+                    </EuiText>
                   </EuiFlexItem>
                 )}
               </EuiFlexGroup>
@@ -730,13 +772,22 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
               <EuiHorizontalRule margin="xs" />
 
               {/* Alert templates */}
-              {cat.templates.map(t => {
-                const metricsAvailable = t.requiredMetrics.every(rm => cat.discoveredMetrics.includes(rm));
-                const missingMetrics = t.requiredMetrics.filter(rm => !cat.discoveredMetrics.includes(rm));
+              {cat.templates.map((t) => {
+                const metricsAvailable = t.requiredMetrics.every((rm) =>
+                  cat.discoveredMetrics.includes(rm)
+                );
+                const missingMetrics = t.requiredMetrics.filter(
+                  (rm) => !cat.discoveredMetrics.includes(rm)
+                );
 
                 return (
-                  <EuiFlexGroup key={t.id} alignItems="center" responsive={false} gutterSize="s"
-                    style={{ padding: '4px 0', opacity: metricsAvailable ? 1 : 0.5 }}>
+                  <EuiFlexGroup
+                    key={t.id}
+                    alignItems="center"
+                    responsive={false}
+                    gutterSize="s"
+                    style={{ padding: '4px 0', opacity: metricsAvailable ? 1 : 0.5 }}
+                  >
                     <EuiFlexItem grow={false}>
                       <EuiCheckbox
                         id={`tmpl-${t.id}`}
@@ -747,8 +798,12 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
                       />
                     </EuiFlexItem>
                     <EuiFlexItem>
-                      <EuiText size="xs"><strong>{t.name}</strong></EuiText>
-                      <EuiText size="xs" color="subdued">{t.description}</EuiText>
+                      <EuiText size="xs">
+                        <strong>{t.name}</strong>
+                      </EuiText>
+                      <EuiText size="xs" color="subdued">
+                        {t.description}
+                      </EuiText>
                     </EuiFlexItem>
                     <EuiFlexItem grow={false}>
                       <EuiBadge color={SEVERITY_COLORS[t.severity]}>{t.severity}</EuiBadge>
@@ -778,18 +833,33 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
   );
 
   const renderConfigure = () => {
-    const selectedList = applications.flatMap(cat =>
-      cat.templates.filter(t => selectedTemplates.has(t.id)).map(t => ({ ...t, category: cat.name }))
-    ).sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4));
+    const selectedList = applications
+      .flatMap((cat) =>
+        cat.templates
+          .filter((t) => selectedTemplates.has(t.id))
+          .map((t) => ({ ...t, category: cat.name }))
+      )
+      .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4));
 
     return (
       <div>
-        <EuiCallOut title={`${selectedList.length} monitors selected`} color="primary" iconType="check" size="s">
-          <EuiText size="xs">Review and customize severity levels before creating. You can also add a label prefix to group these monitors.</EuiText>
+        <EuiCallOut
+          title={`${selectedList.length} monitors selected`}
+          color="primary"
+          iconType="check"
+          size="s"
+        >
+          <EuiText size="xs">
+            Review and customize severity levels before creating. You can also add a label prefix to
+            group these monitors.
+          </EuiText>
         </EuiCallOut>
         <EuiSpacer size="m" />
 
-        <EuiFormRow label="Label Prefix (optional)" helpText="Added as a label to all generated monitors for easy filtering">
+        <EuiFormRow
+          label="Label Prefix (optional)"
+          helpText="Added as a label to all generated monitors for easy filtering"
+        >
           <EuiFieldText
             placeholder="e.g. my-team, production"
             value={labelPrefix}
@@ -803,12 +873,21 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
 
         <EuiPanel paddingSize="s" color="subdued">
           <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-            {selectedList.map(t => (
-              <EuiFlexGroup key={t.id} alignItems="center" responsive={false} gutterSize="s"
-                style={{ padding: '6px 4px', borderBottom: '1px solid #eee' }}>
+            {selectedList.map((t) => (
+              <EuiFlexGroup
+                key={t.id}
+                alignItems="center"
+                responsive={false}
+                gutterSize="s"
+                style={{ padding: '6px 4px', borderBottom: '1px solid #eee' }}
+              >
                 <EuiFlexItem>
-                  <EuiText size="xs"><strong>{t.name}</strong></EuiText>
-                  <EuiText size="xs" color="subdued">{t.category}</EuiText>
+                  <EuiText size="xs">
+                    <strong>{t.name}</strong>
+                  </EuiText>
+                  <EuiText size="xs" color="subdued">
+                    {t.category}
+                  </EuiText>
                 </EuiFlexItem>
                 <EuiFlexItem grow={false} style={{ width: 130 }}>
                   <EuiSelect
@@ -820,7 +899,12 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
                       { value: 'info', text: 'Info' },
                     ]}
                     value={severityOverrides[t.id] || t.severity}
-                    onChange={(e) => setSeverityOverrides(prev => ({ ...prev, [t.id]: e.target.value as UnifiedAlertSeverity }))}
+                    onChange={(e) =>
+                      setSeverityOverrides((prev) => ({
+                        ...prev,
+                        [t.id]: e.target.value as UnifiedAlertSeverity,
+                      }))
+                    }
                     compressed
                     aria-label={`Severity for ${t.name}`}
                   />
@@ -841,8 +925,8 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
   const renderSummary = () => {
     const count = selectedTemplates.size;
     const bySeverity: Record<string, number> = {};
-    applications.forEach(cat => {
-      cat.templates.forEach(t => {
+    applications.forEach((cat) => {
+      cat.templates.forEach((t) => {
         if (selectedTemplates.has(t.id)) {
           const sev = severityOverrides[t.id] || t.severity;
           bySeverity[sev] = (bySeverity[sev] || 0) + 1;
@@ -854,24 +938,32 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
       <div style={{ textAlign: 'center', padding: '20px' }}>
         <EuiIcon type="check" size="xxl" color="success" />
         <EuiSpacer size="m" />
-        <EuiTitle size="m"><h2>{count} Monitors Created</h2></EuiTitle>
+        <EuiTitle size="m">
+          <h2>{count} Monitors Created</h2>
+        </EuiTitle>
         <EuiSpacer size="s" />
         <EuiText size="s" color="subdued">
-          All monitors have been created and are now active. They will begin evaluating on their configured intervals.
+          All monitors have been created and are now active. They will begin evaluating on their
+          configured intervals.
         </EuiText>
         <EuiSpacer size="m" />
         <EuiFlexGroup justifyContent="center" gutterSize="s" wrap>
-          {Object.entries(bySeverity).sort((a, b) => (SEVERITY_ORDER[a[0]] ?? 4) - (SEVERITY_ORDER[b[0]] ?? 4)).map(([sev, n]) => (
-            <EuiFlexItem grow={false} key={sev}>
-              <EuiBadge color={SEVERITY_COLORS[sev]}>{n} {sev}</EuiBadge>
-            </EuiFlexItem>
-          ))}
+          {Object.entries(bySeverity)
+            .sort((a, b) => (SEVERITY_ORDER[a[0]] ?? 4) - (SEVERITY_ORDER[b[0]] ?? 4))
+            .map(([sev, n]) => (
+              <EuiFlexItem grow={false} key={sev}>
+                <EuiBadge color={SEVERITY_COLORS[sev]}>
+                  {n} {sev}
+                </EuiBadge>
+              </EuiFlexItem>
+            ))}
         </EuiFlexGroup>
         {labelPrefix && (
           <>
             <EuiSpacer size="s" />
             <EuiText size="xs" color="subdued">
-              All monitors labeled with <EuiBadge color="hollow">prefix:{labelPrefix}</EuiBadge> and <EuiBadge color="hollow">monitor_source:ai-wizard</EuiBadge>
+              All monitors labeled with <EuiBadge color="hollow">prefix:{labelPrefix}</EuiBadge> and{' '}
+              <EuiBadge color="hollow">monitor_source:ai-wizard</EuiBadge>
             </EuiText>
           </>
         )}
@@ -901,28 +993,40 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
 
   const stepContent = () => {
     switch (step) {
-      case 'scanning': return renderScanning();
-      case 'review': return renderReview();
-      case 'configure': return renderConfigure();
-      case 'summary': return renderSummary();
+      case 'scanning':
+        return renderScanning();
+      case 'review':
+        return renderReview();
+      case 'configure':
+        return renderConfigure();
+      case 'summary':
+        return renderSummary();
     }
   };
 
   const stepTitle = () => {
     switch (step) {
-      case 'scanning': return 'Scanning Metrics';
-      case 'review': return 'Select Monitors';
-      case 'configure': return 'Configure';
-      case 'summary': return 'Complete';
+      case 'scanning':
+        return 'Scanning Metrics';
+      case 'review':
+        return 'Select Monitors';
+      case 'configure':
+        return 'Configure';
+      case 'summary':
+        return 'Complete';
     }
   };
 
   const stepNumber = () => {
     switch (step) {
-      case 'scanning': return 1;
-      case 'review': return 2;
-      case 'configure': return 3;
-      case 'summary': return 4;
+      case 'scanning':
+        return 1;
+      case 'review':
+        return 2;
+      case 'configure':
+        return 3;
+      case 'summary':
+        return 4;
     }
   };
 
@@ -934,9 +1038,12 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
             <EuiIcon type="sparkles" size="l" color="primary" />
           </EuiFlexItem>
           <EuiFlexItem>
-            <EuiTitle size="m"><h2 id="aiMonitorWizardTitle">AI Monitor Setup</h2></EuiTitle>
+            <EuiTitle size="m">
+              <h2 id="aiMonitorWizardTitle">AI Monitor Setup</h2>
+            </EuiTitle>
             <EuiText size="xs" color="subdued">
-              Auto-generate monitors from discovered OTEL metrics — Step {stepNumber()} of 4: {stepTitle()}
+              Auto-generate monitors from discovered OTEL metrics — Step {stepNumber()} of 4:{' '}
+              {stepTitle()}
             </EuiText>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
@@ -947,9 +1054,7 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
         </EuiFlexGroup>
       </EuiFlyoutHeader>
 
-      <EuiFlyoutBody>
-        {stepContent()}
-      </EuiFlyoutBody>
+      <EuiFlyoutBody>{stepContent()}</EuiFlyoutBody>
 
       <EuiFlyoutFooter>
         <EuiFlexGroup justifyContent="spaceBetween" responsive={false}>
@@ -970,7 +1075,9 @@ export const AiMonitorWizard: React.FC<AiMonitorWizardProps> = ({ onClose, onCre
               {step !== 'scanning' && step !== 'summary' && (
                 <EuiFlexItem grow={false}>
                   <EuiButton fill onClick={handleNext} isDisabled={!canGoNext()}>
-                    {step === 'configure' ? `Create ${selectedTemplates.size} Monitors` : 'Next: Configure'}
+                    {step === 'configure'
+                      ? `Create ${selectedTemplates.size} Monitors`
+                      : 'Next: Configure'}
                   </EuiButton>
                 </EuiFlexItem>
               )}

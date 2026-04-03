@@ -40,14 +40,15 @@ export function serializeMonitor(rule: UnifiedRule): MonitorConfig {
     labels: { ...rule.labels },
     annotations: { ...rule.annotations },
     severity: rule.severity,
-    routing: rule.notificationRouting.length > 0
-      ? rule.notificationRouting.map(r => ({
-          channel: r.channel,
-          destination: r.destination,
-          severity: r.severity,
-          throttle: r.throttle,
-        }))
-      : undefined,
+    routing:
+      rule.notificationRouting.length > 0
+        ? rule.notificationRouting.map((r) => ({
+            channel: r.channel,
+            destination: r.destination,
+            severity: r.severity,
+            throttle: r.throttle,
+          }))
+        : undefined,
   };
 }
 
@@ -55,7 +56,10 @@ export function serializeMonitors(rules: UnifiedRule[]): MonitorConfig[] {
   return rules.map(serializeMonitor);
 }
 
-export function deserializeMonitor(json: unknown): { config: MonitorConfig | null; errors: string[] } {
+export function deserializeMonitor(json: unknown): {
+  config: MonitorConfig | null;
+  errors: string[];
+} {
   const errors: string[] = [];
   if (!json || typeof json !== 'object') {
     return { config: null, errors: ['Input must be a JSON object'] };
@@ -68,8 +72,10 @@ export function deserializeMonitor(json: unknown): { config: MonitorConfig | nul
   if (!obj.threshold || typeof obj.threshold !== 'object') {
     errors.push('threshold: required object with operator, value, forDuration');
   } else {
-    if (typeof obj.threshold.operator !== 'string') errors.push('threshold.operator: required string');
-    if (typeof obj.threshold.value !== 'number' || !isFinite(obj.threshold.value)) errors.push('threshold.value: required finite number');
+    if (typeof obj.threshold.operator !== 'string')
+      errors.push('threshold.operator: required string');
+    if (typeof obj.threshold.value !== 'number' || !isFinite(obj.threshold.value))
+      errors.push('threshold.value: required finite number');
     if (obj.threshold.forDuration) {
       const dur = parseDuration(obj.threshold.forDuration);
       if (!dur.valid) errors.push(`threshold.forDuration: ${dur.error}`);
@@ -113,7 +119,8 @@ export function deserializeMonitor(json: unknown): { config: MonitorConfig | nul
       firingPeriod: obj.evaluation.firingPeriod,
     },
     labels: obj.labels && typeof obj.labels === 'object' ? { ...obj.labels } : {},
-    annotations: obj.annotations && typeof obj.annotations === 'object' ? { ...obj.annotations } : {},
+    annotations:
+      obj.annotations && typeof obj.annotations === 'object' ? { ...obj.annotations } : {},
     severity: obj.severity || 'medium',
     routing: Array.isArray(obj.routing) ? obj.routing : undefined,
   };

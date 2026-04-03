@@ -56,16 +56,16 @@ export class SuppressionRuleService {
   }
 
   isAlertSuppressed(alert: { labels: Record<string, string> }): boolean {
-    return this.getActiveRules().some(rule => this.matchesLabels(rule, alert.labels));
+    return this.getActiveRules().some((rule) => this.matchesLabels(rule, alert.labels));
   }
 
   getActiveRules(): SuppressionRuleConfig[] {
     const now = new Date();
-    return this.list().filter(rule => this.isRuleActive(rule, now));
+    return this.list().filter((rule) => this.isRuleActive(rule, now));
   }
 
   detectConflicts(rule: SuppressionRuleConfig): SuppressionRuleConfig[] {
-    return this.list().filter(existing => {
+    return this.list().filter((existing) => {
       if (existing.id === rule.id) return false;
       if (!this.matchersOverlap(rule.matchers, existing.matchers)) return false;
       if (!this.schedulesOverlap(rule, existing)) return false;
@@ -103,8 +103,8 @@ export class SuppressionRuleService {
     // Overlap if one is a subset of the other
     const aKeys = Object.keys(a);
     const bKeys = Object.keys(b);
-    const aSubsetB = aKeys.every(k => b[k] === a[k]);
-    const bSubsetA = bKeys.every(k => a[k] === b[k]);
+    const aSubsetB = aKeys.every((k) => b[k] === a[k]);
+    const bSubsetA = bKeys.every((k) => a[k] === b[k]);
     return aSubsetB || bSubsetA;
   }
 

@@ -19,81 +19,297 @@ import {
   EuiBadge,
   EuiPanel,
 } from '@opensearch-project/oui';
-import { validatePromQL as coreValidatePromQL, prettifyPromQL as corePrettifyPromQL } from '../../core/promql_validator';
+import {
+  validatePromQL as coreValidatePromQL,
+  prettifyPromQL as corePrettifyPromQL,
+} from '../../core/promql_validator';
 
 // ============================================================================
 // PromQL Language Data
 // ============================================================================
 
 export const PROMQL_FUNCTIONS: Record<string, { sig: string; desc: string; params: string[] }> = {
-  rate: { sig: 'rate(v range-vector)', desc: 'Per-second average rate of increase over time range', params: ['range-vector'] },
-  irate: { sig: 'irate(v range-vector)', desc: 'Per-second instant rate of increase', params: ['range-vector'] },
-  increase: { sig: 'increase(v range-vector)', desc: 'Total increase over time range', params: ['range-vector'] },
-  sum: { sig: 'sum(v instant-vector) by (label...)', desc: 'Sum of all values', params: ['instant-vector'] },
-  avg: { sig: 'avg(v instant-vector) by (label...)', desc: 'Average of all values', params: ['instant-vector'] },
+  rate: {
+    sig: 'rate(v range-vector)',
+    desc: 'Per-second average rate of increase over time range',
+    params: ['range-vector'],
+  },
+  irate: {
+    sig: 'irate(v range-vector)',
+    desc: 'Per-second instant rate of increase',
+    params: ['range-vector'],
+  },
+  increase: {
+    sig: 'increase(v range-vector)',
+    desc: 'Total increase over time range',
+    params: ['range-vector'],
+  },
+  sum: {
+    sig: 'sum(v instant-vector) by (label...)',
+    desc: 'Sum of all values',
+    params: ['instant-vector'],
+  },
+  avg: {
+    sig: 'avg(v instant-vector) by (label...)',
+    desc: 'Average of all values',
+    params: ['instant-vector'],
+  },
   min: { sig: 'min(v instant-vector)', desc: 'Minimum value', params: ['instant-vector'] },
   max: { sig: 'max(v instant-vector)', desc: 'Maximum value', params: ['instant-vector'] },
   count: { sig: 'count(v instant-vector)', desc: 'Count of elements', params: ['instant-vector'] },
-  stddev: { sig: 'stddev(v instant-vector)', desc: 'Standard deviation', params: ['instant-vector'] },
-  topk: { sig: 'topk(k scalar, v instant-vector)', desc: 'Top k elements by value', params: ['scalar', 'instant-vector'] },
-  bottomk: { sig: 'bottomk(k scalar, v instant-vector)', desc: 'Bottom k elements by value', params: ['scalar', 'instant-vector'] },
-  histogram_quantile: { sig: 'histogram_quantile(φ float, b instant-vector)', desc: 'Quantile from histogram buckets', params: ['float (0-1)', 'instant-vector'] },
-  label_replace: { sig: 'label_replace(v, dst, replacement, src, regex)', desc: 'Replace label values using regex', params: ['instant-vector', 'dst_label', 'replacement', 'src_label', 'regex'] },
-  label_join: { sig: 'label_join(v, dst, sep, src...)', desc: 'Join label values', params: ['instant-vector', 'dst_label', 'separator', 'src_labels...'] },
+  stddev: {
+    sig: 'stddev(v instant-vector)',
+    desc: 'Standard deviation',
+    params: ['instant-vector'],
+  },
+  topk: {
+    sig: 'topk(k scalar, v instant-vector)',
+    desc: 'Top k elements by value',
+    params: ['scalar', 'instant-vector'],
+  },
+  bottomk: {
+    sig: 'bottomk(k scalar, v instant-vector)',
+    desc: 'Bottom k elements by value',
+    params: ['scalar', 'instant-vector'],
+  },
+  histogram_quantile: {
+    sig: 'histogram_quantile(φ float, b instant-vector)',
+    desc: 'Quantile from histogram buckets',
+    params: ['float (0-1)', 'instant-vector'],
+  },
+  label_replace: {
+    sig: 'label_replace(v, dst, replacement, src, regex)',
+    desc: 'Replace label values using regex',
+    params: ['instant-vector', 'dst_label', 'replacement', 'src_label', 'regex'],
+  },
+  label_join: {
+    sig: 'label_join(v, dst, sep, src...)',
+    desc: 'Join label values',
+    params: ['instant-vector', 'dst_label', 'separator', 'src_labels...'],
+  },
   abs: { sig: 'abs(v instant-vector)', desc: 'Absolute value', params: ['instant-vector'] },
-  ceil: { sig: 'ceil(v instant-vector)', desc: 'Round up to nearest integer', params: ['instant-vector'] },
-  floor: { sig: 'floor(v instant-vector)', desc: 'Round down to nearest integer', params: ['instant-vector'] },
-  round: { sig: 'round(v instant-vector, to_nearest scalar)', desc: 'Round to nearest multiple', params: ['instant-vector', 'to_nearest'] },
-  clamp: { sig: 'clamp(v instant-vector, min scalar, max scalar)', desc: 'Clamp values between min and max', params: ['instant-vector', 'min', 'max'] },
-  clamp_min: { sig: 'clamp_min(v instant-vector, min scalar)', desc: 'Clamp to minimum value', params: ['instant-vector', 'min'] },
-  clamp_max: { sig: 'clamp_max(v instant-vector, max scalar)', desc: 'Clamp to maximum value', params: ['instant-vector', 'max'] },
-  delta: { sig: 'delta(v range-vector)', desc: 'Difference between first and last value', params: ['range-vector'] },
-  deriv: { sig: 'deriv(v range-vector)', desc: 'Per-second derivative using linear regression', params: ['range-vector'] },
-  predict_linear: { sig: 'predict_linear(v range-vector, t scalar)', desc: 'Predict value t seconds from now', params: ['range-vector', 'seconds'] },
-  changes: { sig: 'changes(v range-vector)', desc: 'Number of times value changed', params: ['range-vector'] },
-  resets: { sig: 'resets(v range-vector)', desc: 'Number of counter resets', params: ['range-vector'] },
-  absent: { sig: 'absent(v instant-vector)', desc: 'Returns 1 if vector is empty', params: ['instant-vector'] },
-  absent_over_time: { sig: 'absent_over_time(v range-vector)', desc: 'Returns 1 if range vector is empty', params: ['range-vector'] },
-  sort: { sig: 'sort(v instant-vector)', desc: 'Sort by value ascending', params: ['instant-vector'] },
-  sort_desc: { sig: 'sort_desc(v instant-vector)', desc: 'Sort by value descending', params: ['instant-vector'] },
+  ceil: {
+    sig: 'ceil(v instant-vector)',
+    desc: 'Round up to nearest integer',
+    params: ['instant-vector'],
+  },
+  floor: {
+    sig: 'floor(v instant-vector)',
+    desc: 'Round down to nearest integer',
+    params: ['instant-vector'],
+  },
+  round: {
+    sig: 'round(v instant-vector, to_nearest scalar)',
+    desc: 'Round to nearest multiple',
+    params: ['instant-vector', 'to_nearest'],
+  },
+  clamp: {
+    sig: 'clamp(v instant-vector, min scalar, max scalar)',
+    desc: 'Clamp values between min and max',
+    params: ['instant-vector', 'min', 'max'],
+  },
+  clamp_min: {
+    sig: 'clamp_min(v instant-vector, min scalar)',
+    desc: 'Clamp to minimum value',
+    params: ['instant-vector', 'min'],
+  },
+  clamp_max: {
+    sig: 'clamp_max(v instant-vector, max scalar)',
+    desc: 'Clamp to maximum value',
+    params: ['instant-vector', 'max'],
+  },
+  delta: {
+    sig: 'delta(v range-vector)',
+    desc: 'Difference between first and last value',
+    params: ['range-vector'],
+  },
+  deriv: {
+    sig: 'deriv(v range-vector)',
+    desc: 'Per-second derivative using linear regression',
+    params: ['range-vector'],
+  },
+  predict_linear: {
+    sig: 'predict_linear(v range-vector, t scalar)',
+    desc: 'Predict value t seconds from now',
+    params: ['range-vector', 'seconds'],
+  },
+  changes: {
+    sig: 'changes(v range-vector)',
+    desc: 'Number of times value changed',
+    params: ['range-vector'],
+  },
+  resets: {
+    sig: 'resets(v range-vector)',
+    desc: 'Number of counter resets',
+    params: ['range-vector'],
+  },
+  absent: {
+    sig: 'absent(v instant-vector)',
+    desc: 'Returns 1 if vector is empty',
+    params: ['instant-vector'],
+  },
+  absent_over_time: {
+    sig: 'absent_over_time(v range-vector)',
+    desc: 'Returns 1 if range vector is empty',
+    params: ['range-vector'],
+  },
+  sort: {
+    sig: 'sort(v instant-vector)',
+    desc: 'Sort by value ascending',
+    params: ['instant-vector'],
+  },
+  sort_desc: {
+    sig: 'sort_desc(v instant-vector)',
+    desc: 'Sort by value descending',
+    params: ['instant-vector'],
+  },
   time: { sig: 'time()', desc: 'Current Unix timestamp', params: [] },
   vector: { sig: 'vector(s scalar)', desc: 'Convert scalar to vector', params: ['scalar'] },
-  scalar: { sig: 'scalar(v instant-vector)', desc: 'Convert single-element vector to scalar', params: ['instant-vector'] },
-  avg_over_time: { sig: 'avg_over_time(v range-vector)', desc: 'Average over time', params: ['range-vector'] },
-  min_over_time: { sig: 'min_over_time(v range-vector)', desc: 'Minimum over time', params: ['range-vector'] },
-  max_over_time: { sig: 'max_over_time(v range-vector)', desc: 'Maximum over time', params: ['range-vector'] },
-  sum_over_time: { sig: 'sum_over_time(v range-vector)', desc: 'Sum over time', params: ['range-vector'] },
-  count_over_time: { sig: 'count_over_time(v range-vector)', desc: 'Count over time', params: ['range-vector'] },
-  quantile_over_time: { sig: 'quantile_over_time(φ, v range-vector)', desc: 'Quantile over time', params: ['float (0-1)', 'range-vector'] },
-  last_over_time: { sig: 'last_over_time(v range-vector)', desc: 'Last value over time', params: ['range-vector'] },
+  scalar: {
+    sig: 'scalar(v instant-vector)',
+    desc: 'Convert single-element vector to scalar',
+    params: ['instant-vector'],
+  },
+  avg_over_time: {
+    sig: 'avg_over_time(v range-vector)',
+    desc: 'Average over time',
+    params: ['range-vector'],
+  },
+  min_over_time: {
+    sig: 'min_over_time(v range-vector)',
+    desc: 'Minimum over time',
+    params: ['range-vector'],
+  },
+  max_over_time: {
+    sig: 'max_over_time(v range-vector)',
+    desc: 'Maximum over time',
+    params: ['range-vector'],
+  },
+  sum_over_time: {
+    sig: 'sum_over_time(v range-vector)',
+    desc: 'Sum over time',
+    params: ['range-vector'],
+  },
+  count_over_time: {
+    sig: 'count_over_time(v range-vector)',
+    desc: 'Count over time',
+    params: ['range-vector'],
+  },
+  quantile_over_time: {
+    sig: 'quantile_over_time(φ, v range-vector)',
+    desc: 'Quantile over time',
+    params: ['float (0-1)', 'range-vector'],
+  },
+  last_over_time: {
+    sig: 'last_over_time(v range-vector)',
+    desc: 'Last value over time',
+    params: ['range-vector'],
+  },
 };
 
-const PROMQL_KEYWORDS = ['by', 'without', 'on', 'ignoring', 'group_left', 'group_right', 'bool', 'offset', 'and', 'or', 'unless'];
-const PROMQL_OPERATORS = ['==', '!=', '>', '<', '>=', '<=', '=~', '!~', '+', '-', '*', '/', '%', '^'];
+const PROMQL_KEYWORDS = [
+  'by',
+  'without',
+  'on',
+  'ignoring',
+  'group_left',
+  'group_right',
+  'bool',
+  'offset',
+  'and',
+  'or',
+  'unless',
+];
+const PROMQL_OPERATORS = [
+  '==',
+  '!=',
+  '>',
+  '<',
+  '>=',
+  '<=',
+  '=~',
+  '!~',
+  '+',
+  '-',
+  '*',
+  '/',
+  '%',
+  '^',
+];
 
 // Mock metric names (simulating what a real Prometheus metadata API would return)
 export const MOCK_METRICS = [
-  'node_cpu_seconds_total', 'node_memory_MemTotal_bytes', 'node_memory_MemAvailable_bytes',
-  'node_memory_MemFree_bytes', 'node_filesystem_avail_bytes', 'node_filesystem_size_bytes',
-  'node_disk_read_bytes_total', 'node_disk_written_bytes_total', 'node_network_receive_bytes_total',
-  'node_network_transmit_bytes_total', 'node_network_receive_drop_total', 'node_load1', 'node_load5', 'node_load15',
-  'http_requests_total', 'http_request_duration_seconds_bucket', 'http_request_duration_seconds_sum',
-  'http_request_duration_seconds_count', 'http_request_size_bytes', 'http_response_size_bytes',
-  'up', 'scrape_duration_seconds', 'scrape_samples_scraped',
-  'process_cpu_seconds_total', 'process_resident_memory_bytes', 'process_open_fds',
-  'go_goroutines', 'go_gc_duration_seconds', 'go_memstats_alloc_bytes',
-  'kube_pod_container_status_restarts_total', 'kube_pod_status_phase', 'kube_deployment_status_replicas',
-  'kube_node_status_condition', 'kube_pod_container_resource_limits', 'kube_pod_container_resource_requests',
-  'db_connection_pool_available', 'db_connection_pool_total', 'db_query_duration_seconds',
-  'probe_ssl_earliest_cert_expiry', 'probe_http_duration_seconds', 'probe_success',
-  'container_cpu_usage_seconds_total', 'container_memory_usage_bytes', 'container_network_receive_bytes_total',
+  'node_cpu_seconds_total',
+  'node_memory_MemTotal_bytes',
+  'node_memory_MemAvailable_bytes',
+  'node_memory_MemFree_bytes',
+  'node_filesystem_avail_bytes',
+  'node_filesystem_size_bytes',
+  'node_disk_read_bytes_total',
+  'node_disk_written_bytes_total',
+  'node_network_receive_bytes_total',
+  'node_network_transmit_bytes_total',
+  'node_network_receive_drop_total',
+  'node_load1',
+  'node_load5',
+  'node_load15',
+  'http_requests_total',
+  'http_request_duration_seconds_bucket',
+  'http_request_duration_seconds_sum',
+  'http_request_duration_seconds_count',
+  'http_request_size_bytes',
+  'http_response_size_bytes',
+  'up',
+  'scrape_duration_seconds',
+  'scrape_samples_scraped',
+  'process_cpu_seconds_total',
+  'process_resident_memory_bytes',
+  'process_open_fds',
+  'go_goroutines',
+  'go_gc_duration_seconds',
+  'go_memstats_alloc_bytes',
+  'kube_pod_container_status_restarts_total',
+  'kube_pod_status_phase',
+  'kube_deployment_status_replicas',
+  'kube_node_status_condition',
+  'kube_pod_container_resource_limits',
+  'kube_pod_container_resource_requests',
+  'db_connection_pool_available',
+  'db_connection_pool_total',
+  'db_query_duration_seconds',
+  'probe_ssl_earliest_cert_expiry',
+  'probe_http_duration_seconds',
+  'probe_success',
+  'container_cpu_usage_seconds_total',
+  'container_memory_usage_bytes',
+  'container_network_receive_bytes_total',
 ];
 
 export const MOCK_LABEL_NAMES = [
-  'instance', 'job', 'mode', 'cpu', 'device', 'mountpoint', 'fstype',
-  'severity', 'alertname', 'team', 'service', 'environment', 'region',
-  'namespace', 'pod', 'container', 'node', 'le', 'quantile',
-  'method', 'status', 'handler', 'code', 'application',
+  'instance',
+  'job',
+  'mode',
+  'cpu',
+  'device',
+  'mountpoint',
+  'fstype',
+  'severity',
+  'alertname',
+  'team',
+  'service',
+  'environment',
+  'region',
+  'namespace',
+  'pod',
+  'container',
+  'node',
+  'le',
+  'quantile',
+  'method',
+  'status',
+  'handler',
+  'code',
+  'application',
 ];
 
 export const MOCK_LABEL_VALUES: Record<string, string[]> = {
@@ -115,7 +331,21 @@ export const MOCK_LABEL_VALUES: Record<string, string[]> = {
 // Syntax Highlighting
 // ============================================================================
 
-interface Token { text: string; type: 'function' | 'metric' | 'label' | 'string' | 'number' | 'operator' | 'keyword' | 'bracket' | 'duration' | 'error' | 'plain' }
+interface Token {
+  text: string;
+  type:
+    | 'function'
+    | 'metric'
+    | 'label'
+    | 'string'
+    | 'number'
+    | 'operator'
+    | 'keyword'
+    | 'bracket'
+    | 'duration'
+    | 'error'
+    | 'plain';
+}
 
 function tokenize(query: string): Token[] {
   const tokens: Token[] = [];
@@ -131,8 +361,12 @@ function tokenize(query: string): Token[] {
     // Strings
     if (query[i] === '"' || query[i] === "'") {
       const quote = query[i];
-      let start = i; i++;
-      while (i < query.length && query[i] !== quote) { if (query[i] === '\\') i++; i++; }
+      let start = i;
+      i++;
+      while (i < query.length && query[i] !== quote) {
+        if (query[i] === '\\') i++;
+        i++;
+      }
       if (i < query.length) i++;
       tokens.push({ text: query.slice(start, i), type: 'string' });
       continue;
@@ -150,18 +384,21 @@ function tokenize(query: string): Token[] {
       continue;
     }
     // Brackets
-    if ('()[]{}' .includes(query[i])) {
+    if ('()[]{}'.includes(query[i])) {
       tokens.push({ text: query[i], type: 'bracket' });
-      i++; continue;
+      i++;
+      continue;
     }
     // Operators
-    if ('+-*/%^' .includes(query[i])) {
+    if ('+-*/%^'.includes(query[i])) {
       tokens.push({ text: query[i], type: 'operator' });
-      i++; continue;
+      i++;
+      continue;
     }
     // Comparison operators
     if ('=!><'.includes(query[i])) {
-      let start = i; i++;
+      let start = i;
+      i++;
       if (i < query.length && '=~'.includes(query[i])) i++;
       tokens.push({ text: query.slice(start, i), type: 'operator' });
       continue;
@@ -169,7 +406,8 @@ function tokenize(query: string): Token[] {
     // Comma
     if (query[i] === ',') {
       tokens.push({ text: ',', type: 'plain' });
-      i++; continue;
+      i++;
+      continue;
     }
     // Identifiers (functions, metrics, keywords, labels)
     if (/[a-zA-Z_:]/.test(query[i])) {
@@ -207,7 +445,9 @@ const TOKEN_COLORS: Record<string, string> = {
 function renderHighlighted(query: string): React.ReactNode {
   const tokens = tokenize(query);
   return tokens.map((t, i) => (
-    <span key={i} style={{ color: TOKEN_COLORS[t.type] || '#343741' }}>{t.text}</span>
+    <span key={i} style={{ color: TOKEN_COLORS[t.type] || '#343741' }}>
+      {t.text}
+    </span>
   ));
 }
 
@@ -252,7 +492,14 @@ interface Suggestion {
   insertText?: string;
 }
 
-function getContext(query: string, cursorPos: number): { type: 'metric' | 'function' | 'label' | 'labelValue' | 'keyword' | 'general'; prefix: string; labelName?: string } {
+function getContext(
+  query: string,
+  cursorPos: number
+): {
+  type: 'metric' | 'function' | 'label' | 'labelValue' | 'keyword' | 'general';
+  prefix: string;
+  labelName?: string;
+} {
   const before = query.slice(0, cursorPos);
   // Inside label value: {label="...
   const labelValueMatch = before.match(/\{[^}]*?(\w+)\s*=~?\s*"([^"]*)$/);
@@ -326,7 +573,14 @@ function getSuggestions(query: string, cursorPos: number): Suggestion[] {
   }
 
   // Sort: exact prefix match first, then by type priority
-  const typePriority: Record<string, number> = { function: 0, metric: 1, keyword: 2, label: 3, labelValue: 4, snippet: 5 };
+  const typePriority: Record<string, number> = {
+    function: 0,
+    metric: 1,
+    keyword: 2,
+    label: 3,
+    labelValue: 4,
+    snippet: 5,
+  };
   results.sort((a, b) => {
     const aExact = a.text.toLowerCase().startsWith(prefix) ? 0 : 1;
     const bExact = b.text.toLowerCase().startsWith(prefix) ? 0 : 1;
@@ -341,7 +595,10 @@ function getSuggestions(query: string, cursorPos: number): Suggestion[] {
 // Function Parameter Hints
 // ============================================================================
 
-function getFunctionHint(query: string, cursorPos: number): { funcName: string; paramIndex: number; info: typeof PROMQL_FUNCTIONS[string] } | null {
+function getFunctionHint(
+  query: string,
+  cursorPos: number
+): { funcName: string; paramIndex: number; info: (typeof PROMQL_FUNCTIONS)[string] } | null {
   const before = query.slice(0, cursorPos);
   // Walk backwards to find the enclosing function call
   let depth = 0;
@@ -349,15 +606,21 @@ function getFunctionHint(query: string, cursorPos: number): { funcName: string; 
   for (let i = before.length - 1; i >= 0; i--) {
     if (before[i] === ')') depth++;
     else if (before[i] === '(') {
-      if (depth > 0) { depth--; continue; }
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
       // Found the opening paren — get function name
       const nameMatch = before.slice(0, i).match(/(\w+)\s*$/);
       if (nameMatch && PROMQL_FUNCTIONS[nameMatch[1]]) {
-        return { funcName: nameMatch[1], paramIndex: commaCount, info: PROMQL_FUNCTIONS[nameMatch[1]] };
+        return {
+          funcName: nameMatch[1],
+          paramIndex: commaCount,
+          info: PROMQL_FUNCTIONS[nameMatch[1]],
+        };
       }
       return null;
-    }
-    else if (before[i] === ',' && depth === 0) commaCount++;
+    } else if (before[i] === ',' && depth === 0) commaCount++;
   }
   return null;
 }
@@ -387,7 +650,10 @@ export interface PromQLEditorProps {
 }
 
 export const PromQLEditor: React.FC<PromQLEditorProps> = ({
-  value, onChange, placeholder = 'Enter PromQL query...', height = 120,
+  value,
+  onChange,
+  placeholder = 'Enter PromQL query...',
+  height = 120,
 }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -446,10 +712,10 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
     if (showSuggestions && suggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveSuggestion(prev => Math.min(prev + 1, suggestions.length - 1));
+        setActiveSuggestion((prev) => Math.min(prev + 1, suggestions.length - 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActiveSuggestion(prev => Math.max(prev - 1, 0));
+        setActiveSuggestion((prev) => Math.max(prev - 1, 0));
       } else if (e.key === 'Enter' || e.key === 'Tab') {
         if (activeSuggestion >= 0 && suggestions[activeSuggestion]) {
           e.preventDefault();
@@ -474,24 +740,45 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
     onChange(prettifyPromQL(value));
   };
 
-  const errorCount = errors.filter(e => e.severity === 'error').length;
-  const warnCount = errors.filter(e => e.severity === 'warning').length;
+  const errorCount = errors.filter((e) => e.severity === 'error').length;
+  const warnCount = errors.filter((e) => e.severity === 'warning').length;
 
   return (
     <div style={{ position: 'relative' }}>
       {/* Editor container */}
-      <div style={{ position: 'relative', border: `1px solid ${errorCount > 0 ? '#BD271E' : '#D3DAE6'}`, borderRadius: 4, overflow: 'hidden' }}>
+      <div
+        style={{
+          position: 'relative',
+          border: `1px solid ${errorCount > 0 ? '#BD271E' : '#D3DAE6'}`,
+          borderRadius: 4,
+          overflow: 'hidden',
+        }}
+      >
         {/* Syntax highlight overlay */}
         <div
           aria-hidden="true"
           style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            padding: '8px 12px', fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
-            fontSize: 13, lineHeight: '20px', whiteSpace: 'pre-wrap', wordWrap: 'break-word',
-            pointerEvents: 'none', overflow: 'auto', color: 'transparent',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: '8px 12px',
+            fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
+            fontSize: 13,
+            lineHeight: '20px',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            pointerEvents: 'none',
+            overflow: 'auto',
+            color: 'transparent',
           }}
         >
-          {value ? renderHighlighted(value) : <span style={{ color: '#98A2B3' }}>{placeholder}</span>}
+          {value ? (
+            renderHighlighted(value)
+          ) : (
+            <span style={{ color: '#98A2B3' }}>{placeholder}</span>
+          )}
         </div>
         {/* Actual textarea */}
         <textarea
@@ -511,10 +798,20 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
           spellCheck={false}
           aria-label="PromQL query editor"
           style={{
-            width: '100%', height, resize: 'vertical', border: 'none', outline: 'none',
-            padding: '8px 12px', fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
-            fontSize: 13, lineHeight: '20px', background: 'transparent', color: 'transparent',
-            caretColor: '#343741', position: 'relative', zIndex: 1,
+            width: '100%',
+            height,
+            resize: 'vertical',
+            border: 'none',
+            outline: 'none',
+            padding: '8px 12px',
+            fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
+            fontSize: 13,
+            lineHeight: '20px',
+            background: 'transparent',
+            color: 'transparent',
+            caretColor: '#343741',
+            position: 'relative',
+            zIndex: 1,
           }}
         />
       </div>
@@ -523,23 +820,34 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} style={{ marginTop: 4 }}>
         <EuiFlexItem grow={false}>
           <EuiToolTip content="Format query">
-            <EuiButtonEmpty size="xs" iconType="editorCodeBlock" onClick={handlePrettify} isDisabled={!value}>
+            <EuiButtonEmpty
+              size="xs"
+              iconType="editorCodeBlock"
+              onClick={handlePrettify}
+              isDisabled={!value}
+            >
               Prettify
             </EuiButtonEmpty>
           </EuiToolTip>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EuiText size="xs" color="subdued">Ctrl+Space for suggestions</EuiText>
+          <EuiText size="xs" color="subdued">
+            Ctrl+Space for suggestions
+          </EuiText>
         </EuiFlexItem>
         <EuiFlexItem />
         {errorCount > 0 && (
           <EuiFlexItem grow={false}>
-            <EuiBadge color="danger">{errorCount} error{errorCount > 1 ? 's' : ''}</EuiBadge>
+            <EuiBadge color="danger">
+              {errorCount} error{errorCount > 1 ? 's' : ''}
+            </EuiBadge>
           </EuiFlexItem>
         )}
         {warnCount > 0 && (
           <EuiFlexItem grow={false}>
-            <EuiBadge color="warning">{warnCount} warning{warnCount > 1 ? 's' : ''}</EuiBadge>
+            <EuiBadge color="warning">
+              {warnCount} warning{warnCount > 1 ? 's' : ''}
+            </EuiBadge>
           </EuiFlexItem>
         )}
       </EuiFlexGroup>
@@ -548,10 +856,30 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
       {errors.length > 0 && (
         <div style={{ marginTop: 4 }}>
           {errors.map((err, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0' }}>
-              <EuiIcon type={err.severity === 'error' ? 'crossInACircleFilled' : err.severity === 'warning' ? 'alert' : 'iInCircle'}
-                color={err.severity === 'error' ? 'danger' : err.severity === 'warning' ? 'warning' : 'subdued'} size="s" />
-              <EuiText size="xs" color={err.severity === 'error' ? 'danger' : 'subdued'}>{err.message}</EuiText>
+            <div
+              key={i}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0' }}
+            >
+              <EuiIcon
+                type={
+                  err.severity === 'error'
+                    ? 'crossInACircleFilled'
+                    : err.severity === 'warning'
+                      ? 'alert'
+                      : 'iInCircle'
+                }
+                color={
+                  err.severity === 'error'
+                    ? 'danger'
+                    : err.severity === 'warning'
+                      ? 'warning'
+                      : 'subdued'
+                }
+                size="s"
+              />
+              <EuiText size="xs" color={err.severity === 'error' ? 'danger' : 'subdued'}>
+                {err.message}
+              </EuiText>
             </div>
           ))}
         </div>
@@ -559,16 +887,35 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
 
       {/* Function parameter hint */}
       {funcHint && (
-        <EuiPanel paddingSize="s" style={{ position: 'absolute', top: height + 2, left: 0, zIndex: 1001, maxWidth: 400, border: '1px solid #D3DAE6' }}>
+        <EuiPanel
+          paddingSize="s"
+          style={{
+            position: 'absolute',
+            top: height + 2,
+            left: 0,
+            zIndex: 1001,
+            maxWidth: 400,
+            border: '1px solid #D3DAE6',
+          }}
+        >
           <EuiText size="xs">
             <code style={{ color: '#006BB4' }}>{funcHint.info.sig}</code>
           </EuiText>
-          <EuiText size="xs" color="subdued">{funcHint.info.desc}</EuiText>
+          <EuiText size="xs" color="subdued">
+            {funcHint.info.desc}
+          </EuiText>
           {funcHint.info.params.length > 0 && (
             <EuiText size="xs" style={{ marginTop: 2 }}>
               {funcHint.info.params.map((p, i) => (
-                <span key={i} style={{ fontWeight: i === funcHint!.paramIndex ? 700 : 400, color: i === funcHint!.paramIndex ? '#006BB4' : '#69707D' }}>
-                  {i > 0 ? ', ' : ''}{p}
+                <span
+                  key={i}
+                  style={{
+                    fontWeight: i === funcHint!.paramIndex ? 700 : 400,
+                    color: i === funcHint!.paramIndex ? '#006BB4' : '#69707D',
+                  }}
+                >
+                  {i > 0 ? ', ' : ''}
+                  {p}
                 </span>
               ))}
             </EuiText>
@@ -578,30 +925,72 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
 
       {/* Autocomplete dropdown */}
       {showSuggestions && suggestions.length > 0 && (
-        <div ref={suggestionsRef} style={{
-          position: 'absolute', top: height + 2, left: 0, right: 0, zIndex: 1002,
-          maxHeight: 250, overflow: 'auto', background: 'white',
-          border: '1px solid #D3DAE6', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        }}>
+        <div
+          ref={suggestionsRef}
+          style={{
+            position: 'absolute',
+            top: height + 2,
+            left: 0,
+            right: 0,
+            zIndex: 1002,
+            maxHeight: 250,
+            overflow: 'auto',
+            background: 'white',
+            border: '1px solid #D3DAE6',
+            borderRadius: 4,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          }}
+        >
           {suggestions.map((s, i) => {
             const icon = SUGGESTION_ICONS[s.type] || { color: '#69707D', label: '?' };
             return (
               <div
                 key={`${s.type}-${s.text}`}
                 style={{
-                  padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                   background: i === activeSuggestion ? '#E6F0FF' : 'white',
                 }}
-                onMouseDown={(e) => { e.preventDefault(); applySuggestion(s); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  applySuggestion(s);
+                }}
                 onMouseEnter={() => setActiveSuggestion(i)}
               >
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 20, height: 20, borderRadius: 3, fontSize: 10, fontWeight: 700,
-                  background: icon.color + '20', color: icon.color,
-                }}>{icon.label}</span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 20,
+                    height: 20,
+                    borderRadius: 3,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    background: icon.color + '20',
+                    color: icon.color,
+                  }}
+                >
+                  {icon.label}
+                </span>
                 <span style={{ fontFamily: 'monospace', fontSize: 12, flex: 1 }}>{s.text}</span>
-                {s.detail && <span style={{ fontSize: 11, color: '#98A2B3', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.detail}</span>}
+                {s.detail && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: '#98A2B3',
+                      maxWidth: 200,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {s.detail}
+                  </span>
+                )}
               </div>
             );
           })}

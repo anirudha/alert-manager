@@ -42,7 +42,7 @@ export class InMemoryDatasourceService implements DatasourceService {
   async update(id: string, input: Partial<Datasource>): Promise<Datasource | null> {
     const datasource = this.datasources.get(id);
     if (!datasource) return null;
-    
+
     Object.assign(datasource, input);
     this.logger.info(`Updated datasource: ${id}`);
     return datasource;
@@ -93,7 +93,7 @@ export class InMemoryDatasourceService implements DatasourceService {
     if (!ds || ds.type !== 'prometheus' || !this.promBackend) return [];
 
     const workspaces = await this.promBackend.listWorkspaces(ds);
-    return workspaces.map(ws => ({
+    return workspaces.map((ws) => ({
       id: `${dsId}::${ws.id}`,
       name: `${ds.name} / ${ws.alias || ws.name}`,
       type: ds.type,

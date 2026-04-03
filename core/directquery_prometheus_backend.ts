@@ -51,14 +51,15 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   private readonly baseUrl: string;
   private readonly defaultAuth?: { username: string; password: string };
 
-  constructor(private readonly logger: Logger, private readonly config: DirectQueryConfig) {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: DirectQueryConfig
+  ) {
     this.http = new HttpClient(logger);
     this.baseUrl = config.opensearchUrl.replace(/\/+$/, '');
     this.defaultAuth = config.auth;
 
-    this.logger.info(
-      `DirectQuery Prometheus backend configured: OpenSearch=${this.baseUrl}`
-    );
+    this.logger.info(`DirectQuery Prometheus backend configured: OpenSearch=${this.baseUrl}`);
   }
 
   // =========================================================================
@@ -83,14 +84,12 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
       const all: any[] = Array.isArray(resp.body) ? resp.body : [];
       const promSources = all.filter(
-        (d) => d.connector?.toUpperCase() === 'PROMETHEUS' && d.status !== 'DISABLED',
+        (d) => d.connector?.toUpperCase() === 'PROMETHEUS' && d.status !== 'DISABLED'
       );
 
       this.logger.info(
         `Discovered ${promSources.length} Prometheus datasource(s) in OpenSearch SQL plugin` +
-        (promSources.length > 0
-          ? `: ${promSources.map((d: any) => d.name).join(', ')}`
-          : ''),
+          (promSources.length > 0 ? `: ${promSources.map((d: any) => d.name).join(', ')}` : '')
       );
 
       return promSources.map((d: any) => ({
@@ -100,7 +99,13 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
         enabled: true,
         directQueryName: d.name,
         auth: this.defaultAuth
-          ? { type: 'basic' as const, credentials: { username: this.defaultAuth.username, password: this.defaultAuth.password } }
+          ? {
+              type: 'basic' as const,
+              credentials: {
+                username: this.defaultAuth.username,
+                password: this.defaultAuth.password,
+              },
+            }
           : undefined,
       }));
     } catch (err) {
@@ -118,7 +123,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     if (!name) {
       throw new Error(
         `Datasource "${ds.name}" (${ds.id}) has no directQueryName. ` +
-        'It must be auto-discovered from the OpenSearch SQL plugin.',
+          'It must be auto-discovered from the OpenSearch SQL plugin.'
       );
     }
     return name;
@@ -147,7 +152,12 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     return resp.body?.data !== undefined ? resp.body.data : resp.body;
   }
 
-  private async post<T = any>(ds: Datasource, path: string, body: any, timeoutMs = 15_000): Promise<T> {
+  private async post<T = any>(
+    ds: Datasource,
+    path: string,
+    body: any,
+    timeoutMs = 15_000
+  ): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery POST ${url}`);
     const resp = await this.http.request<any>({
@@ -196,9 +206,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     const groups: PromRuleGroup[] = rawGroups.map((g: any) => ({
       name: g.name || '',
       file: g.file || '',
-      interval: typeof g.interval === 'number'
-        ? g.interval
-        : this.parseDurationToSeconds(g.interval || '60s'),
+      interval:
+        typeof g.interval === 'number'
+          ? g.interval
+          : this.parseDurationToSeconds(g.interval || '60s'),
       rules: (g.rules || []).map((r: any) => this.mapRule(r)),
     }));
 
@@ -206,7 +217,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
       return groups.filter(
         (g) =>
           g.file.includes(ds.workspaceId!) ||
-          g.rules.some((r) => r.type === 'alerting' && r.labels._workspace === ds.workspaceId),
+          g.rules.some((r) => r.type === 'alerting' && r.labels._workspace === ds.workspaceId)
       );
     }
 
@@ -263,7 +274,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]> {
     const ampMatch = ds.url.match(
-      /aps-workspaces\.([^.]+)\.amazonaws\.com\/workspaces\/(ws-[a-zA-Z0-9]+)/,
+      /aps-workspaces\.([^.]+)\.amazonaws\.com\/workspaces\/(ws-[a-zA-Z0-9]+)/
     );
     if (ampMatch) {
       return [
@@ -314,7 +325,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerAlertGroups(): Promise<AlertmanagerAlertGroup[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/alerts/groups');
+      const data = await this.get<any>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/alerts/groups'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager alert groups via direct query: ${err}`);
@@ -343,14 +357,21 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   }
 
   async createSilence(silence: AlertmanagerSilence): Promise<string> {
-    const data = await this.post<any>(this.requireDefaultDs(), '/alertmanager/api/v2/silences', silence);
+    const data = await this.post<any>(
+      this.requireDefaultDs(),
+      '/alertmanager/api/v2/silences',
+      silence
+    );
     if (typeof data === 'string') return data;
     return data?.silenceID || data?.silenceId || '';
   }
 
   async deleteSilence(silenceId: string): Promise<boolean> {
     try {
-      await this.del(this.requireDefaultDs(), `/alertmanager/api/v2/silence/${encodeURIComponent(silenceId)}`);
+      await this.del(
+        this.requireDefaultDs(),
+        `/alertmanager/api/v2/silence/${encodeURIComponent(silenceId)}`
+      );
       return true;
     } catch {
       return false;
@@ -380,9 +401,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
     const name = r.name || r.alert || '';
     const query = r.query || r.expr || '';
-    const duration = typeof r.duration === 'number'
-      ? r.duration
-      : this.parseDurationToSeconds(r.for || r.duration || '0s');
+    const duration =
+      typeof r.duration === 'number'
+        ? r.duration
+        : this.parseDurationToSeconds(r.for || r.duration || '0s');
 
     return {
       type: 'alerting',

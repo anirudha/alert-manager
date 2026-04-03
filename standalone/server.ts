@@ -92,9 +92,24 @@ async function initBackends(): Promise<void> {
     promBackend = mockProm;
 
     datasourceService.seed([
-      { name: 'OpenSearch Production', type: 'opensearch', url: 'https://opensearch.example.com:9200', enabled: true },
-      { name: 'Prometheus US-East (AMP)', type: 'prometheus', url: 'https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxx', enabled: true },
-      { name: 'OpenSearch Staging', type: 'opensearch', url: 'https://opensearch-staging.example.com:9200', enabled: true },
+      {
+        name: 'OpenSearch Production',
+        type: 'opensearch',
+        url: 'https://opensearch.example.com:9200',
+        enabled: true,
+      },
+      {
+        name: 'Prometheus US-East (AMP)',
+        type: 'prometheus',
+        url: 'https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxx',
+        enabled: true,
+      },
+      {
+        name: 'OpenSearch Staging',
+        type: 'opensearch',
+        url: 'https://opensearch-staging.example.com:9200',
+        enabled: true,
+      },
     ]);
 
     mockOs.seed('ds-1');
@@ -120,7 +135,10 @@ async function initBackends(): Promise<void> {
         type: 'opensearch',
         url: OPENSEARCH_URL,
         enabled: true,
-        auth: { type: 'basic', credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD } },
+        auth: {
+          type: 'basic',
+          credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD },
+        },
       },
     ]);
 
@@ -140,7 +158,7 @@ async function initBackends(): Promise<void> {
     } else {
       logger.warn(
         'No Prometheus datasources found in OpenSearch SQL plugin. ' +
-        'Register one via POST /_plugins/_query/_datasources with connector=PROMETHEUS.',
+          'Register one via POST /_plugins/_query/_datasources with connector=PROMETHEUS.'
       );
     }
   }
@@ -211,7 +229,12 @@ app.post('/api/datasources/:dsId/monitors', async (req, res) => {
   res.status(r.status).json(r.body);
 });
 app.put('/api/datasources/:dsId/monitors/:monitorId', async (req, res) => {
-  const r = await handleUpdateOSMonitor(alertService, req.params.dsId, req.params.monitorId, req.body);
+  const r = await handleUpdateOSMonitor(
+    alertService,
+    req.params.dsId,
+    req.params.monitorId,
+    req.body
+  );
   res.status(r.status).json(r.body);
 });
 app.delete('/api/datasources/:dsId/monitors/:monitorId', async (req, res) => {
@@ -223,7 +246,12 @@ app.get('/api/datasources/:dsId/alerts', async (req, res) => {
   res.status(r.status).json(r.body);
 });
 app.post('/api/datasources/:dsId/monitors/:monitorId/acknowledge', async (req, res) => {
-  const r = await handleAcknowledgeOSAlerts(alertService, req.params.dsId, req.params.monitorId, req.body);
+  const r = await handleAcknowledgeOSAlerts(
+    alertService,
+    req.params.dsId,
+    req.params.monitorId,
+    req.body
+  );
   res.status(r.status).json(r.body);
 });
 
@@ -380,9 +408,18 @@ app.get('/api/alertmanager/config', async (_req, res) => {
 function extractReceiverIntegrations(receiver: any): Array<{ type: string; summary: string }> {
   const integrations: Array<{ type: string; summary: string }> = [];
   const configKeys = [
-    'webhook_configs', 'slack_configs', 'email_configs', 'pagerduty_configs',
-    'opsgenie_configs', 'victorops_configs', 'pushover_configs', 'wechat_configs',
-    'sns_configs', 'telegram_configs', 'msteams_configs', 'webex_configs',
+    'webhook_configs',
+    'slack_configs',
+    'email_configs',
+    'pagerduty_configs',
+    'opsgenie_configs',
+    'victorops_configs',
+    'pushover_configs',
+    'wechat_configs',
+    'sns_configs',
+    'telegram_configs',
+    'msteams_configs',
+    'webex_configs',
   ];
   for (const key of configKeys) {
     if (receiver[key] && Array.isArray(receiver[key])) {
