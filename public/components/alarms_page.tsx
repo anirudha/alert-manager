@@ -22,7 +22,7 @@ import {
   EuiTab,
   EuiTabs,
 } from '@elastic/eui';
-import { Datasource, UnifiedAlert, UnifiedRule } from '../../core';
+import { Datasource, UnifiedAlertSummary, UnifiedRuleSummary } from '../../core';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -49,8 +49,8 @@ type TabId = 'alerts' | 'rules';
 
 export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [activeTab, setActiveTab] = useState<TabId>('alerts');
-  const [alerts, setAlerts] = useState<UnifiedAlert[]>([]);
-  const [rules, setRules] = useState<UnifiedRule[]>([]);
+  const [alerts, setAlerts] = useState<UnifiedAlertSummary[]>([]);
+  const [rules, setRules] = useState<UnifiedRuleSummary[]>([]);
   const [datasources, setDatasources] = useState<Datasource[]>([]);
   const [loading, setLoading] = useState(true);
 

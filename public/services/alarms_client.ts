@@ -8,7 +8,7 @@
  * Works in both OSD and standalone mode via the HttpClient abstraction.
  * API paths are configurable to support different route prefixes.
  */
-import { Datasource, UnifiedAlert, UnifiedRule } from '../../core';
+import { Datasource, UnifiedAlertSummary, UnifiedRuleSummary } from '../../core';
 
 export interface HttpClient {
   get<T = unknown>(path: string): Promise<T>;
@@ -35,13 +35,13 @@ const STANDALONE_PATHS: ApiPaths = {
 };
 
 interface AlertsResponse {
-  results?: UnifiedAlert[];
-  alerts?: UnifiedAlert[];
+  results?: UnifiedAlertSummary[];
+  alerts?: UnifiedAlertSummary[];
 }
 
 interface RulesResponse {
-  results?: UnifiedRule[];
-  rules?: UnifiedRule[];
+  results?: UnifiedRuleSummary[];
+  rules?: UnifiedRuleSummary[];
 }
 
 export class AlarmsApiClient {
@@ -59,12 +59,12 @@ export class AlarmsApiClient {
     return res.datasources;
   }
 
-  async listAlerts(): Promise<UnifiedAlert[]> {
+  async listAlerts(): Promise<UnifiedAlertSummary[]> {
     const res = await this.http.get<AlertsResponse>(this.paths.alerts);
     return res.results ?? res.alerts ?? [];
   }
 
-  async listRules(): Promise<UnifiedRule[]> {
+  async listRules(): Promise<UnifiedRuleSummary[]> {
     const res = await this.http.get<RulesResponse>(this.paths.rules);
     return res.results ?? res.rules ?? [];
   }

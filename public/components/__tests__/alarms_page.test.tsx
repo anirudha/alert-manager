@@ -10,7 +10,7 @@ import { AlarmsPage } from '../alarms_page';
 // OSD uses data-test-subj instead of data-testid
 configure({ testIdAttribute: 'data-test-subj' });
 import { AlarmsApiClient, HttpClient } from '../../services/alarms_client';
-import { UnifiedAlert, UnifiedRule, Datasource } from '../../../core';
+import { UnifiedAlertSummary, UnifiedRuleSummary, Datasource } from '../../../core';
 
 // ---------------------------------------------------------------------------
 // Helpers — use Partial with `as` cast since the component only reads
@@ -43,7 +43,7 @@ const mockAlerts = [
     labels: {},
     annotations: {},
   },
-] as unknown as UnifiedAlert[];
+] as unknown as UnifiedAlertSummary[];
 
 const mockRules = [
   {
@@ -58,7 +58,7 @@ const mockRules = [
     labels: {},
     annotations: {},
   },
-] as unknown as UnifiedRule[];
+] as unknown as UnifiedRuleSummary[];
 
 const mockDatasources: Datasource[] = [
   {
@@ -86,8 +86,8 @@ function createMockHttpClient(): HttpClient {
 }
 
 function createMockApiClient(
-  alerts: UnifiedAlert[] = mockAlerts,
-  rules: UnifiedRule[] = mockRules,
+  alerts: UnifiedAlertSummary[] = mockAlerts,
+  rules: UnifiedRuleSummary[] = mockRules,
   datasources: Datasource[] = mockDatasources
 ): AlarmsApiClient {
   const client = createMockHttpClient();

@@ -6,7 +6,7 @@
 /**
  * Monitor serialization for JSON export/import.
  */
-import { UnifiedRule } from './types';
+import { UnifiedRuleSummary, UnifiedRule, NotificationRouting } from './types';
 import { parseDuration } from './validators';
 
 export interface MonitorConfig {
@@ -21,7 +21,12 @@ export interface MonitorConfig {
   routing?: Array<{ channel: string; destination: string; severity?: string[]; throttle?: string }>;
 }
 
-export function serializeMonitor(rule: UnifiedRule): MonitorConfig {
+/** Accepts both summary and full rule types for serialization. */
+export function serializeMonitor(rule: UnifiedRuleSummary): MonitorConfig {
+  // Detail fields are optional — only present when a full UnifiedRule is passed
+  const fullRule = rule as Partial<UnifiedRule>;
+  const routing: NotificationRouting[] = fullRule.notificationRouting ?? [];
+
   return {
     version: '1.0',
     name: rule.name,
@@ -35,14 +40,14 @@ export function serializeMonitor(rule: UnifiedRule): MonitorConfig {
     evaluation: {
       interval: rule.evaluationInterval || '1m',
       pendingPeriod: rule.pendingPeriod || '5m',
-      firingPeriod: rule.firingPeriod,
+      firingPeriod: fullRule.firingPeriod,
     },
     labels: { ...rule.labels },
     annotations: { ...rule.annotations },
     severity: rule.severity,
     routing:
-      rule.notificationRouting.length > 0
-        ? rule.notificationRouting.map((r) => ({
+      routing.length > 0
+        ? routing.map((r) => ({
             channel: r.channel,
             destination: r.destination,
             severity: r.severity,
@@ -52,7 +57,7 @@ export function serializeMonitor(rule: UnifiedRule): MonitorConfig {
   };
 }
 
-export function serializeMonitors(rules: UnifiedRule[]): MonitorConfig[] {
+export function serializeMonitors(rules: UnifiedRuleSummary[]): MonitorConfig[] {
   return rules.map(serializeMonitor);
 }
 

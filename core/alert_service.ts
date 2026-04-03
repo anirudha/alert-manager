@@ -22,22 +22,14 @@ import {
   PromRuleGroup,
   ProgressiveResponse,
   PaginatedResponse,
-  UnifiedAlert,
+  UnifiedAlertSummary,
   UnifiedAlertSeverity,
   UnifiedAlertState,
   UnifiedFetchOptions,
-  UnifiedRule,
+  UnifiedRuleSummary,
   MonitorType,
   MonitorStatus,
 } from './types';
-import {
-  generateMockAlertHistory,
-  generateMockNotificationRouting,
-  generateMockPreviewData,
-  generateMockSuppressionRules,
-  getAiSummary,
-  getDescription,
-} from './mock_enrichment';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -123,7 +115,7 @@ export class MultiBackendAlertService {
 
   async getUnifiedAlerts(
     options?: UnifiedFetchOptions
-  ): Promise<ProgressiveResponse<UnifiedAlert>> {
+  ): Promise<ProgressiveResponse<UnifiedAlertSummary>> {
     const datasources = await this.resolveDatasources(options?.dsIds);
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const fetchedAt = new Date().toISOString();
@@ -132,8 +124,8 @@ export class MultiBackendAlertService {
       datasources.map((ds) => this.fetchAlertsFromDatasource(ds, timeoutMs, options?.onProgress))
     );
 
-    const allResults: UnifiedAlert[] = [];
-    const statusList: DatasourceFetchResult<UnifiedAlert>[] = [];
+    const allResults: UnifiedAlertSummary[] = [];
+    const statusList: DatasourceFetchResult<UnifiedAlertSummary>[] = [];
 
     for (let i = 0; i < datasources.length; i++) {
       const settled = dsResults[i];
@@ -141,7 +133,7 @@ export class MultiBackendAlertService {
         allResults.push(...settled.value.data);
         statusList.push(settled.value);
       } else {
-        const errResult: DatasourceFetchResult<UnifiedAlert> = {
+        const errResult: DatasourceFetchResult<UnifiedAlertSummary> = {
           datasourceId: datasources[i].id,
           datasourceName: datasources[i].name,
           datasourceType: datasources[i].type,
@@ -163,7 +155,9 @@ export class MultiBackendAlertService {
     };
   }
 
-  async getUnifiedRules(options?: UnifiedFetchOptions): Promise<ProgressiveResponse<UnifiedRule>> {
+  async getUnifiedRules(
+    options?: UnifiedFetchOptions
+  ): Promise<ProgressiveResponse<UnifiedRuleSummary>> {
     const datasources = await this.resolveDatasources(options?.dsIds);
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const fetchedAt = new Date().toISOString();
@@ -172,8 +166,8 @@ export class MultiBackendAlertService {
       datasources.map((ds) => this.fetchRulesFromDatasource(ds, timeoutMs, options?.onProgress))
     );
 
-    const allResults: UnifiedRule[] = [];
-    const statusList: DatasourceFetchResult<UnifiedRule>[] = [];
+    const allResults: UnifiedRuleSummary[] = [];
+    const statusList: DatasourceFetchResult<UnifiedRuleSummary>[] = [];
 
     for (let i = 0; i < datasources.length; i++) {
       const settled = dsResults[i];
@@ -181,7 +175,7 @@ export class MultiBackendAlertService {
         allResults.push(...settled.value.data);
         statusList.push(settled.value);
       } else {
-        const errResult: DatasourceFetchResult<UnifiedRule> = {
+        const errResult: DatasourceFetchResult<UnifiedRuleSummary> = {
           datasourceId: datasources[i].id,
           datasourceName: datasources[i].name,
           datasourceType: datasources[i].type,
@@ -207,12 +201,14 @@ export class MultiBackendAlertService {
   // Paginated unified views — for single-datasource selection with pagination
   // =========================================================================
 
-  async getPaginatedRules(options?: UnifiedFetchOptions): Promise<PaginatedResponse<UnifiedRule>> {
+  async getPaginatedRules(
+    options?: UnifiedFetchOptions
+  ): Promise<PaginatedResponse<UnifiedRuleSummary>> {
     const page = options?.page ?? 1;
     const pageSize = options?.pageSize ?? 20;
     const datasources = await this.resolveDatasources(options?.dsIds);
 
-    const allRules: UnifiedRule[] = [];
+    const allRules: UnifiedRuleSummary[] = [];
     const warnings: DatasourceWarning[] = [];
 
     for (const ds of datasources) {
@@ -252,12 +248,12 @@ export class MultiBackendAlertService {
 
   async getPaginatedAlerts(
     options?: UnifiedFetchOptions
-  ): Promise<PaginatedResponse<UnifiedAlert>> {
+  ): Promise<PaginatedResponse<UnifiedAlertSummary>> {
     const page = options?.page ?? 1;
     const pageSize = options?.pageSize ?? 20;
     const datasources = await this.resolveDatasources(options?.dsIds);
 
-    const allAlerts: UnifiedAlert[] = [];
+    const allAlerts: UnifiedAlertSummary[] = [];
     const warnings: DatasourceWarning[] = [];
 
     for (const ds of datasources) {
@@ -304,14 +300,14 @@ export class MultiBackendAlertService {
   private async fetchAlertsFromDatasource(
     ds: Datasource,
     timeoutMs: number,
-    onProgress?: (result: DatasourceFetchResult<UnifiedAlert>) => void
-  ): Promise<DatasourceFetchResult<UnifiedAlert>> {
+    onProgress?: (result: DatasourceFetchResult<UnifiedAlertSummary>) => void
+  ): Promise<DatasourceFetchResult<UnifiedAlertSummary>> {
     const start = Date.now();
     const makeResult = (
       status: DatasourceFetchStatus,
-      data: UnifiedAlert[],
+      data: UnifiedAlertSummary[],
       error?: string
-    ): DatasourceFetchResult<UnifiedAlert> => ({
+    ): DatasourceFetchResult<UnifiedAlertSummary> => ({
       datasourceId: ds.id,
       datasourceName: ds.name,
       datasourceType: ds.type,
@@ -342,14 +338,14 @@ export class MultiBackendAlertService {
   private async fetchRulesFromDatasource(
     ds: Datasource,
     timeoutMs: number,
-    onProgress?: (result: DatasourceFetchResult<UnifiedRule>) => void
-  ): Promise<DatasourceFetchResult<UnifiedRule>> {
+    onProgress?: (result: DatasourceFetchResult<UnifiedRuleSummary>) => void
+  ): Promise<DatasourceFetchResult<UnifiedRuleSummary>> {
     const start = Date.now();
     const makeResult = (
       status: DatasourceFetchStatus,
-      data: UnifiedRule[],
+      data: UnifiedRuleSummary[],
       error?: string
-    ): DatasourceFetchResult<UnifiedRule> => ({
+    ): DatasourceFetchResult<UnifiedRuleSummary> => ({
       datasourceId: ds.id,
       datasourceName: ds.name,
       datasourceType: ds.type,
@@ -377,8 +373,8 @@ export class MultiBackendAlertService {
     }
   }
 
-  private async fetchAlertsRaw(ds: Datasource): Promise<UnifiedAlert[]> {
-    const results: UnifiedAlert[] = [];
+  private async fetchAlertsRaw(ds: Datasource): Promise<UnifiedAlertSummary[]> {
+    const results: UnifiedAlertSummary[] = [];
     if (ds.type === 'opensearch' && this.osBackend) {
       const { alerts } = await this.osBackend.getAlerts(ds);
       for (const a of alerts) results.push(osAlertToUnified(a, ds.id));
@@ -389,11 +385,11 @@ export class MultiBackendAlertService {
     return results;
   }
 
-  private async fetchRulesRaw(ds: Datasource): Promise<UnifiedRule[]> {
-    const results: UnifiedRule[] = [];
+  private async fetchRulesRaw(ds: Datasource): Promise<UnifiedRuleSummary[]> {
+    const results: UnifiedRuleSummary[] = [];
     if (ds.type === 'opensearch' && this.osBackend) {
       const monitors = await this.osBackend.getMonitors(ds);
-      for (const m of monitors) results.push(osMonitorToUnifiedRule(m, ds.id));
+      for (const m of monitors) results.push(osMonitorToUnifiedRuleSummary(m, ds.id));
     } else if (ds.type === 'prometheus' && this.promBackend) {
       const groups = await this.promBackend.getRuleGroups(ds);
       for (const g of groups) {
@@ -515,7 +511,7 @@ function promStateToUnified(state: string): UnifiedAlertState {
   return 'resolved';
 }
 
-function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlert {
+function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlertSummary {
   return {
     id: a.id,
     datasourceId: dsId,
@@ -528,11 +524,10 @@ function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlert {
     lastUpdated: new Date(a.last_notification_time).toISOString(),
     labels: { monitor_id: a.monitor_id, trigger_id: a.trigger_id },
     annotations: {},
-    raw: a,
   };
 }
 
-function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlert {
+function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlertSummary {
   return {
     id: `${dsId}-${a.labels.alertname}-${a.labels.instance || ''}`,
     datasourceId: dsId,
@@ -545,11 +540,10 @@ function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlert {
     lastUpdated: a.activeAt,
     labels: a.labels,
     annotations: a.annotations,
-    raw: a,
   };
 }
 
-function osMonitorToUnifiedRule(m: OSMonitor, dsId: string): UnifiedRule {
+function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleSummary {
   const trigger = m.triggers[0];
   const isEnabled = m.enabled;
   const hasError = false;
@@ -622,16 +616,8 @@ function osMonitorToUnifiedRule(m: OSMonitor, dsId: string): UnifiedRule {
     lastModified: new Date(m.last_update_time).toISOString(),
     lastTriggered: undefined,
     notificationDestinations: destNames,
-    description: getDescription(
-      m.name,
-      monitorType,
-      JSON.stringify(m.inputs[0]?.search?.query ?? {})
-    ),
-    aiSummary: getAiSummary(m.name),
     evaluationInterval: evalInterval,
     pendingPeriod: '5 minutes',
-    firingPeriod: monitorType === 'log' ? '10 minutes' : undefined,
-    lookbackPeriod: monitorType === 'log' ? '15 minutes' : undefined,
     threshold: trigger
       ? {
           operator: '>',
@@ -639,11 +625,6 @@ function osMonitorToUnifiedRule(m: OSMonitor, dsId: string): UnifiedRule {
           unit: monitorType === 'metric' ? '%' : 'count',
         }
       : undefined,
-    alertHistory: generateMockAlertHistory(status, severity),
-    conditionPreviewData: generateMockPreviewData(severity),
-    notificationRouting: generateMockNotificationRouting(destNames),
-    suppressionRules: generateMockSuppressionRules(labels),
-    raw: m,
   };
 }
 
@@ -652,7 +633,7 @@ function parseThresholdValue(conditionSource: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-function promRuleToUnified(r: any, groupName: string, dsId: string): UnifiedRule {
+function promRuleToUnified(r: any, groupName: string, dsId: string): UnifiedRuleSummary {
   const state = r.state as string;
   const severity = promSeverityFromLabels(r.labels);
   const status: MonitorStatus =
@@ -679,17 +660,8 @@ function promRuleToUnified(r: any, groupName: string, dsId: string): UnifiedRule
     lastModified: r.lastEvaluation || new Date().toISOString(),
     lastTriggered: r.alerts?.length > 0 ? r.alerts[0].activeAt : undefined,
     notificationDestinations: destNames,
-    description: getDescription(r.name, 'metric', r.query),
-    aiSummary: getAiSummary(r.name),
     evaluationInterval: `${r.duration}s`,
     pendingPeriod: `${r.duration}s`,
-    firingPeriod: undefined,
-    lookbackPeriod: undefined,
     threshold: { operator: '>', value: parseThresholdValue(r.query), unit: '%' },
-    alertHistory: generateMockAlertHistory(status, severity),
-    conditionPreviewData: generateMockPreviewData(severity),
-    notificationRouting: generateMockNotificationRouting(destNames),
-    suppressionRules: generateMockSuppressionRules(r.labels),
-    raw: r,
   };
 }

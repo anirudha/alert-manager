@@ -345,7 +345,8 @@ export interface DatasourceService {
 export type UnifiedAlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type UnifiedAlertState = 'active' | 'pending' | 'acknowledged' | 'resolved' | 'error';
 
-export interface UnifiedAlert {
+/** Lightweight alert representation for list views and tables. */
+export interface UnifiedAlertSummary {
   id: string;
   datasourceId: string;
   datasourceType: DatasourceType;
@@ -357,7 +358,10 @@ export interface UnifiedAlert {
   lastUpdated: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
-  // Original backend-specific data
+}
+
+/** Full alert with backend-specific raw data. Use for detail views only. */
+export interface UnifiedAlert extends UnifiedAlertSummary {
   raw: OSAlert | PromAlert;
 }
 
@@ -388,7 +392,8 @@ export interface NotificationRouting {
   throttle?: string; // e.g. "10 minutes"
 }
 
-export interface UnifiedRule {
+/** Lightweight rule representation for list views and tables. */
+export interface UnifiedRuleSummary {
   id: string;
   datasourceId: string;
   datasourceType: DatasourceType;
@@ -400,7 +405,6 @@ export interface UnifiedRule {
   group?: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
-  // Extended fields for monitor management
   monitorType: MonitorType;
   status: MonitorStatus;
   healthStatus: MonitorHealthStatus;
@@ -409,19 +413,21 @@ export interface UnifiedRule {
   lastModified: string;
   lastTriggered?: string;
   notificationDestinations: string[];
-  // Detail view fields
-  description: string;
-  aiSummary: string;
   evaluationInterval: string;
   pendingPeriod: string;
+  threshold?: { operator: string; value: number; unit?: string };
+}
+
+/** Full rule with detail-view fields. Use for single-item detail views only. */
+export interface UnifiedRule extends UnifiedRuleSummary {
+  description: string;
+  aiSummary: string;
   firingPeriod?: string;
   lookbackPeriod?: string;
-  threshold?: { operator: string; value: number; unit?: string };
   alertHistory: AlertHistoryEntry[];
   conditionPreviewData: Array<{ timestamp: number; value: number }>;
   notificationRouting: NotificationRouting[];
   suppressionRules: SuppressionRule[];
-  // Original backend-specific data
   raw: OSMonitor | PromAlertingRule;
 }
 
