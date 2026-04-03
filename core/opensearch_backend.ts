@@ -77,15 +77,24 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     monitorId: string,
     input: Partial<OSMonitor>
   ): Promise<OSMonitor | null> {
-    // Fetch the current monitor so we can merge the partial update
-    const current = await this.getMonitor(ds, monitorId);
-    if (!current) return null;
-
-    const { id: _id, ...currentFields } = current;
-    const merged = { ...currentFields, ...input, last_update_time: Date.now() };
-
+    // Fetch the current monitor with version info for optimistic concurrency
+    let seqNo: number | undefined;
+    let primaryTerm: number | undefined;
     try {
-      const resp = await this.req<any>(ds, 'PUT', `/_plugins/_alerting/monitors/${monitorId}`, {
+      const getResp = await this.req<any>(ds, 'GET', `/_plugins/_alerting/monitors/${monitorId}`);
+      seqNo = getResp.body._seq_no;
+      primaryTerm = getResp.body._primary_term;
+      const current = this.mapMonitor(getResp.body._id, getResp.body.monitor);
+      const { id: _id, ...currentFields } = current;
+      const merged = { ...currentFields, ...input, last_update_time: Date.now() };
+
+      // Use if_seq_no/if_primary_term for optimistic concurrency control
+      let putPath = `/_plugins/_alerting/monitors/${monitorId}`;
+      if (seqNo !== undefined && primaryTerm !== undefined) {
+        putPath += `?if_seq_no=${seqNo}&if_primary_term=${primaryTerm}`;
+      }
+
+      const resp = await this.req<any>(ds, 'PUT', putPath, {
         ...merged,
         type: 'monitor',
       });

@@ -103,20 +103,58 @@ export function validateMonitorForm(form: MonitorFormState): ValidationResult {
     }
   }
 
+  // Validate labels: safe key pattern, no duplicates, max counts
+  const LABEL_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  const MAX_LABELS = 50;
+  const MAX_LABEL_VALUE_LENGTH = 1024;
+
+  if (form.labels.length > MAX_LABELS) {
+    errors.labels = `Too many labels (max ${MAX_LABELS})`;
+  }
+
   const labelKeys = new Set<string>();
-  for (let i = 0; i < form.labels.length; i++) {
+  for (let i = 0; i < Math.min(form.labels.length, MAX_LABELS); i++) {
     const l = form.labels[i];
     if (l.key || l.value) {
-      if (!l.key.trim()) errors[`labels[${i}].key`] = 'Label key is required';
-      else if (labelKeys.has(l.key)) errors[`labels[${i}].key`] = `Duplicate label key "${l.key}"`;
-      else labelKeys.add(l.key);
+      if (!l.key.trim()) {
+        errors[`labels[${i}].key`] = 'Label key is required';
+      } else if (!LABEL_KEY_PATTERN.test(l.key)) {
+        errors[`labels[${i}].key`] =
+          'Label key must match [a-zA-Z_][a-zA-Z0-9_]* (alphanumeric and underscores)';
+      } else if (labelKeys.has(l.key)) {
+        errors[`labels[${i}].key`] = `Duplicate label key "${l.key}"`;
+      } else {
+        labelKeys.add(l.key);
+      }
+      if (l.value && l.value.length > MAX_LABEL_VALUE_LENGTH) {
+        errors[`labels[${i}].value`] = `Label value too long (max ${MAX_LABEL_VALUE_LENGTH} chars)`;
+      }
     }
   }
 
-  for (let i = 0; i < form.annotations.length; i++) {
+  // Validate annotations: safe key pattern, no duplicates, max counts
+  if (form.annotations.length > MAX_LABELS) {
+    errors.annotations = `Too many annotations (max ${MAX_LABELS})`;
+  }
+
+  const annotationKeys = new Set<string>();
+  for (let i = 0; i < Math.min(form.annotations.length, MAX_LABELS); i++) {
     const a = form.annotations[i];
     if (a.key || a.value) {
-      if (!a.key.trim()) errors[`annotations[${i}].key`] = 'Annotation key is required';
+      if (!a.key.trim()) {
+        errors[`annotations[${i}].key`] = 'Annotation key is required';
+      } else if (!LABEL_KEY_PATTERN.test(a.key)) {
+        errors[`annotations[${i}].key`] =
+          'Annotation key must match [a-zA-Z_][a-zA-Z0-9_]* (alphanumeric and underscores)';
+      } else if (annotationKeys.has(a.key)) {
+        errors[`annotations[${i}].key`] = `Duplicate annotation key "${a.key}"`;
+      } else {
+        annotationKeys.add(a.key);
+      }
+      if (a.value && a.value.length > MAX_LABEL_VALUE_LENGTH) {
+        errors[`annotations[${i}].value`] =
+          `Annotation value too long (max ${MAX_LABEL_VALUE_LENGTH} chars)`;
+      }
     }
   }
 

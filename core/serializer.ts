@@ -9,6 +9,21 @@
 import { UnifiedRuleSummary, UnifiedRule, NotificationRouting } from './types';
 import { parseDuration } from './validators';
 
+/** Safely extract a string-to-string map, enforcing max count and string values. */
+function sanitizeStringMap(input: unknown, maxKeys: number): Record<string, string> {
+  if (!input || typeof input !== 'object') return {};
+  const result: Record<string, string> = {};
+  let count = 0;
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (count >= maxKeys) break;
+    if (typeof key === 'string' && typeof value === 'string') {
+      result[key] = value.substring(0, 10_000);
+      count++;
+    }
+  }
+  return result;
+}
+
 export interface MonitorConfig {
   version: '1.0';
   name: string;
@@ -61,6 +76,9 @@ export function serializeMonitors(rules: UnifiedRuleSummary[]): MonitorConfig[] 
   return rules.map(serializeMonitor);
 }
 
+const MAX_STRING_LENGTH = 10_000;
+const MAX_LABEL_COUNT = 100;
+
 export function deserializeMonitor(json: unknown): {
   config: MonitorConfig | null;
   errors: string[];
@@ -69,10 +87,22 @@ export function deserializeMonitor(json: unknown): {
   if (!json || typeof json !== 'object') {
     return { config: null, errors: ['Input must be a JSON object'] };
   }
+
+  // Guard against excessively large payloads
+  const rawSize = JSON.stringify(json).length;
+  if (rawSize > 1_000_000) {
+    return { config: null, errors: ['Input too large (max 1MB)'] };
+  }
+
   const obj = json as Record<string, any>;
 
   if (!obj.name || typeof obj.name !== 'string') errors.push('name: required string field');
+  else if (obj.name.length > MAX_STRING_LENGTH)
+    errors.push(`name: too long (max ${MAX_STRING_LENGTH} chars)`);
+
   if (!obj.query || typeof obj.query !== 'string') errors.push('query: required string field');
+  else if (obj.query.length > MAX_STRING_LENGTH)
+    errors.push(`query: too long (max ${MAX_STRING_LENGTH} chars)`);
 
   if (!obj.threshold || typeof obj.threshold !== 'object') {
     errors.push('threshold: required object with operator, value, forDuration');
@@ -123,11 +153,10 @@ export function deserializeMonitor(json: unknown): {
       pendingPeriod: obj.evaluation.pendingPeriod,
       firingPeriod: obj.evaluation.firingPeriod,
     },
-    labels: obj.labels && typeof obj.labels === 'object' ? { ...obj.labels } : {},
-    annotations:
-      obj.annotations && typeof obj.annotations === 'object' ? { ...obj.annotations } : {},
+    labels: sanitizeStringMap(obj.labels, MAX_LABEL_COUNT),
+    annotations: sanitizeStringMap(obj.annotations, MAX_LABEL_COUNT),
     severity: obj.severity || 'medium',
-    routing: Array.isArray(obj.routing) ? obj.routing : undefined,
+    routing: Array.isArray(obj.routing) ? obj.routing.slice(0, 20) : undefined,
   };
 
   return { config, errors: [] };

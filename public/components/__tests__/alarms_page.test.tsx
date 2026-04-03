@@ -183,22 +183,30 @@ describe('AlarmsPage', () => {
     });
   });
 
-  it('displays rule counts in tab labels', async () => {
+  it('displays rule counts after switching to rules tab', async () => {
     const apiClient = createMockApiClient();
     render(<AlarmsPage apiClient={apiClient} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('alertManagerTab-rules')).toBeDefined();
+    });
+
+    // Rules are lazy-loaded — switch to rules tab first
+    fireEvent.click(screen.getByTestId('alertManagerTab-rules'));
+
     await waitFor(() => {
       const rulesTab = screen.getByTestId('alertManagerTab-rules');
       expect(rulesTab.textContent).toContain('Rules (1)');
     });
   });
 
-  it('calls API client on mount', async () => {
+  it('calls alerts and datasources API on mount (lazy — rules not fetched)', async () => {
     const apiClient = createMockApiClient();
     render(<AlarmsPage apiClient={apiClient} />);
     await waitFor(() => {
-      expect(apiClient.listAlerts).toHaveBeenCalledTimes(1);
-      expect(apiClient.listRules).toHaveBeenCalledTimes(1);
-      expect(apiClient.listDatasources).toHaveBeenCalledTimes(1);
+      expect(apiClient.listAlerts).toHaveBeenCalled();
+      expect(apiClient.listDatasources).toHaveBeenCalled();
     });
+    // Rules are lazy-loaded — not fetched until tab is clicked
+    expect(apiClient.listRules).not.toHaveBeenCalled();
   });
 });

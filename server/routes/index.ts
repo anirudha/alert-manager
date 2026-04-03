@@ -58,9 +58,9 @@ export function defineRoutes(
       path: '/api/alerting/datasources',
       validate: {
         body: schema.object({
-          name: schema.string(),
+          name: schema.string({ minLength: 1, maxLength: 255 }),
           type: schema.oneOf([schema.literal('opensearch'), schema.literal('prometheus')]),
-          url: schema.string(),
+          url: schema.uri({ scheme: ['http', 'https'] }),
           enabled: schema.maybe(schema.boolean()),
         }),
       },
