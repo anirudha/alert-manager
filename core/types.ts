@@ -465,6 +465,8 @@ export interface UnifiedFetchOptions {
   /** Pagination params for server-side pagination. */
   page?: number;
   pageSize?: number;
+  /** Maximum total results to return. Defaults to 5000. Prevents unbounded responses. */
+  maxResults?: number;
 }
 
 // ============================================================================

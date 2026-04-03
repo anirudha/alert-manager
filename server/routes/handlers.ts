@@ -194,12 +194,13 @@ export async function handleGetPromAlerts(
 
 export async function handleGetUnifiedAlerts(
   alertSvc: MultiBackendAlertService,
-  query?: { dsIds?: string; timeout?: string }
+  query?: { dsIds?: string; timeout?: string; maxResults?: string }
 ): Promise<Result> {
   try {
     const dsIds = query?.dsIds ? query.dsIds.split(',').filter(Boolean) : undefined;
     const timeoutMs = query?.timeout ? parseInt(query.timeout, 10) : undefined;
-    const response = await alertSvc.getUnifiedAlerts({ dsIds, timeoutMs });
+    const maxResults = query?.maxResults ? parseInt(query.maxResults, 10) : undefined;
+    const response = await alertSvc.getUnifiedAlerts({ dsIds, timeoutMs, maxResults });
     return { status: 200, body: response };
   } catch (e) {
     return { status: 500, body: { error: String(e) } };
@@ -208,12 +209,13 @@ export async function handleGetUnifiedAlerts(
 
 export async function handleGetUnifiedRules(
   alertSvc: MultiBackendAlertService,
-  query?: { dsIds?: string; timeout?: string }
+  query?: { dsIds?: string; timeout?: string; maxResults?: string }
 ): Promise<Result> {
   try {
     const dsIds = query?.dsIds ? query.dsIds.split(',').filter(Boolean) : undefined;
     const timeoutMs = query?.timeout ? parseInt(query.timeout, 10) : undefined;
-    const response = await alertSvc.getUnifiedRules({ dsIds, timeoutMs });
+    const maxResults = query?.maxResults ? parseInt(query.maxResults, 10) : undefined;
+    const response = await alertSvc.getUnifiedRules({ dsIds, timeoutMs, maxResults });
     return { status: 200, body: response };
   } catch (e) {
     return { status: 500, body: { error: String(e) } };

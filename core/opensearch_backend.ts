@@ -24,12 +24,34 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   // =========================================================================
 
   async getMonitors(ds: Datasource): Promise<OSMonitor[]> {
-    const resp = await this.req<any>(ds, 'POST', '/_plugins/_alerting/monitors/_search', {
-      query: { match_all: {} },
-      size: 1000,
-    });
-    const hits = resp.body?.hits?.hits ?? [];
-    return hits.map((hit: any) => this.mapMonitor(hit._id, hit._source));
+    const PAGE_SIZE = 100;
+    const monitors: OSMonitor[] = [];
+    let searchAfter: unknown[] | undefined;
+
+    // Use search_after pagination to retrieve all monitors
+    while (true) {
+      const body: Record<string, unknown> = {
+        query: { match_all: {} },
+        size: PAGE_SIZE,
+        sort: [{ _id: 'asc' }],
+      };
+      if (searchAfter) {
+        body.search_after = searchAfter;
+      }
+
+      const resp = await this.req<any>(ds, 'POST', '/_plugins/_alerting/monitors/_search', body);
+      const hits = resp.body?.hits?.hits ?? [];
+      if (hits.length === 0) break;
+
+      for (const hit of hits) {
+        monitors.push(this.mapMonitor(hit._id, hit._source));
+      }
+
+      if (hits.length < PAGE_SIZE) break;
+      searchAfter = hits[hits.length - 1].sort;
+    }
+
+    return monitors;
   }
 
   async getMonitor(ds: Datasource, monitorId: string): Promise<OSMonitor | null> {
@@ -101,9 +123,27 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   // =========================================================================
 
   async getAlerts(ds: Datasource): Promise<{ alerts: OSAlert[]; totalAlerts: number }> {
-    const resp = await this.req<any>(ds, 'GET', '/_plugins/_alerting/monitors/alerts?size=1000');
-    const alerts: OSAlert[] = (resp.body.alerts ?? []).map((a: any) => this.mapAlert(a));
-    return { alerts, totalAlerts: resp.body.totalAlerts ?? alerts.length };
+    const PAGE_SIZE = 100;
+    const allAlerts: OSAlert[] = [];
+    let startIndex = 0;
+    let totalAlerts = 0;
+
+    // Paginate through all alerts
+    while (true) {
+      const resp = await this.req<any>(
+        ds,
+        'GET',
+        `/_plugins/_alerting/monitors/alerts?size=${PAGE_SIZE}&startIndex=${startIndex}`
+      );
+      totalAlerts = resp.body.totalAlerts ?? 0;
+      const alerts: OSAlert[] = (resp.body.alerts ?? []).map((a: any) => this.mapAlert(a));
+      allAlerts.push(...alerts);
+
+      if (alerts.length < PAGE_SIZE || allAlerts.length >= totalAlerts) break;
+      startIndex += PAGE_SIZE;
+    }
+
+    return { alerts: allAlerts, totalAlerts };
   }
 
   async acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<any> {

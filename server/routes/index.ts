@@ -120,15 +120,47 @@ export function defineRoutes(
   );
 
   // Unified view routes
-  router.get({ path: '/api/alerting/unified/alerts', validate: false }, async (_ctx, _req, res) => {
-    const result = await handleGetUnifiedAlerts(alertService);
-    return res.ok({ body: result.body });
-  });
+  router.get(
+    {
+      path: '/api/alerting/unified/alerts',
+      validate: {
+        query: schema.object({
+          dsIds: schema.maybe(schema.string()),
+          timeout: schema.maybe(schema.string()),
+          maxResults: schema.maybe(schema.string()),
+        }),
+      },
+    },
+    async (_ctx, req, res) => {
+      const result = await handleGetUnifiedAlerts(alertService, {
+        dsIds: req.query.dsIds,
+        timeout: req.query.timeout,
+        maxResults: req.query.maxResults,
+      });
+      return res.ok({ body: result.body });
+    }
+  );
 
-  router.get({ path: '/api/alerting/unified/rules', validate: false }, async (_ctx, _req, res) => {
-    const result = await handleGetUnifiedRules(alertService);
-    return res.ok({ body: result.body });
-  });
+  router.get(
+    {
+      path: '/api/alerting/unified/rules',
+      validate: {
+        query: schema.object({
+          dsIds: schema.maybe(schema.string()),
+          timeout: schema.maybe(schema.string()),
+          maxResults: schema.maybe(schema.string()),
+        }),
+      },
+    },
+    async (_ctx, req, res) => {
+      const result = await handleGetUnifiedRules(alertService, {
+        dsIds: req.query.dsIds,
+        timeout: req.query.timeout,
+        maxResults: req.query.maxResults,
+      });
+      return res.ok({ body: result.body });
+    }
+  );
 
   // OpenSearch monitor/alert routes
   router.get(

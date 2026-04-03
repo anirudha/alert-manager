@@ -32,6 +32,7 @@ import {
 } from './types';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_RESULTS = 5_000;
 
 export class MultiBackendAlertService {
   private osBackend?: OpenSearchBackend;
@@ -118,6 +119,7 @@ export class MultiBackendAlertService {
   ): Promise<ProgressiveResponse<UnifiedAlertSummary>> {
     const datasources = await this.resolveDatasources(options?.dsIds);
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxResults = options?.maxResults ?? DEFAULT_MAX_RESULTS;
     const fetchedAt = new Date().toISOString();
 
     const dsResults = await Promise.allSettled(
@@ -147,7 +149,7 @@ export class MultiBackendAlertService {
     }
 
     return {
-      results: allResults,
+      results: allResults.slice(0, maxResults),
       datasourceStatus: statusList,
       totalDatasources: datasources.length,
       completedDatasources: statusList.filter((s) => s.status === 'success').length,
@@ -160,6 +162,7 @@ export class MultiBackendAlertService {
   ): Promise<ProgressiveResponse<UnifiedRuleSummary>> {
     const datasources = await this.resolveDatasources(options?.dsIds);
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxResults = options?.maxResults ?? DEFAULT_MAX_RESULTS;
     const fetchedAt = new Date().toISOString();
 
     const dsResults = await Promise.allSettled(
@@ -189,7 +192,7 @@ export class MultiBackendAlertService {
     }
 
     return {
-      results: allResults,
+      results: allResults.slice(0, maxResults),
       datasourceStatus: statusList,
       totalDatasources: datasources.length,
       completedDatasources: statusList.filter((s) => s.status === 'success').length,
@@ -205,23 +208,28 @@ export class MultiBackendAlertService {
     options?: UnifiedFetchOptions
   ): Promise<PaginatedResponse<UnifiedRuleSummary>> {
     const page = options?.page ?? 1;
-    const pageSize = options?.pageSize ?? 20;
+    const pageSize = Math.min(options?.pageSize ?? 20, 100);
     const datasources = await this.resolveDatasources(options?.dsIds);
 
     const allRules: UnifiedRuleSummary[] = [];
     const warnings: DatasourceWarning[] = [];
 
-    for (const ds of datasources) {
-      try {
-        const rules = await this.fetchRulesRaw(ds);
-        allRules.push(...rules);
-      } catch (err) {
-        this.logger.error(`Failed to fetch rules from ${ds.name} (${ds.id}): ${err}`);
+    // Fetch from all datasources in parallel
+    const dsResults = await Promise.allSettled(datasources.map((ds) => this.fetchRulesRaw(ds)));
+
+    for (let i = 0; i < datasources.length; i++) {
+      const settled = dsResults[i];
+      if (settled.status === 'fulfilled') {
+        allRules.push(...settled.value);
+      } else {
+        this.logger.error(
+          `Failed to fetch rules from ${datasources[i].name} (${datasources[i].id}): ${settled.reason}`
+        );
         warnings.push({
-          datasourceId: ds.id,
-          datasourceName: ds.name,
-          datasourceType: ds.type,
-          error: String(err),
+          datasourceId: datasources[i].id,
+          datasourceName: datasources[i].name,
+          datasourceType: datasources[i].type,
+          error: String(settled.reason),
         });
       }
     }
@@ -250,23 +258,28 @@ export class MultiBackendAlertService {
     options?: UnifiedFetchOptions
   ): Promise<PaginatedResponse<UnifiedAlertSummary>> {
     const page = options?.page ?? 1;
-    const pageSize = options?.pageSize ?? 20;
+    const pageSize = Math.min(options?.pageSize ?? 20, 100);
     const datasources = await this.resolveDatasources(options?.dsIds);
 
     const allAlerts: UnifiedAlertSummary[] = [];
     const warnings: DatasourceWarning[] = [];
 
-    for (const ds of datasources) {
-      try {
-        const alerts = await this.fetchAlertsRaw(ds);
-        allAlerts.push(...alerts);
-      } catch (err) {
-        this.logger.error(`Failed to fetch alerts from ${ds.name} (${ds.id}): ${err}`);
+    // Fetch from all datasources in parallel
+    const dsResults = await Promise.allSettled(datasources.map((ds) => this.fetchAlertsRaw(ds)));
+
+    for (let i = 0; i < datasources.length; i++) {
+      const settled = dsResults[i];
+      if (settled.status === 'fulfilled') {
+        allAlerts.push(...settled.value);
+      } else {
+        this.logger.error(
+          `Failed to fetch alerts from ${datasources[i].name} (${datasources[i].id}): ${settled.reason}`
+        );
         warnings.push({
-          datasourceId: ds.id,
-          datasourceName: ds.name,
-          datasourceType: ds.type,
-          error: String(err),
+          datasourceId: datasources[i].id,
+          datasourceName: datasources[i].name,
+          datasourceType: datasources[i].type,
+          error: String(settled.reason),
         });
       }
     }
