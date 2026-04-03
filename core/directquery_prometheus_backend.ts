@@ -36,6 +36,12 @@ import {
   AlertmanagerReceiver,
   AlertmanagerSilence,
   AlertmanagerStatus,
+  PromRulesApiResponse,
+  PromRawRuleGroup,
+  PromRawRule,
+  PromRawAlert,
+  PromAlertsApiResponse,
+  DatasourceDefinition,
 } from './types';
 
 export interface DirectQueryConfig {
@@ -43,6 +49,8 @@ export interface DirectQueryConfig {
   opensearchUrl: string;
   /** OpenSearch basic auth credentials */
   auth?: { username: string; password: string };
+  /** Whether to reject unauthorized TLS certificates for discovery and helper calls. Defaults to true. */
+  rejectUnauthorized?: boolean;
 }
 
 export class DirectQueryPrometheusBackend implements PrometheusBackend {
@@ -50,6 +58,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   private readonly http: HttpClient;
   private readonly baseUrl: string;
   private readonly defaultAuth?: { username: string; password: string };
+  private readonly defaultRejectUnauthorized: boolean;
 
   constructor(
     private readonly logger: Logger,
@@ -58,6 +67,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     this.http = new HttpClient(logger);
     this.baseUrl = config.opensearchUrl.replace(/\/+$/, '');
     this.defaultAuth = config.auth;
+    this.defaultRejectUnauthorized = config.rejectUnauthorized ?? false;
 
     this.logger.info(`DirectQuery Prometheus backend configured: OpenSearch=${this.baseUrl}`);
   }
@@ -74,25 +84,28 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
    */
   async discoverDatasources(): Promise<Array<Omit<Datasource, 'id'>>> {
     try {
-      const resp = await this.http.request<any>({
+      const resp = await this.http.request<DatasourceDefinition[]>({
         method: 'GET',
         url: `${this.baseUrl}/_plugins/_query/_datasources`,
         auth: this.defaultAuth,
-        rejectUnauthorized: false,
+        rejectUnauthorized: this.defaultRejectUnauthorized,
         timeoutMs: 10_000,
       });
 
-      const all: any[] = Array.isArray(resp.body) ? resp.body : [];
+      const all: DatasourceDefinition[] = Array.isArray(resp.body) ? resp.body : [];
       const promSources = all.filter(
-        (d) => d.connector?.toUpperCase() === 'PROMETHEUS' && d.status !== 'DISABLED'
+        (d: DatasourceDefinition) =>
+          d.connector?.toUpperCase() === 'PROMETHEUS' && d.status !== 'DISABLED'
       );
 
       this.logger.info(
         `Discovered ${promSources.length} Prometheus datasource(s) in OpenSearch SQL plugin` +
-          (promSources.length > 0 ? `: ${promSources.map((d: any) => d.name).join(', ')}` : '')
+          (promSources.length > 0
+            ? `: ${promSources.map((d: DatasourceDefinition) => d.name).join(', ')}`
+            : '')
       );
 
-      return promSources.map((d: any) => ({
+      return promSources.map((d: DatasourceDefinition) => ({
         name: d.name,
         type: 'prometheus' as const,
         url: this.baseUrl,
@@ -139,49 +152,53 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     return buildAuthFromDatasource(ds) || this.defaultAuth;
   }
 
-  private async get<T = any>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
+  private resolveTls(ds: Datasource): boolean {
+    return ds.tls?.rejectUnauthorized ?? this.defaultRejectUnauthorized;
+  }
+
+  private async get<T = unknown>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery GET ${url}`);
-    const resp = await this.http.request<any>({
+    const resp = await this.http.request<{ data?: T } & Record<string, unknown>>({
       method: 'GET',
       url,
       auth: this.resolveAuth(ds),
-      rejectUnauthorized: false,
+      rejectUnauthorized: this.resolveTls(ds),
       timeoutMs,
     });
-    return resp.body?.data !== undefined ? resp.body.data : resp.body;
+    return resp.body?.data !== undefined ? (resp.body.data as T) : (resp.body as unknown as T);
   }
 
-  private async post<T = any>(
+  private async post<T = unknown>(
     ds: Datasource,
     path: string,
-    body: any,
+    body: unknown,
     timeoutMs = 15_000
   ): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery POST ${url}`);
-    const resp = await this.http.request<any>({
+    const resp = await this.http.request<{ data?: T } & Record<string, unknown>>({
       method: 'POST',
       url,
       body,
       auth: this.resolveAuth(ds),
-      rejectUnauthorized: false,
+      rejectUnauthorized: this.resolveTls(ds),
       timeoutMs,
     });
-    return resp.body?.data !== undefined ? resp.body.data : resp.body;
+    return resp.body?.data !== undefined ? (resp.body.data as T) : (resp.body as unknown as T);
   }
 
-  private async del<T = any>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
+  private async del<T = unknown>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery DELETE ${url}`);
-    const resp = await this.http.request<any>({
+    const resp = await this.http.request<{ data?: T } & Record<string, unknown>>({
       method: 'DELETE',
       url,
       auth: this.resolveAuth(ds),
-      rejectUnauthorized: false,
+      rejectUnauthorized: this.resolveTls(ds),
       timeoutMs,
     });
-    return resp.body?.data !== undefined ? resp.body.data : resp.body;
+    return resp.body?.data !== undefined ? (resp.body.data as T) : (resp.body as unknown as T);
   }
 
   // =========================================================================
@@ -189,11 +206,11 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   // =========================================================================
 
   async getRuleGroups(ds: Datasource): Promise<PromRuleGroup[]> {
-    const data = await this.get<any>(ds, '/api/v1/rules');
+    const data = await this.get<PromRulesApiResponse>(ds, '/api/v1/rules');
 
-    let rawGroups: any[];
+    let rawGroups: PromRawRuleGroup[];
     if (Array.isArray(data)) {
-      rawGroups = data;
+      rawGroups = data as unknown as PromRawRuleGroup[];
     } else if (data?.groups) {
       rawGroups = data.groups;
     } else if (data?.data?.groups) {
@@ -203,14 +220,14 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
       rawGroups = [];
     }
 
-    const groups: PromRuleGroup[] = rawGroups.map((g: any) => ({
+    const groups: PromRuleGroup[] = rawGroups.map((g: PromRawRuleGroup) => ({
       name: g.name || '',
       file: g.file || '',
       interval:
         typeof g.interval === 'number'
           ? g.interval
-          : this.parseDurationToSeconds(g.interval || '60s'),
-      rules: (g.rules || []).map((r: any) => this.mapRule(r)),
+          : this.parseDurationToSeconds(String(g.interval || '60s')),
+      rules: (g.rules || []).map((r: PromRawRule) => this.mapRule(r)),
     }));
 
     if (ds.workspaceId && ds.workspaceId !== 'default') {
@@ -230,20 +247,27 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlerts(ds: Datasource): Promise<PromAlert[]> {
     try {
-      const data = await this.get<any>(ds, '/api/v1/alerts');
-      let rawAlerts: any[];
+      const data = await this.get<PromAlertsApiResponse>(ds, '/api/v1/alerts');
+      let rawAlerts: PromRawAlert[];
       if (Array.isArray(data)) {
-        rawAlerts = data;
+        rawAlerts = data as unknown as PromRawAlert[];
       } else if (data?.alerts) {
-        rawAlerts = data.alerts;
-      } else if (data?.data?.alerts) {
-        rawAlerts = data.data.alerts;
+        rawAlerts = data.alerts as PromRawAlert[];
+      } else if (data?.data) {
+        const inner = data.data;
+        if (Array.isArray(inner)) {
+          rawAlerts = inner;
+        } else if (inner && typeof inner === 'object' && 'alerts' in inner) {
+          rawAlerts = (inner as { alerts: PromRawAlert[] }).alerts;
+        } else {
+          rawAlerts = [];
+        }
       } else {
         rawAlerts = [];
       }
 
       if (rawAlerts.length > 0) {
-        const alerts = rawAlerts.map((a: any) => this.mapAlert(a));
+        const alerts = rawAlerts.map((a: PromRawAlert) => this.mapAlert(a));
         if (ds.workspaceId && ds.workspaceId !== 'default') {
           return alerts.filter((a) => a.labels._workspace === ds.workspaceId);
         }
@@ -315,7 +339,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerAlerts(): Promise<AlertmanagerAlert[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/alerts');
+      const data = await this.get<AlertmanagerAlert[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/alerts'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager alerts via direct query: ${err}`);
@@ -325,7 +352,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerAlertGroups(): Promise<AlertmanagerAlertGroup[]> {
     try {
-      const data = await this.get<any>(
+      const data = await this.get<AlertmanagerAlertGroup[]>(
         this.requireDefaultDs(),
         '/alertmanager/api/v2/alerts/groups'
       );
@@ -338,7 +365,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerReceivers(): Promise<AlertmanagerReceiver[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/receivers');
+      const data = await this.get<AlertmanagerReceiver[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/receivers'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager receivers via direct query: ${err}`);
@@ -348,7 +378,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getSilences(): Promise<AlertmanagerSilence[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/silences');
+      const data = await this.get<AlertmanagerSilence[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/silences'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager silences via direct query: ${err}`);
@@ -357,7 +390,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   }
 
   async createSilence(silence: AlertmanagerSilence): Promise<string> {
-    const data = await this.post<any>(
+    const data = await this.post<string | { silenceID?: string; silenceId?: string }>(
       this.requireDefaultDs(),
       '/alertmanager/api/v2/silences',
       silence
@@ -368,7 +401,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async deleteSilence(silenceId: string): Promise<boolean> {
     try {
-      await this.del(
+      await this.del<unknown>(
         this.requireDefaultDs(),
         `/alertmanager/api/v2/silence/${encodeURIComponent(silenceId)}`
       );
@@ -386,7 +419,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   // Helpers
   // =========================================================================
 
-  private mapRule(r: any): PromRule {
+  private mapRule(r: PromRawRule): PromRule {
     if (r.type === 'recording' || r.record) {
       return {
         type: 'recording',
@@ -404,7 +437,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     const duration =
       typeof r.duration === 'number'
         ? r.duration
-        : this.parseDurationToSeconds(r.for || r.duration || '0s');
+        : this.parseDurationToSeconds(r.for || String(r.duration || '0s'));
 
     return {
       type: 'alerting',
@@ -413,7 +446,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
       duration,
       labels: r.labels || {},
       annotations: r.annotations || {},
-      alerts: (r.alerts || []).map((a: any) => this.mapAlert(a)),
+      alerts: (r.alerts || []).map((a: PromRawAlert) => this.mapAlert(a)),
       health: r.health || 'unknown',
       state: r.state || 'inactive',
       lastEvaluation: r.lastEvaluation,
@@ -433,13 +466,13 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     return total;
   }
 
-  private mapAlert(a: any): PromAlert {
+  private mapAlert(a: PromRawAlert): PromAlert {
     return {
       labels: a.labels || {},
       annotations: a.annotations || {},
-      state: a.state || 'inactive',
+      state: (a.state || 'inactive') as PromAlert['state'],
       activeAt: a.activeAt || '',
-      value: a.value ?? '',
+      value: a.value != null ? String(a.value) : '',
     };
   }
 }

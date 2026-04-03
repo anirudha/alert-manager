@@ -10,11 +10,11 @@ import {
   MultiBackendAlertService,
   SuppressionRuleService,
   SuppressionRuleConfig,
-  Logger,
+  OSMonitor,
 } from '../../core';
-import { validateMonitorForm } from '../../core/validators';
-import { serializeMonitors, deserializeMonitor } from '../../core/serializer';
+import { serializeMonitors, deserializeMonitor, MonitorConfig } from '../../core/serializer';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Result = { status: number; body: any };
 
 /** Sanitize error for client response. */
@@ -30,15 +30,23 @@ function safeError(e: unknown): string {
 // Monitor CRUD
 // ============================================================================
 
+interface MonitorMutationBody {
+  datasourceId?: string;
+  [key: string]: unknown;
+}
+
 export async function handleCreateMonitor(
   alertSvc: MultiBackendAlertService,
-  body: any
+  body: MonitorMutationBody
 ): Promise<Result> {
   if (!body.datasourceId) {
     return { status: 400, body: { error: 'datasourceId is required' } };
   }
   try {
-    const monitor = await alertSvc.createOSMonitor(body.datasourceId, body);
+    const monitor = await alertSvc.createOSMonitor(
+      body.datasourceId,
+      body as unknown as Omit<OSMonitor, 'id'>
+    );
     return { status: 201, body: monitor };
   } catch (e) {
     return { status: 400, body: { error: safeError(e) } };
@@ -48,13 +56,17 @@ export async function handleCreateMonitor(
 export async function handleUpdateMonitor(
   alertSvc: MultiBackendAlertService,
   id: string,
-  body: any
+  body: MonitorMutationBody
 ): Promise<Result> {
   if (!body.datasourceId) {
     return { status: 400, body: { error: 'datasourceId is required' } };
   }
   try {
-    const monitor = await alertSvc.updateOSMonitor(body.datasourceId, id, body);
+    const monitor = await alertSvc.updateOSMonitor(
+      body.datasourceId,
+      id,
+      body as unknown as Partial<OSMonitor>
+    );
     if (!monitor) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: monitor };
   } catch (e) {
@@ -83,18 +95,24 @@ export async function handleDeleteMonitor(
 // Import / Export
 // ============================================================================
 
+interface MonitorImportBody {
+  datasourceId?: string;
+  monitors?: unknown[];
+}
+
 export async function handleImportMonitors(
   alertSvc: MultiBackendAlertService,
-  body: any
+  body: MonitorImportBody | unknown[]
 ): Promise<Result> {
-  const dsId = body.datasourceId;
-  const configs = Array.isArray(body) ? body : body.monitors;
+  const importBody = body as MonitorImportBody;
+  const dsId = Array.isArray(body) ? undefined : importBody.datasourceId;
+  const configs = Array.isArray(body) ? body : importBody.monitors;
   if (!Array.isArray(configs))
     return { status: 400, body: { error: 'Expected array of monitor configs' } };
 
   // Phase 1: validate all configs
   const importResults: { index: number; success: boolean; errors?: string[]; id?: string }[] = [];
-  const validConfigs: { index: number; config: any }[] = [];
+  const validConfigs: { index: number; config: MonitorConfig }[] = [];
   for (let i = 0; i < configs.length; i++) {
     const { config, errors } = deserializeMonitor(configs[i]);
     if (!config) {
@@ -113,7 +131,10 @@ export async function handleImportMonitors(
   if (dsId) {
     for (const { index, config } of validConfigs) {
       try {
-        const created = await alertSvc.createOSMonitor(dsId, config);
+        const created = await alertSvc.createOSMonitor(
+          dsId,
+          config as unknown as Omit<OSMonitor, 'id'>
+        );
         importResults.push({ index, success: true, id: created.id });
       } catch (e) {
         importResults.push({ index, success: false, errors: [safeError(e)] });
@@ -137,10 +158,7 @@ export async function handleImportMonitors(
   };
 }
 
-export async function handleExportMonitors(
-  alertSvc: MultiBackendAlertService,
-  query?: any
-): Promise<Result> {
+export async function handleExportMonitors(alertSvc: MultiBackendAlertService): Promise<Result> {
   try {
     const response = await alertSvc.getUnifiedRules();
     const configs = serializeMonitors(response.results);
@@ -213,7 +231,7 @@ export async function handleAcknowledgeAlert(
 export async function handleSilenceAlert(
   svc: SuppressionRuleService,
   alertId: string,
-  body: any
+  body: { duration?: string }
 ): Promise<Result> {
   const duration = body?.duration || '1h';
   const now = new Date();

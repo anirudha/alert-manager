@@ -19,6 +19,7 @@ import {
   OSAlert,
   OSMonitor,
   PromAlert,
+  PromAlertingRule,
   PromRuleGroup,
   ProgressiveResponse,
   PaginatedResponse,
@@ -102,7 +103,7 @@ export class MultiBackendAlertService {
     return this.osBackend!.getAlerts(ds);
   }
 
-  async acknowledgeOSAlerts(dsId: string, monitorId: string, alertIds: string[]): Promise<any> {
+  async acknowledgeOSAlerts(dsId: string, monitorId: string, alertIds: string[]): Promise<unknown> {
     const ds = await this.requireDatasource(dsId, 'opensearch');
     return this.osBackend!.acknowledgeAlerts(ds, monitorId, alertIds);
   }
@@ -646,8 +647,12 @@ function parseThresholdValue(conditionSource: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-function promRuleToUnified(r: any, groupName: string, dsId: string): UnifiedRuleSummary {
-  const state = r.state as string;
+function promRuleToUnified(
+  r: PromAlertingRule,
+  groupName: string,
+  dsId: string
+): UnifiedRuleSummary {
+  const state = r.state;
   const severity = promSeverityFromLabels(r.labels);
   const status: MonitorStatus =
     state === 'firing' ? 'active' : state === 'pending' ? 'pending' : 'muted';

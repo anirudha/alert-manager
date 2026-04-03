@@ -66,7 +66,7 @@ export class InMemoryDatasourceService implements DatasourceService {
           method: 'GET',
           url: `${datasource.url.replace(/\/+$/, '')}/_cluster/health`,
           auth: buildAuthFromDatasource(datasource),
-          rejectUnauthorized: false,
+          rejectUnauthorized: datasource.tls?.rejectUnauthorized ?? false,
           timeoutMs: 5000,
         });
         const status = resp.body?.status; // green, yellow, red

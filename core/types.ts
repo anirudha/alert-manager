@@ -37,6 +37,9 @@ export interface Datasource {
     type: 'basic' | 'apikey' | 'sigv4';
     credentials?: Record<string, string>;
   };
+  tls?: {
+    rejectUnauthorized?: boolean;
+  };
 }
 
 // ============================================================================
@@ -107,7 +110,7 @@ export interface OSTrigger {
 export interface OSMonitorInput {
   search: {
     indices: string[];
-    query: Record<string, any>;
+    query: Record<string, unknown>;
   };
 }
 
@@ -155,8 +158,111 @@ export interface OSDestination {
   last_update_time: number;
   schema_version?: number;
   slack?: { url: string };
-  custom_webhook?: Record<string, any>;
-  email?: Record<string, any>;
+  custom_webhook?: Record<string, unknown>;
+  email?: Record<string, unknown>;
+}
+
+// ============================================================================
+// OpenSearch Alerting API response shapes (for backend parsing)
+// ============================================================================
+
+export interface OSMonitorSource {
+  type?: string;
+  monitor_type?: string;
+  name?: string;
+  enabled?: boolean;
+  schedule?: OSSchedule;
+  inputs?: OSMonitorInput[];
+  triggers?: OSRawTrigger[];
+  last_update_time?: number;
+  schema_version?: number;
+}
+
+export interface OSRawTrigger {
+  id?: string;
+  name?: string;
+  severity?: string | number;
+  condition?: { script: { source: string; lang?: string } };
+  actions?: OSRawAction[];
+  query_level_trigger?: Record<string, unknown>;
+  bucket_level_trigger?: Record<string, unknown>;
+  doc_level_trigger?: Record<string, unknown>;
+}
+
+export interface OSRawAction {
+  id?: string;
+  name?: string;
+  destination_id?: string;
+  message_template?: { source: string; lang?: string };
+  subject_template?: { source: string; lang?: string };
+  throttle_enabled?: boolean;
+  throttle?: { value: number; unit: string };
+}
+
+export interface OSMonitorHit {
+  _id: string;
+  _source: OSMonitorSource;
+  sort?: unknown[];
+}
+
+export interface OSSearchResponse {
+  hits: {
+    total?: { value: number };
+    hits: OSMonitorHit[];
+  };
+}
+
+export interface OSGetMonitorResponse {
+  _id: string;
+  _version?: number;
+  _seq_no?: number;
+  _primary_term?: number;
+  monitor: OSMonitorSource;
+}
+
+export interface OSCreateMonitorResponse {
+  _id: string;
+  _version?: number;
+  monitor: OSMonitorSource;
+}
+
+export interface OSAlertRaw {
+  id?: string;
+  alert_id?: string;
+  version?: number;
+  monitor_id?: string;
+  monitor_name?: string;
+  monitor_version?: number;
+  trigger_id?: string;
+  trigger_name?: string;
+  state?: string;
+  severity?: string | number;
+  error_message?: string | null;
+  start_time?: number;
+  last_notification_time?: number;
+  end_time?: number | null;
+  acknowledged_time?: number | null;
+  action_execution_results?: unknown[];
+}
+
+export interface OSAlertsApiResponse {
+  totalAlerts?: number;
+  alerts?: OSAlertRaw[];
+}
+
+export interface OSDestinationRaw {
+  id?: string;
+  type?: string;
+  name?: string;
+  last_update_time?: number;
+  schema_version?: number;
+  slack?: { url: string };
+  custom_webhook?: Record<string, unknown>;
+  email?: Record<string, unknown>;
+}
+
+export interface OSDestinationsApiResponse {
+  destinations?: OSDestinationRaw[];
 }
 
 // ============================================================================
@@ -226,11 +332,11 @@ export interface OpenSearchBackend {
     monitor: Partial<OSMonitor>
   ): Promise<OSMonitor | null>;
   deleteMonitor(ds: Datasource, monitorId: string): Promise<boolean>;
-  runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<any>;
+  runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<unknown>;
 
   // Alerts
   getAlerts(ds: Datasource): Promise<{ alerts: OSAlert[]; totalAlerts: number }>;
-  acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<any>;
+  acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<unknown>;
 
   // Destinations
   getDestinations(ds: Datasource): Promise<OSDestination[]>;
@@ -282,6 +388,63 @@ export interface AlertmanagerStatus {
 
 export interface AlertmanagerReceiver {
   name: string;
+}
+
+// ============================================================================
+// Prometheus API response shapes (for backend parsing)
+// ============================================================================
+
+export interface PromRulesApiResponse {
+  data?: { groups: PromRawRuleGroup[] };
+  groups?: PromRawRuleGroup[];
+  status?: string;
+}
+
+export interface PromRawRuleGroup {
+  name: string;
+  file: string;
+  interval?: string | number;
+  rules: PromRawRule[];
+}
+
+export interface PromRawRule {
+  type: 'recording' | 'alerting';
+  name?: string;
+  record?: string;
+  alert?: string;
+  expr?: string;
+  query?: string;
+  for?: string;
+  duration?: string | number;
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+  alerts?: PromRawAlert[];
+  health?: string;
+  state?: string;
+  lastEvaluation?: string;
+  evaluationTime?: number;
+}
+
+export interface PromRawAlert {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  state: string;
+  activeAt: string;
+  value?: string | number;
+}
+
+export interface PromAlertsApiResponse {
+  data?: PromRawAlert[] | { alerts: PromRawAlert[] };
+  alerts?: PromRawAlert[];
+  status?: string;
+}
+
+export interface DatasourceDefinition {
+  name: string;
+  connector?: string;
+  status?: string;
+  properties?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface AlertmanagerAlertGroup {
@@ -461,7 +624,7 @@ export interface UnifiedFetchOptions {
   /** Per-datasource timeout in ms. Defaults to 10000. */
   timeoutMs?: number;
   /** Called as each datasource completes, for progressive UI updates. */
-  onProgress?: (result: DatasourceFetchResult<any>) => void;
+  onProgress?: (result: DatasourceFetchResult<unknown>) => void;
   /** Pagination params for server-side pagination. */
   page?: number;
   pageSize?: number;

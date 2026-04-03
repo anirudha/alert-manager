@@ -43,7 +43,12 @@ function createAlertService(dsSvc: InMemoryDatasourceService): MultiBackendAlert
   return new MultiBackendAlertService(dsSvc, noopLogger);
 }
 
-const dsInput = { name: 'Test', type: 'opensearch' as const, url: 'http://localhost:9200', enabled: true };
+const dsInput = {
+  name: 'Test',
+  type: 'opensearch' as const,
+  url: 'http://localhost:9200',
+  enabled: true,
+};
 
 // ---------------------------------------------------------------------------
 // Datasource Handlers
@@ -203,7 +208,7 @@ describe('handleCreateOSMonitor', () => {
   it('returns 400 when backend throws for unknown datasource', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
-    const result = await handleCreateOSMonitor(alertSvc, 'bad-ds', { name: 'test' });
+    const result = await handleCreateOSMonitor(alertSvc, 'bad-ds', { name: 'test' } as any);
     expect(result.status).toBe(400);
   });
 });

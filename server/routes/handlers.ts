@@ -7,8 +7,15 @@
  * Route handlers — pure functions that work with any HTTP framework.
  * Exposes backend-native API shapes + unified views.
  */
-import { DatasourceService, Datasource, MultiBackendAlertService, Logger } from '../../core';
+import {
+  DatasourceService,
+  Datasource,
+  MultiBackendAlertService,
+  Logger,
+  OSMonitor,
+} from '../../core';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Result = { status: number; body: any };
 
 /** Sanitize error for client response — log full detail, return safe message. */
@@ -102,7 +109,7 @@ export async function handleGetOSMonitor(
 export async function handleCreateOSMonitor(
   alertSvc: MultiBackendAlertService,
   dsId: string,
-  body: any
+  body: Omit<OSMonitor, 'id'>
 ): Promise<Result> {
   try {
     return { status: 201, body: await alertSvc.createOSMonitor(dsId, body) };
@@ -115,7 +122,7 @@ export async function handleUpdateOSMonitor(
   alertSvc: MultiBackendAlertService,
   dsId: string,
   monitorId: string,
-  body: any
+  body: Partial<OSMonitor>
 ): Promise<Result> {
   try {
     const m = await alertSvc.updateOSMonitor(dsId, monitorId, body);
@@ -159,7 +166,7 @@ export async function handleAcknowledgeOSAlerts(
   alertSvc: MultiBackendAlertService,
   dsId: string,
   monitorId: string,
-  body: any
+  body: { alerts?: string[] }
 ): Promise<Result> {
   try {
     return {

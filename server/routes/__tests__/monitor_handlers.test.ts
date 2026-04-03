@@ -111,7 +111,7 @@ describe('handleDeleteMonitor', () => {
 describe('handleImportMonitors', () => {
   it('returns 400 when body is not an array and has no monitors key', async () => {
     const { alertSvc } = createServices();
-    const result = await handleImportMonitors(alertSvc, { invalid: true });
+    const result = await handleImportMonitors(alertSvc, { invalid: true } as any);
     expect(result.status).toBe(400);
     expect(result.body.error).toContain('Expected array');
   });

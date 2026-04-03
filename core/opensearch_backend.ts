@@ -9,7 +9,25 @@
  * API reference: https://opensearch.org/docs/latest/observing-your-data/alerting/api/
  */
 import { HttpClient, buildAuthFromDatasource } from './http_client';
-import { Datasource, Logger, OpenSearchBackend, OSMonitor, OSAlert, OSDestination } from './types';
+import {
+  Datasource,
+  Logger,
+  OpenSearchBackend,
+  OSMonitor,
+  OSAlert,
+  OSDestination,
+  OSTrigger,
+  OSSearchResponse,
+  OSGetMonitorResponse,
+  OSCreateMonitorResponse,
+  OSAlertsApiResponse,
+  OSAlertRaw,
+  OSMonitorSource,
+  OSRawTrigger,
+  OSRawAction,
+  OSDestinationRaw,
+  OSDestinationsApiResponse,
+} from './types';
 
 export class HttpOpenSearchBackend implements OpenSearchBackend {
   readonly type = 'opensearch' as const;
@@ -39,7 +57,12 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
         body.search_after = searchAfter;
       }
 
-      const resp = await this.req<any>(ds, 'POST', '/_plugins/_alerting/monitors/_search', body);
+      const resp = await this.req<OSSearchResponse>(
+        ds,
+        'POST',
+        '/_plugins/_alerting/monitors/_search',
+        body
+      );
       const hits = resp.body?.hits?.hits ?? [];
       if (hits.length === 0) break;
 
@@ -56,7 +79,11 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
 
   async getMonitor(ds: Datasource, monitorId: string): Promise<OSMonitor | null> {
     try {
-      const resp = await this.req<any>(ds, 'GET', `/_plugins/_alerting/monitors/${monitorId}`);
+      const resp = await this.req<OSGetMonitorResponse>(
+        ds,
+        'GET',
+        `/_plugins/_alerting/monitors/${monitorId}`
+      );
       return this.mapMonitor(resp.body._id, resp.body.monitor);
     } catch (err) {
       if (this.is404(err)) return null;
@@ -65,10 +92,15 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   }
 
   async createMonitor(ds: Datasource, monitor: Omit<OSMonitor, 'id'>): Promise<OSMonitor> {
-    const resp = await this.req<any>(ds, 'POST', '/_plugins/_alerting/monitors', {
-      ...monitor,
-      type: 'monitor',
-    });
+    const resp = await this.req<OSCreateMonitorResponse>(
+      ds,
+      'POST',
+      '/_plugins/_alerting/monitors',
+      {
+        ...monitor,
+        type: 'monitor',
+      }
+    );
     return this.mapMonitor(resp.body._id, resp.body.monitor);
   }
 
@@ -81,7 +113,11 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     let seqNo: number | undefined;
     let primaryTerm: number | undefined;
     try {
-      const getResp = await this.req<any>(ds, 'GET', `/_plugins/_alerting/monitors/${monitorId}`);
+      const getResp = await this.req<OSGetMonitorResponse>(
+        ds,
+        'GET',
+        `/_plugins/_alerting/monitors/${monitorId}`
+      );
       seqNo = getResp.body._seq_no;
       primaryTerm = getResp.body._primary_term;
       const current = this.mapMonitor(getResp.body._id, getResp.body.monitor);
@@ -94,7 +130,7 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
         putPath += `?if_seq_no=${seqNo}&if_primary_term=${primaryTerm}`;
       }
 
-      const resp = await this.req<any>(ds, 'PUT', putPath, {
+      const resp = await this.req<OSCreateMonitorResponse>(ds, 'PUT', putPath, {
         ...merged,
         type: 'monitor',
       });
@@ -115,8 +151,8 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     }
   }
 
-  async runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<any> {
-    const resp = await this.req<any>(
+  async runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<unknown> {
+    const resp = await this.req<unknown>(
       ds,
       'POST',
       `/_plugins/_alerting/monitors/${monitorId}/_execute`,
@@ -139,13 +175,13 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
 
     // Paginate through all alerts
     while (true) {
-      const resp = await this.req<any>(
+      const resp = await this.req<OSAlertsApiResponse>(
         ds,
         'GET',
         `/_plugins/_alerting/monitors/alerts?size=${PAGE_SIZE}&startIndex=${startIndex}`
       );
       totalAlerts = resp.body.totalAlerts ?? 0;
-      const alerts: OSAlert[] = (resp.body.alerts ?? []).map((a: any) => this.mapAlert(a));
+      const alerts: OSAlert[] = (resp.body.alerts ?? []).map((a: OSAlertRaw) => this.mapAlert(a));
       allAlerts.push(...alerts);
 
       if (alerts.length < PAGE_SIZE || allAlerts.length >= totalAlerts) break;
@@ -155,8 +191,8 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     return { alerts: allAlerts, totalAlerts };
   }
 
-  async acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<any> {
-    const resp = await this.req<any>(
+  async acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<unknown> {
+    const resp = await this.req<unknown>(
       ds,
       'POST',
       `/_plugins/_alerting/monitors/${monitorId}/_acknowledge/alerts`,
@@ -170,12 +206,21 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   // =========================================================================
 
   async getDestinations(ds: Datasource): Promise<OSDestination[]> {
-    const resp = await this.req<any>(ds, 'GET', '/_plugins/_alerting/destinations?size=200');
-    return (resp.body.destinations ?? []).map((d: any) => this.mapDestination(d));
+    const resp = await this.req<OSDestinationsApiResponse>(
+      ds,
+      'GET',
+      '/_plugins/_alerting/destinations?size=200'
+    );
+    return (resp.body.destinations ?? []).map((d: OSDestinationRaw) => this.mapDestination(d));
   }
 
   async createDestination(ds: Datasource, dest: Omit<OSDestination, 'id'>): Promise<OSDestination> {
-    const resp = await this.req<any>(ds, 'POST', '/_plugins/_alerting/destinations', dest);
+    const resp = await this.req<{ _id: string; destination: OSDestinationRaw }>(
+      ds,
+      'POST',
+      '/_plugins/_alerting/destinations',
+      dest
+    );
     return this.mapDestination({ id: resp.body._id, ...resp.body.destination });
   }
 
@@ -193,61 +238,73 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   // Helpers
   // =========================================================================
 
-  private async req<T = any>(
+  private async req<T = unknown>(
     ds: Datasource,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
-    body?: any
+    body?: unknown
   ) {
     return this.http.request<T>({
       method,
       url: `${ds.url.replace(/\/+$/, '')}${path}`,
       body,
       auth: buildAuthFromDatasource(ds),
-      rejectUnauthorized: false,
+      // Default false for backward compatibility with self-signed certs.
+      // Production deployments should set ds.tls.rejectUnauthorized = true.
+      rejectUnauthorized: ds.tls?.rejectUnauthorized ?? false,
       timeoutMs: 10_000,
     });
   }
 
-  private mapMonitor(id: string, source: any): OSMonitor {
+  private mapMonitor(id: string, source: OSMonitorSource): OSMonitor {
     return {
       id,
-      type: source.type || 'monitor',
-      monitor_type: source.monitor_type || 'query_level_monitor',
+      type: (source.type as OSMonitor['type']) || 'monitor',
+      monitor_type: (source.monitor_type as OSMonitor['monitor_type']) || 'query_level_monitor',
       name: source.name || '',
       enabled: source.enabled ?? true,
       schedule: source.schedule || { period: { interval: 5, unit: 'MINUTES' } },
       inputs: source.inputs || [],
-      triggers: (source.triggers || []).map((t: any) => this.mapTrigger(t)),
+      triggers: (source.triggers || []).map((t: OSRawTrigger) => this.mapTrigger(t)),
       last_update_time: source.last_update_time || Date.now(),
       schema_version: source.schema_version,
     };
   }
 
-  private mapTrigger(t: any): any {
+  private mapTrigger(t: OSRawTrigger): OSTrigger {
     // OpenSearch returns triggers in different formats depending on monitor_type
     // For query_level_monitor: { query_level_trigger: { ... } }
     // For bucket_level_monitor: { bucket_level_trigger: { ... } }
     // Normalize to flat trigger format
-    const inner = t.query_level_trigger || t.bucket_level_trigger || t.doc_level_trigger || t;
+    const inner = (t.query_level_trigger ||
+      t.bucket_level_trigger ||
+      t.doc_level_trigger ||
+      t) as OSRawTrigger;
     return {
       id: inner.id || '',
       name: inner.name || '',
-      severity: String(inner.severity || '3'),
-      condition: inner.condition || { script: { source: '', lang: 'painless' } },
-      actions: (inner.actions || []).map((a: any) => ({
+      severity: String(inner.severity || '3') as OSTrigger['severity'],
+      condition: {
+        script: {
+          source: inner.condition?.script?.source || '',
+          lang: inner.condition?.script?.lang || 'painless',
+        },
+      },
+      actions: (inner.actions || []).map((a: OSRawAction) => ({
         id: a.id || '',
         name: a.name || '',
         destination_id: a.destination_id || '',
-        message_template: a.message_template || { source: '' },
-        subject_template: a.subject_template,
+        message_template: { source: a.message_template?.source || '' },
+        subject_template: a.subject_template
+          ? { source: a.subject_template.source || '' }
+          : undefined,
         throttle_enabled: a.throttle_enabled ?? false,
-        throttle: a.throttle,
+        throttle: a.throttle as OSTrigger['actions'][0]['throttle'],
       })),
     };
   }
 
-  private mapAlert(a: any): OSAlert {
+  private mapAlert(a: OSAlertRaw): OSAlert {
     return {
       id: a.id || a.alert_id || '',
       version: a.version ?? 1,
@@ -256,21 +313,22 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
       monitor_version: a.monitor_version ?? 1,
       trigger_id: a.trigger_id || '',
       trigger_name: a.trigger_name || '',
-      state: a.state || 'ACTIVE',
-      severity: String(a.severity || '3') as any,
+      state: (a.state || 'ACTIVE') as OSAlert['state'],
+      severity: String(a.severity || '3') as OSAlert['severity'],
       error_message: a.error_message || null,
       start_time: a.start_time || Date.now(),
       last_notification_time: a.last_notification_time || Date.now(),
       end_time: a.end_time || null,
       acknowledged_time: a.acknowledged_time || null,
-      action_execution_results: a.action_execution_results || [],
+      action_execution_results: (a.action_execution_results ||
+        []) as OSAlert['action_execution_results'],
     };
   }
 
-  private mapDestination(d: any): OSDestination {
+  private mapDestination(d: OSDestinationRaw): OSDestination {
     return {
       id: d.id || '',
-      type: d.type || 'custom_webhook',
+      type: (d.type || 'custom_webhook') as OSDestination['type'],
       name: d.name || '',
       last_update_time: d.last_update_time || Date.now(),
       schema_version: d.schema_version,
