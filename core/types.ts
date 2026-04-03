@@ -454,6 +454,12 @@ export interface AlertmanagerAlertGroup {
 }
 
 /** Prometheus / AMP backend */
+/** Time-series data point from Prometheus range query. */
+export interface PromTimeSeriesPoint {
+  timestamp: number;
+  value: number;
+}
+
 export interface PrometheusBackend {
   readonly type: 'prometheus';
 
@@ -465,6 +471,15 @@ export interface PrometheusBackend {
 
   // Workspace discovery
   listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]>;
+
+  /** Execute a PromQL range query and return time-series data points. */
+  queryRange?(
+    ds: Datasource,
+    query: string,
+    start: number,
+    end: number,
+    step: number
+  ): Promise<PromTimeSeriesPoint[]>;
 
   // ---- Alertmanager operations (optional — only available when alertmanagerUrl is set) ----
 

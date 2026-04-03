@@ -42,6 +42,7 @@ import {
   PromRawAlert,
   PromAlertsApiResponse,
   DatasourceDefinition,
+  PromTimeSeriesPoint,
 } from './types';
 
 export interface DirectQueryConfig {
@@ -452,6 +453,52 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
       lastEvaluation: r.lastEvaluation,
       evaluationTime: r.evaluationTime,
     } as PromAlertingRule;
+  }
+
+  /**
+   * Execute a PromQL range query via DirectQuery and return time-series data.
+   * Uses: GET /api/v1/query_range?query=...&start=...&end=...&step=...
+   */
+  async queryRange(
+    ds: Datasource,
+    query: string,
+    start: number,
+    end: number,
+    step: number
+  ): Promise<PromTimeSeriesPoint[]> {
+    try {
+      const params = new URLSearchParams({
+        query,
+        start: start.toString(),
+        end: end.toString(),
+        step: step.toString(),
+      });
+      const data = await this.get<{
+        resultType?: string;
+        result?: Array<{
+          metric?: Record<string, string>;
+          values?: Array<[number, string]>;
+        }>;
+      }>(ds, `/api/v1/query_range?${params.toString()}`);
+
+      // Flatten all series into a single time-series (sum/first series)
+      const points: PromTimeSeriesPoint[] = [];
+      const result = data?.result || [];
+      if (result.length > 0) {
+        // Use the first result series
+        const values = result[0].values || [];
+        for (const [ts, val] of values) {
+          const numVal = parseFloat(val);
+          if (!isNaN(numVal)) {
+            points.push({ timestamp: ts * 1000, value: numVal });
+          }
+        }
+      }
+      return points;
+    } catch (err) {
+      this.logger.warn(`Failed to execute range query: ${err}`);
+      return [];
+    }
   }
 
   private parseDurationToSeconds(dur: string): number {

@@ -393,6 +393,15 @@ export class MultiBackendAlertService {
       trigger?.actions?.[0]?.message_template?.source ||
       `${summary.monitorType} monitor targeting ${monitor.inputs[0]?.search?.indices?.join(', ') || 'unknown indices'}`;
 
+    // Fetch condition preview via monitor dry run
+    let conditionPreviewData: Array<{ timestamp: number; value: number }> = [];
+    try {
+      const execResult = await this.osBackend!.runMonitor(ds, monitorId, true);
+      conditionPreviewData = this.extractOSPreviewData(execResult);
+    } catch {
+      // Dry run is best-effort — some monitors may not support it
+    }
+
     return {
       ...summary,
       description,
@@ -401,8 +410,7 @@ export class MultiBackendAlertService {
       firingPeriod: undefined,
       lookbackPeriod: undefined,
       alertHistory,
-      // MOCK: Condition preview requires time-series query execution
-      conditionPreviewData: [],
+      conditionPreviewData,
       notificationRouting,
       // Suppression rules from the in-memory service (not from OS API)
       suppressionRules: [],
@@ -445,8 +453,11 @@ export class MultiBackendAlertService {
           firingPeriod: undefined,
           lookbackPeriod: undefined,
           alertHistory,
-          // MOCK: Condition preview requires PromQL range query execution
-          conditionPreviewData: [],
+          conditionPreviewData: await this.fetchPromPreviewData(
+            ds,
+            alertingRule.query,
+            alertingRule
+          ),
           notificationRouting: [],
           suppressionRules: [],
           raw: alertingRule,
@@ -647,6 +658,114 @@ export class MultiBackendAlertService {
         }
       );
     });
+  }
+
+  /**
+   * Extract preview data from OS monitor dry-run result.
+   * The _execute API returns input_results with the query response.
+   */
+  private extractOSPreviewData(execResult: unknown): Array<{ timestamp: number; value: number }> {
+    const points: Array<{ timestamp: number; value: number }> = [];
+    if (!execResult || typeof execResult !== 'object') return points;
+
+    const result = execResult as Record<string, unknown>;
+    const inputResults = result.input_results as Record<string, unknown> | undefined;
+    const triggerResults = result.trigger_results as Record<string, unknown> | undefined;
+
+    // Try to extract a meaningful numeric value from trigger results
+    if (triggerResults) {
+      const now = Date.now();
+      for (const [, triggerData] of Object.entries(triggerResults)) {
+        const td = triggerData as Record<string, unknown>;
+        // Trigger results contain the evaluated condition value
+        if (typeof td.triggered === 'boolean') {
+          // Use the period_start/period_end from the execution
+          const periodStart = (result.period_start as number) || now - 300_000;
+          const periodEnd = (result.period_end as number) || now;
+          points.push({
+            timestamp: periodEnd,
+            value: td.triggered ? 1 : 0,
+          });
+          // Also add start point for a basic range
+          points.push({
+            timestamp: periodStart,
+            value: td.triggered ? 1 : 0,
+          });
+        }
+      }
+    }
+
+    // Try to extract hit counts from input results (common for query-level monitors)
+    if (inputResults) {
+      const results = inputResults.results as Array<Record<string, unknown>> | undefined;
+      if (results && results.length > 0) {
+        const firstResult = results[0];
+        const hits = firstResult?.hits as Record<string, unknown> | undefined;
+        const total = hits?.total as { value?: number } | number | undefined;
+        const totalValue = typeof total === 'number' ? total : total?.value;
+        if (typeof totalValue === 'number') {
+          points.push({ timestamp: Date.now(), value: totalValue });
+        }
+      }
+    }
+
+    return points.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  /**
+   * Fetch PromQL range query data for condition preview.
+   * Queries the last 1 hour with 60-second step.
+   */
+  /**
+   * Fetch condition preview data for Prometheus rules.
+   *
+   * Attempts queryRange via DirectQuery first. If the API doesn't support it
+   * (OpenSearch DirectQuery only proxies /rules and /alerts, not /query_range),
+   * falls back to extracting current evaluation data from the rule's embedded
+   * alerts and lastEvaluation timestamp.
+   */
+  private async fetchPromPreviewData(
+    ds: Datasource,
+    query: string,
+    rule: PromAlertingRule
+  ): Promise<Array<{ timestamp: number; value: number }>> {
+    // Try queryRange first (works with direct Prometheus, not via DirectQuery)
+    if (this.promBackend?.queryRange) {
+      try {
+        const metricQuery = query.replace(/\s*(>|<|>=|<=|==|!=)\s*[\d.]+\s*$/, '').trim();
+        const now = Math.floor(Date.now() / 1000);
+        const oneHourAgo = now - 3600;
+        const step = 60;
+        const points = await this.promBackend.queryRange(ds, metricQuery, oneHourAgo, now, step);
+        if (points.length > 0) return points;
+      } catch {
+        // queryRange not supported (e.g., DirectQuery) — fall through to extraction
+      }
+    }
+
+    // Fallback: extract data from the rule's embedded alerts and evaluation metadata
+    const points: Array<{ timestamp: number; value: number }> = [];
+
+    // Add data points from currently active alerts (they contain the current value)
+    for (const alert of rule.alerts || []) {
+      const value = parseFloat(alert.value);
+      if (!isNaN(value)) {
+        points.push({
+          timestamp: new Date(alert.activeAt).getTime(),
+          value,
+        });
+      }
+    }
+
+    // Add the last evaluation timestamp with the alert count as a proxy metric
+    if (rule.lastEvaluation) {
+      points.push({
+        timestamp: new Date(rule.lastEvaluation).getTime(),
+        value: (rule.alerts || []).length,
+      });
+    }
+
+    return points.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   private async requireDatasource(dsId: string, expectedType: string): Promise<Datasource> {
