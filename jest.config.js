@@ -12,4 +12,19 @@ module.exports = {
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },
+  collectCoverageFrom: [
+    'core/**/*.ts',
+    'server/**/*.ts',
+    '!core/mock_backend.ts',
+    '!**/index.ts',
+    '!**/__tests__/**',
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 50,
+      functions: 60,
+      lines: 60,
+      statements: 60,
+    },
+  },
 };

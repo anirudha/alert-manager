@@ -7,6 +7,7 @@
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "lint": "eslint . --ext .js,.ts,.tsx --ignore-pattern standalone/dist --ignore-pattern standalone/node_modules",
     "lint:fix": "eslint . --ext .js,.ts,.tsx --fix --ignore-pattern standalone/dist --ignore-pattern standalone/node_modules",
     "build": "yarn plugin-helpers build",
