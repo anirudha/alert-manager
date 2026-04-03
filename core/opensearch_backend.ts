@@ -44,8 +44,8 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
 
   async createMonitor(ds: Datasource, monitor: Omit<OSMonitor, 'id'>): Promise<OSMonitor> {
     const resp = await this.req<any>(ds, 'POST', '/_plugins/_alerting/monitors', {
-      type: 'monitor',
       ...monitor,
+      type: 'monitor',
     });
     return this.mapMonitor(resp.body._id, resp.body.monitor);
   }
@@ -64,8 +64,8 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
 
     try {
       const resp = await this.req<any>(ds, 'PUT', `/_plugins/_alerting/monitors/${monitorId}`, {
-        type: 'monitor',
         ...merged,
+        type: 'monitor',
       });
       return this.mapMonitor(resp.body._id, resp.body.monitor);
     } catch (err) {
