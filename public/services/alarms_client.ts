@@ -11,9 +11,9 @@
 import { Datasource, UnifiedAlert, UnifiedRule } from '../../core';
 
 export interface HttpClient {
-  get<T = any>(path: string): Promise<T>;
-  post<T = any>(path: string, body?: any): Promise<T>;
-  delete<T = any>(path: string): Promise<T>;
+  get<T = unknown>(path: string): Promise<T>;
+  post<T = unknown>(path: string, body?: unknown): Promise<T>;
+  delete<T = unknown>(path: string): Promise<T>;
 }
 
 export interface ApiPaths {
@@ -34,6 +34,16 @@ const STANDALONE_PATHS: ApiPaths = {
   rules: '/api/rules',
 };
 
+interface AlertsResponse {
+  results?: UnifiedAlert[];
+  alerts?: UnifiedAlert[];
+}
+
+interface RulesResponse {
+  results?: UnifiedRule[];
+  rules?: UnifiedRule[];
+}
+
 export class AlarmsApiClient {
   private readonly paths: ApiPaths;
 
@@ -47,12 +57,12 @@ export class AlarmsApiClient {
   }
 
   async listAlerts(): Promise<UnifiedAlert[]> {
-    const res = await this.http.get<any>(this.paths.alerts);
+    const res = await this.http.get<AlertsResponse>(this.paths.alerts);
     return res.results ?? res.alerts ?? [];
   }
 
   async listRules(): Promise<UnifiedRule[]> {
-    const res = await this.http.get<any>(this.paths.rules);
+    const res = await this.http.get<RulesResponse>(this.paths.rules);
     return res.results ?? res.rules ?? [];
   }
 }
