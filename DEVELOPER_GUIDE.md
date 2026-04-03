@@ -135,7 +135,7 @@ export async function handleNewFeature(service: AlarmService, input: Input) {
 ```typescript
 // server/routes/index.ts
 router.post(
-  { path: '/api/alarms/new-feature', validate: { body: schema } },
+  { path: '/api/alert_manager/new-feature', validate: { body: schema } },
   async (_ctx, req, res) => {
     const result = await handleNewFeature(service, req.body);
     return res.ok({ body: result.body });
@@ -147,7 +147,7 @@ router.post(
 
 ```typescript
 // standalone/server.ts
-app.post('/api/alarms/new-feature', async (req, res) => {
+app.post('/api/alert_manager/new-feature', async (req, res) => {
   const result = await handleNewFeature(service, req.body);
   res.status(result.status).json(result.body);
 });
@@ -165,18 +165,18 @@ Update both:
 
 ```bash
 # List alarms
-curl http://localhost:5603/api/alarms
+curl http://localhost:5603/api/alert_manager
 
 # Create alarm
-curl -X POST http://localhost:5603/api/alarms \
+curl -X POST http://localhost:5603/api/alert_manager \
   -H "Content-Type: application/json" \
   -d '{"name":"Test","severity":"low","condition":"test > 0"}'
 
 # Toggle alarm
-curl -X POST http://localhost:5603/api/alarms/alarm-1/toggle
+curl -X POST http://localhost:5603/api/alert_manager/alarm-1/toggle
 
 # Delete alarm
-curl -X DELETE http://localhost:5603/api/alarms/alarm-1
+curl -X DELETE http://localhost:5603/api/alert_manager/alarm-1
 ```
 
 ### Unit Tests

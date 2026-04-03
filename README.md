@@ -50,7 +50,7 @@ A single codebase, two ways to run it:
 | Mode | Use Case | How to Run | Port |
 |------|----------|-----------|------|
 | OSD Plugin | Production / Cloud / SaaS | `yarn start` inside OSD | 5601 |
-| Standalone (npx) | Quick dev, demos, lightweight serving | `npx @anirudhaj/alarms` | 5603 |
+| Standalone (npx) | Quick dev, demos, lightweight serving | `npx @opensearch-project/alert-manager` | 5603 |
 
 Both modes share the same **core services**, **route handlers**, **UI components**, and **API shape**. The only difference is the hosting layer.
 
@@ -76,14 +76,14 @@ git clone https://github.com/opensearch-project/OpenSearch-Dashboards.git
 cd OpenSearch-Dashboards
 
 # Clone this plugin
-git clone https://github.com/anirudha/alert-manager.git plugins/alarms
+git clone https://github.com/opensearch-project/dashboards-observability.git plugins/alert-manager
 
 # Install dependencies and start
 yarn osd bootstrap
 yarn start
 ```
 
-Navigate to http://localhost:5601/app/alarms
+Navigate to http://localhost:5601/app/alertManager
 
 ### 2. Standalone Mode (npx)
 
@@ -91,13 +91,13 @@ For quick dev, demos, and lightweight serving:
 
 ```bash
 # Run with default port 5603
-npx @anirudhaj/alarms
+npx @opensearch-project/alert-manager
 
 # Custom port
-npx @anirudhaj/alarms --port 8080
+npx @opensearch-project/alert-manager --port 8080
 
 # Disable mock mode (connect to real backends)
-MOCK_MODE=false npx @anirudhaj/alarms
+MOCK_MODE=false npx @opensearch-project/alert-manager
 ```
 
 Open http://localhost:5603 in your browser.
@@ -111,7 +111,7 @@ Run Alert Manager against the [Observability Stack](https://github.com/lezzago/o
 git clone -b update-alerting https://github.com/lezzago/observability-stack.git && cd observability-stack && docker compose up -d
 
 # Then run Alert Manager — defaults match the observability stack out of the box:
-npx @anirudhaj/alarms
+npx @opensearch-project/alert-manager
 ```
 
 This auto-discovers the Prometheus Direct Query datasource registered by the stack, giving you unified visibility into:
@@ -159,23 +159,23 @@ All defaults are tuned to work with the observability stack out of the box. Over
 | [![bugs open][bug-badge]][bug-link]                            |
 
 [build-badge]: https://img.shields.io/badge/build-passing-brightgreen
-[build-link]: https://github.com/anirudha/alert-manager/actions
+[build-link]: https://github.com/opensearch-project/dashboards-observability/actions
 [standalone-badge]: https://img.shields.io/badge/standalone-ready-blue
-[standalone-link]: https://github.com/anirudha/alert-manager/tree/main/standalone
-[publish-badge]: https://github.com/anirudha/alert-manager/actions/workflows/publish.yml/badge.svg
-[publish-link]: https://github.com/anirudha/alert-manager/actions/workflows/publish.yml
-[npm-badge]: https://img.shields.io/npm/v/@anirudhaj/alarms
-[npm-link]: https://www.npmjs.com/package/@anirudhaj/alarms
+[standalone-link]: https://github.com/opensearch-project/dashboards-observability/tree/main/standalone
+[publish-badge]: https://github.com/opensearch-project/dashboards-observability/actions/workflows/publish.yml/badge.svg
+[publish-link]: https://github.com/opensearch-project/dashboards-observability/actions/workflows/publish.yml
+[npm-badge]: https://img.shields.io/npm/v/@opensearch-project/alert-manager
+[npm-link]: https://www.npmjs.com/package/@opensearch-project/alert-manager
 [dco-badge]: https://img.shields.io/badge/DCO-enabled-brightgreen
-[dco-badge-link]: https://github.com/anirudha/alert-manager/actions
+[dco-badge-link]: https://github.com/opensearch-project/dashboards-observability/actions
 [link-check-badge]: https://img.shields.io/badge/links-valid-brightgreen
-[link-check-link]: https://github.com/anirudha/alert-manager/actions
-[good-first-badge]: https://img.shields.io/github/issues/anirudha/alert-manager/good%20first%20issue.svg
-[good-first-link]: https://github.com/anirudha/alert-manager/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22
-[feature-badge]: https://img.shields.io/github/issues/anirudha/alert-manager/feature.svg
-[feature-link]: https://github.com/anirudha/alert-manager/issues?q=is%3Aopen+is%3Aissue+label%3Afeature
-[bug-badge]: https://img.shields.io/github/issues/anirudha/alert-manager/bug.svg
-[bug-link]: https://github.com/anirudha/alert-manager/issues?q=is%3Aopen+is%3Aissue+label%3Abug
+[link-check-link]: https://github.com/opensearch-project/dashboards-observability/actions
+[good-first-badge]: https://img.shields.io/github/issues/opensearch-project/dashboards-observability/good%20first%20issue.svg
+[good-first-link]: https://github.com/opensearch-project/dashboards-observability/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22
+[feature-badge]: https://img.shields.io/github/issues/opensearch-project/dashboards-observability/feature.svg
+[feature-link]: https://github.com/opensearch-project/dashboards-observability/issues?q=is%3Aopen+is%3Aissue+label%3Afeature
+[bug-badge]: https://img.shields.io/github/issues/opensearch-project/dashboards-observability/bug.svg
+[bug-link]: https://github.com/opensearch-project/dashboards-observability/issues?q=is%3Aopen+is%3Aissue+label%3Abug
 
 ## API Reference
 

@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Alert Manager!
 
 ## Ways to Contribute
 
-- Report bugs and request features via [GitHub Issues](https://github.com/anirudha/alert-manager/issues)
+- Report bugs and request features via [GitHub Issues](https://github.com/opensearch-project/dashboards-observability/issues)
 - Submit pull requests for bug fixes or new features
 - Improve documentation
 - Help answer questions in issues

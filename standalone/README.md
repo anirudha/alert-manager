@@ -1,11 +1,11 @@
-# @anirudhaj/alarms
+# @opensearch-project/alert-manager (Standalone)
 
 Alert Manager UI for OpenSearch Alerting and Amazon Managed Prometheus. Supports multiple alerting backends with a unified interface.
 
 ## Quick Start
 
 ```bash
-npx @anirudhaj/alarms
+npx @opensearch-project/alert-manager
 ```
 
 Open http://localhost:5603 in your browser.
@@ -13,9 +13,9 @@ Open http://localhost:5603 in your browser.
 ## Options
 
 ```bash
-npx @anirudhaj/alarms --port 8080      # Custom port
-MOCK_MODE=false npx @anirudhaj/alarms  # Disable mock mode
-npx @anirudhaj/alarms --help           # Show help
+npx @opensearch-project/alert-manager --port 8080      # Custom port
+MOCK_MODE=false npx @opensearch-project/alert-manager  # Disable mock mode
+npx @opensearch-project/alert-manager --help           # Show help
 ```
 
 ## Supported Backends
@@ -91,7 +91,7 @@ curl -X POST http://localhost:5603/api/rules \
 
 ## Repository
 
-https://github.com/anirudha/alert-manager
+https://github.com/opensearch-project/dashboards-observability
 
 ## License
 
