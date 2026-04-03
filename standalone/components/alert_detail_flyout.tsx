@@ -5,7 +5,7 @@
 import React, { useState, useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
-import { LineChart } from 'echarts/charts';
+import { LineChart, CustomChart } from 'echarts/charts';
 import {
   GridComponent,
   TooltipComponent,
@@ -48,7 +48,7 @@ import {
   SuppressionRule,
 } from '../../core';
 
-echarts.use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
+echarts.use([LineChart, CustomChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
 // ============================================================================
 // Color maps
@@ -56,6 +56,14 @@ echarts.use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, Mark
 
 const STATE_COLORS: Record<string, string> = {
   active: 'danger', pending: 'warning', acknowledged: 'primary', resolved: 'success', error: 'danger',
+};
+
+const TIMELINE_COLORS: Record<string, string> = {
+  active: '#BD271E',
+  pending: '#F5A700',
+  acknowledged: '#006BB4',
+  resolved: '#017D73',
+  error: '#BD271E',
 };
 
 // ============================================================================
@@ -73,7 +81,7 @@ export interface AlertDetailFlyoutProps {
   onViewAlert?: (alert: UnifiedAlert) => void;
 }
 
-type TabId = 'signal' | 'history' | 'configuration' | 'related';
+type TabId = 'overview' | 'history' | 'configuration' | 'related';
 
 // ============================================================================
 // Component
@@ -82,8 +90,9 @@ type TabId = 'signal' | 'history' | 'configuration' | 'related';
 export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   alert, datasources, rules, allAlerts, onClose, onAcknowledge, onSilence, onViewAlert,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabId>('signal');
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [timeRange, setTimeRange] = useState('6h');
+  const [historyTimeRange, setHistoryTimeRange] = useState('6h');
   const [isMuted, setIsMuted] = useState(false);
 
   const dsName = datasources.find(d => d.id === alert.datasourceId)?.name || alert.datasourceId;
@@ -136,7 +145,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
   // ---- Tabs ----
   const tabs: Array<{ id: TabId; name: string }> = [
-    { id: 'signal', name: 'Signal' },
+    { id: 'overview', name: 'Overview' },
     { id: 'history', name: 'History' },
     { id: 'configuration', name: 'Configuration' },
     { id: 'related', name: 'Related resources' },
@@ -213,6 +222,11 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
     ? associatedRule.alertHistory
     : generateMockHistory(alert);
 
+  // ---- Timeline chart option ----
+  const timelineChartOption = useMemo(() => {
+    return buildTimelineChartOption(historyEntries, historyTimeRange);
+  }, [historyEntries, historyTimeRange]);
+
   // ---- Notification routing (from rule) ----
   const routingEntries: NotificationRouting[] = associatedRule?.notificationRouting || [];
 
@@ -225,12 +239,18 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   const conditionPeriods = associatedRule?.firingPeriod || '5 min';
   const actionDest = associatedRule?.notificationDestinations?.[0] || annotations.notification || '—';
 
+  // ---- Summary & Recommendation (from annotations or generated) ----
+  const summary = annotations.summary || associatedRule?.aiSummary || generateMockSummary(alert, metricLabel, thresholdValue, thresholdUnit);
+  const recommendationRaw = annotations.recommendation;
+  const recommendation: string[] = recommendationRaw
+    ? recommendationRaw.split('\n').filter(Boolean)
+    : generateMockRecommendation(alert, metricLabel);
+
   return (
     <EuiFlyout onClose={onClose} size="l" ownFocus aria-labelledby="alertDetailTitle">
-      {/* ---- Header ---- */}
-      <EuiFlyoutHeader hasBorder>
+      {/* ---- Header with tabs ---- */}
+      <EuiFlyoutHeader hasBorder style={{ paddingBottom: 0 }}>
         <EuiTitle size="m"><h2 id="alertDetailTitle">{alert.name}</h2></EuiTitle>
-        <EuiSpacer size="s" />
         <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false} wrap>
           <EuiFlexItem grow={false}>
             <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
@@ -270,54 +290,52 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
             </EuiFlexGroup>
           </EuiFlexItem>
         </EuiFlexGroup>
-      </EuiFlyoutHeader>
-
-      <EuiFlyoutBody>
-        {/* ---- Section: What happened ---- */}
-        <EuiFlexGroup gutterSize="m" responsive={true}>
-          <EuiFlexItem>
-            <EuiPanel paddingSize="m" hasBorder>
-              <EuiText size="m"><strong>{currentValue}{thresholdUnit}</strong></EuiText>
-              <EuiText size="xs" color="subdued">error rate</EuiText>
-            </EuiPanel>
-          </EuiFlexItem>
-          <EuiFlexItem>
-            <EuiPanel paddingSize="m" hasBorder>
-              <EuiText size="m"><strong>{thresholdOperator} {thresholdValue}{thresholdUnit}</strong></EuiText>
-              <EuiText size="xs" color="subdued">for {conditionPeriods}</EuiText>
-            </EuiPanel>
-          </EuiFlexItem>
-          <EuiFlexItem>
-            <EuiPanel paddingSize="m" hasBorder>
-              <EuiText size="m"><strong>3 of 3 periods</strong></EuiText>
-              <EuiText size="xs" color="subdued">breaching</EuiText>
-            </EuiPanel>
-          </EuiFlexItem>
-          <EuiFlexItem>
-            <EuiPanel paddingSize="m" hasBorder>
-              <EuiText size="m"><strong>{actionDest}</strong></EuiText>
-              <EuiText size="xs" color="subdued">notification target</EuiText>
-            </EuiPanel>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-
-        <EuiSpacer size="m" />
-
-        {/* ---- Tab Navigation ---- */}
-        <EuiTabs>
+        {/* Tabs in the header — condensed, flush with border */}
+        <EuiTabs size="s" style={{ marginBottom: '-1px' }}>
           {tabs.map(t => (
             <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
               {t.name}
             </EuiTab>
           ))}
         </EuiTabs>
+      </EuiFlyoutHeader>
 
-        <EuiSpacer size="m" />
-
-        {/* ---- Signal Tab ---- */}
-        {activeTab === 'signal' && (
+      <EuiFlyoutBody>
+        {/* ---- Overview Tab (default) ---- */}
+        {activeTab === 'overview' && (
           <>
-            <EuiPanel paddingSize="m" hasBorder>
+            {/* Quick stats */}
+            <EuiFlexGroup gutterSize="m" responsive={true}>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder hasShadow={false}>
+                  <EuiText size="m"><strong>{currentValue}{thresholdUnit}</strong></EuiText>
+                  <EuiText size="xs" color="subdued">error rate</EuiText>
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder hasShadow={false}>
+                  <EuiText size="m"><strong>{thresholdOperator} {thresholdValue}{thresholdUnit}</strong></EuiText>
+                  <EuiText size="xs" color="subdued">for {conditionPeriods}</EuiText>
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder hasShadow={false}>
+                  <EuiText size="m"><strong>3 of 3 periods</strong></EuiText>
+                  <EuiText size="xs" color="subdued">breaching</EuiText>
+                </EuiPanel>
+              </EuiFlexItem>
+              <EuiFlexItem>
+                <EuiPanel paddingSize="m" hasBorder hasShadow={false}>
+                  <EuiText size="m"><strong>{actionDest}</strong></EuiText>
+                  <EuiText size="xs" color="subdued">notification target</EuiText>
+                </EuiPanel>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+
+            <EuiSpacer size="m" />
+
+            {/* Metric Chart */}
+            <EuiPanel paddingSize="m" hasBorder hasShadow={false}>
               <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
                 <EuiFlexItem grow={false}>
                   <EuiText size="xs"><strong>Metric: {metricLabel}</strong></EuiText>
@@ -350,62 +368,105 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
             <EuiSpacer size="m" />
 
-            {/* Correlated Signals */}
-            <EuiPanel paddingSize="m" hasBorder>
-              <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
-                <EuiFlexItem grow={false}>
-                  <EuiText size="s"><strong>Correlated signals</strong></EuiText>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiButtonEmpty size="xs" flush="right">View all &gt;</EuiButtonEmpty>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-              <EuiSpacer size="s" />
-              {correlatedAlerts.length > 0 ? (
-                <EuiBasicTable
-                  items={correlatedAlerts}
-                  columns={[
-                    {
-                      field: 'state', name: '', width: '30px',
-                      render: (state: string) => <EuiHealth color={STATE_COLORS[state] || 'subdued'} />,
-                    },
-                    {
-                      field: 'name', name: 'Name',
-                      render: (name: string, a: UnifiedAlert) => (
-                        <EuiLink onClick={() => onViewAlert?.(a)}>{name}</EuiLink>
-                      ),
-                    },
-                    {
-                      field: 'state', name: 'State', width: '100px',
-                      render: (state: string) => (
-                        <EuiBadge color={state === 'active' ? 'danger' : 'success'}>
-                          {state === 'active' ? 'In alarm' : 'OK'}
-                        </EuiBadge>
-                      ),
-                    },
-                    {
-                      field: 'startTime', name: 'Time', width: '100px',
-                      render: (ts: string, a: UnifiedAlert) =>
-                        a.state === 'active' && ts
-                          ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : '—',
-                    },
-                    {
-                      field: 'message', name: 'Detail',
-                      render: (msg: string) => <EuiText size="xs" color="subdued">{msg || '—'}</EuiText>,
-                    },
-                  ]}
-                />
-              ) : (
-                <EuiText size="s" color="subdued">No correlated signals found</EuiText>
-              )}
-            </EuiPanel>
+            {/* Summary */}
+            <EuiText size="s"><strong>Summary</strong></EuiText>
+            <EuiSpacer size="s" />
+            <EuiText size="s">{summary}</EuiText>
+
+            <EuiSpacer size="m" />
+
+            {/* Recommendation */}
+            <EuiText size="s"><strong>Recommendation</strong></EuiText>
+            <EuiSpacer size="s" />
+            <EuiText size="s">
+              <ul>
+                {recommendation.map((rec, i) => (
+                  <li key={i}>{rec}</li>
+                ))}
+              </ul>
+            </EuiText>
+
+            <EuiSpacer size="m" />
+
+            {/* Related alerts */}
+            <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s"><strong>Related alerts</strong></EuiText>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiButtonEmpty size="xs" flush="right">View all &gt;</EuiButtonEmpty>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+            <EuiSpacer size="s" />
+            {correlatedAlerts.length > 0 ? (
+              <EuiBasicTable
+                items={correlatedAlerts}
+                columns={[
+                  {
+                    field: 'state', name: '', width: '30px',
+                    render: (state: string) => <EuiHealth color={STATE_COLORS[state] || 'subdued'} />,
+                  },
+                  {
+                    field: 'name', name: 'Name',
+                    render: (name: string, a: UnifiedAlert) => (
+                      <EuiLink onClick={() => onViewAlert?.(a)}>{name}</EuiLink>
+                    ),
+                  },
+                  {
+                    field: 'state', name: 'State', width: '100px',
+                    render: (state: string) => (
+                      <EuiBadge color={state === 'active' ? 'danger' : 'success'}>
+                        {state === 'active' ? 'In alarm' : 'OK'}
+                      </EuiBadge>
+                    ),
+                  },
+                  {
+                    field: 'startTime', name: 'Time', width: '100px',
+                    render: (ts: string, a: UnifiedAlert) =>
+                      a.state === 'active' && ts
+                        ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : '—',
+                  },
+                  {
+                    field: 'message', name: 'Detail',
+                    render: (msg: string) => <EuiText size="xs" color="subdued">{msg || '—'}</EuiText>,
+                  },
+                ]}
+              />
+            ) : (
+              <EuiText size="s" color="subdued">No related alerts found</EuiText>
+            )}
           </>
         )}
 
         {/* ---- History Tab ---- */}
         {activeTab === 'history' && (
           <>
+            {/* Timeline visualization */}
+            <EuiPanel paddingSize="m" hasBorder hasShadow={false}>
+              <EuiFlexGroup alignItems="center" justifyContent="flexEnd" responsive={false}>
+                <EuiFlexItem grow={false}>
+                  <EuiButtonGroup
+                    legend="History time range"
+                    options={timeRangeOptions}
+                    idSelected={historyTimeRange}
+                    onChange={(id) => setHistoryTimeRange(id)}
+                    buttonSize="compressed"
+                  />
+                </EuiFlexItem>
+              </EuiFlexGroup>
+              <EuiSpacer size="s" />
+              <ReactEChartsCore
+                echarts={echarts}
+                option={timelineChartOption}
+                style={{ height: 100, width: '100%' }}
+                notMerge
+              />
+            </EuiPanel>
+
+            <EuiSpacer size="m" />
+
+            {/* State history table */}
             {historyEntries.length > 0 ? (
               <EuiBasicTable
                 items={historyEntries}
@@ -496,7 +557,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
                     { field: 'destination', name: 'Destination' },
                     {
                       field: 'severity', name: 'Severities', width: '200px',
-                      render: (sevs: string[]) => sevs?.length
+                      render: (sevs: string | string[] | undefined) => Array.isArray(sevs) && sevs.length
                         ? sevs.map(s => <EuiBadge key={s} color="hollow">{s}</EuiBadge>)
                         : '—',
                     },
@@ -514,7 +575,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
             <EuiAccordion id="configSuppression" buttonContent={<strong>Suppression Rules</strong>} initialIsOpen={false} paddingSize="m">
               {suppressionEntries.length > 0 ? (
                 suppressionEntries.map((rule, i) => (
-                  <EuiPanel key={i} paddingSize="s" hasBorder style={{ marginBottom: 8 }}>
+                  <EuiPanel key={i} paddingSize="s" hasBorder hasShadow={false} style={{ marginBottom: 8 }}>
                     <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
                       <EuiFlexItem>
                         <EuiText size="s"><strong>{rule.name}</strong></EuiText>
@@ -542,7 +603,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
             {(associatedRule || ds || annotations.runbook_url || annotations.dashboard_url) ? (
               <>
                 {associatedRule && (
-                  <EuiPanel paddingSize="m" hasBorder style={{ marginBottom: 8 }}>
+                  <EuiPanel paddingSize="m" hasBorder hasShadow={false} style={{ marginBottom: 8 }}>
                     <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
                       <EuiFlexItem grow={false}><EuiIcon type="bell" /></EuiFlexItem>
                       <EuiFlexItem>
@@ -553,7 +614,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
                   </EuiPanel>
                 )}
                 {ds && (
-                  <EuiPanel paddingSize="m" hasBorder style={{ marginBottom: 8 }}>
+                  <EuiPanel paddingSize="m" hasBorder hasShadow={false} style={{ marginBottom: 8 }}>
                     <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
                       <EuiFlexItem grow={false}><EuiIcon type="database" /></EuiFlexItem>
                       <EuiFlexItem>
@@ -564,7 +625,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
                   </EuiPanel>
                 )}
                 {annotations.runbook_url && (
-                  <EuiPanel paddingSize="m" hasBorder style={{ marginBottom: 8 }}>
+                  <EuiPanel paddingSize="m" hasBorder hasShadow={false} style={{ marginBottom: 8 }}>
                     <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
                       <EuiFlexItem grow={false}><EuiIcon type="document" /></EuiFlexItem>
                       <EuiFlexItem>
@@ -575,7 +636,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
                   </EuiPanel>
                 )}
                 {annotations.dashboard_url && (
-                  <EuiPanel paddingSize="m" hasBorder style={{ marginBottom: 8 }}>
+                  <EuiPanel paddingSize="m" hasBorder hasShadow={false} style={{ marginBottom: 8 }}>
                     <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
                       <EuiFlexItem grow={false}><EuiIcon type="dashboardApp" /></EuiFlexItem>
                       <EuiFlexItem>
@@ -620,7 +681,6 @@ function generateMockSignalData(range: string, threshold: number): Array<{ times
   const data: Array<{ timestamp: number; value: number }> = [];
   for (let i = 0; i <= points; i++) {
     const t = now - totalMs + i * step;
-    // Simulate a value that crosses the threshold in the last third
     const base = threshold * 0.6;
     const noise = (Math.sin(i * 0.3) + Math.random() * 0.5) * threshold * 0.3;
     const ramp = i > points * 0.65 ? (i - points * 0.65) / (points * 0.35) * threshold * 0.8 : 0;
@@ -639,4 +699,101 @@ function generateMockHistory(alert: UnifiedAlert): AlertHistoryEntry[] {
     { timestamp: new Date(start - 3600000).toISOString(), state: 'active', value: '8.7%', message: 'Threshold breached — error rate exceeded 5%' },
     { timestamp: new Date(start - 7200000).toISOString(), state: 'resolved', value: '2.0%', message: 'Alert resolved — value returned below threshold' },
   ] as AlertHistoryEntry[];
+}
+
+function generateMockSummary(alert: UnifiedAlert, metricLabel: string, thresholdValue: number, thresholdUnit: string): string {
+  return `The alert "${alert.name}" triggered because ${metricLabel} exceeded the configured threshold of ${thresholdValue}${thresholdUnit}. ` +
+    `The metric has been breaching consistently over the evaluation window, indicating a sustained issue rather than a transient spike. ` +
+    `This may be caused by increased error rates in upstream dependencies or a recent deployment affecting service health.`;
+}
+
+function generateMockRecommendation(alert: UnifiedAlert, metricLabel: string): string[] {
+  return [
+    `Check recent deployments to the affected service for regressions.`,
+    `Review upstream dependency health and latency metrics.`,
+    `Inspect application logs for error patterns correlated with the ${metricLabel} increase.`,
+    `Consider scaling the service if the issue is load-related.`,
+    `If this is a known issue, acknowledge the alert and update the runbook.`,
+  ];
+}
+
+function buildTimelineChartOption(historyEntries: AlertHistoryEntry[], timeRange: string) {
+  const rangeMs: Record<string, number> = { '1h': 3600000, '3h': 10800000, '6h': 21600000, '1d': 86400000 };
+  const totalMs = rangeMs[timeRange] || 21600000;
+  const now = Date.now();
+  const start = now - totalMs;
+
+  // Build segments from history entries (sorted oldest first)
+  const sorted = [...historyEntries].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  const segments: Array<{ start: number; end: number; state: string }> = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const ts = new Date(sorted[i].timestamp).getTime();
+    const endTs = i < sorted.length - 1 ? new Date(sorted[i + 1].timestamp).getTime() : now;
+    if (endTs >= start) {
+      segments.push({
+        start: Math.max(ts, start),
+        end: endTs,
+        state: sorted[i].state,
+      });
+    }
+  }
+
+  // If no segments in range, show a single segment with the latest known state
+  if (segments.length === 0 && sorted.length > 0) {
+    segments.push({ start, end: now, state: sorted[sorted.length - 1].state });
+  }
+
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: any) => {
+        const d = params.data;
+        if (!d) return '';
+        const from = new Date(d.value[0]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const to = new Date(d.value[1]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `${d.name}<br/>${from} — ${to}`;
+      },
+    },
+    grid: { top: 10, right: 20, bottom: 30, left: 50, height: 40 },
+    xAxis: {
+      type: 'time',
+      min: start,
+      max: now,
+      axisLabel: {
+        formatter: (v: number) => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    },
+    yAxis: {
+      type: 'category',
+      data: ['State'],
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    series: [{
+      type: 'custom',
+      renderItem: (params: any, api: any) => {
+        const categoryIndex = api.value(2);
+        const startVal = api.coord([api.value(0), categoryIndex]);
+        const endVal = api.coord([api.value(1), categoryIndex]);
+        const height = api.size([0, 1])[1] * 0.6;
+        return {
+          type: 'rect',
+          shape: {
+            x: startVal[0],
+            y: startVal[1] - height / 2,
+            width: endVal[0] - startVal[0],
+            height,
+          },
+          style: api.style(),
+        };
+      },
+      encode: { x: [0, 1], y: 2 },
+      data: segments.map(seg => ({
+        value: [seg.start, seg.end, 0],
+        name: seg.state,
+        itemStyle: { color: TIMELINE_COLORS[seg.state] || '#999' },
+      })),
+    }],
+  };
 }

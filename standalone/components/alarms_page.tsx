@@ -842,8 +842,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             rules={rules}
             allAlerts={alerts}
             onClose={() => setSelectedAlert(null)}
-            onAcknowledge={(id) => { handleAcknowledgeAlert(id); setSelectedAlert(null); }}
-            onSilence={(id) => { handleSilenceAlert(id); setSelectedAlert(null); }}
+            onAcknowledge={(id) => { handleAcknowledgeAlert(id); }}
+            onSilence={(id) => { handleSilenceAlert(id); }}
             onViewAlert={(a) => setSelectedAlert(a)}
           />
         )}

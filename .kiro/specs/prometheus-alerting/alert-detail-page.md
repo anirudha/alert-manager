@@ -2,7 +2,7 @@
 
 ## Page Layout
 
-The page is a single-column layout flyout detail view. It can be opened within a page that reference the specific alert. It has a flyout header with status and actions, a row of summary cards, tabbed content sections, and no footer. Uses OUI components throughout and echarts for chart visualizations.
+The page is a single-column layout flyout detail view. It can be opened within a page that reference the specific alert. It has a flyout header with status and actions, a row of summary cards, tabbed content sections, and no footer. Uses OUI compressed components throughout for high density, OUI panels should not have shadows for reduce cognitive load. Uses echarts for chart visualizations. 
 
 ---
 
@@ -28,7 +28,7 @@ Horizontal layout with status and labels on the left and action buttons on the f
 
 ## Tab Navigation
 
-Tabs should be part of the flyout header, the content of the tabs is the content of the flyout.
+Tabs should be part of the flyout header, the content of the tabs is the content of the flyout. Use Codensed tabs, the tabs should sit flush with the header border, remove paddings below the tabs.
 
 Four tabs. "Signal" is selected by default with an underline indicator.
 
@@ -87,21 +87,24 @@ Wrapped in a single panel with border.
 
 ### Summary
 
-- Generated summary of what happended and possible causes in human readable format.
+- A paragraph explaining what happended and possible causes in human readable format.
+- No panels
 
 ### Recommendation
 
 - Generated list of recommended actions users can take to remediate the alert.
+- No panels
 
 ---
 
 ### Related alerts
 
-Separate panel with border, below the metric chart.
+- Display related alerts to this alert
+- No panels
 
 #### Header
 
-- Left: title text — "Related signals"
+- Left: title text — "Related alerts"
 - Right: link-style button — "View all >"
 
 #### Table
@@ -121,9 +124,14 @@ Separate panel with border, below the metric chart.
 
 ## Section 5: History Tab
 
-### Alert timeline
+### Timeline visualization 
 
-It should display a timeline visulziation of the alert's state
+Display a timeline visulziation of the alert's states.
+
+#### Chart Header
+
+- Right side: time range button group with options `1h`, `3h`, `6h` (selected by default), `1d`
+
 
 
 ### State history
@@ -201,8 +209,8 @@ A list of related resource panels:
 
 | Action                    | Behavior                                                         |
 |---------------------------|------------------------------------------------------------------|
-| Click "Acknowledge"       | Calls API to acknowledge alert, updates state badge              |
-| Click "Mute"             | Calls API to silence alert, toggles button label to "Unmute"     |
+| Click "Acknowledge"       | Calls API to acknowledge alert, updates state badge, stays in the flyout.              |
+| Click "Mute"             | Calls API to silence alert, toggles button label to "Unmute", stays in the flyout.     |
 | Click breadcrumb "Alarms" | Navigates back to alarms list                                   |
 | Change time range         | Re-renders the echarts signal chart with the selected range      |
 | Click correlated signal   | Navigates to that alert's detail page                            |
