@@ -34,10 +34,11 @@ export async function handleCreateMonitor(
   alertSvc: MultiBackendAlertService,
   body: any
 ): Promise<Result> {
+  if (!body.datasourceId) {
+    return { status: 400, body: { error: 'datasourceId is required' } };
+  }
   try {
-    // For Prometheus monitors, create via the first prometheus datasource
-    const dsId = body.datasourceId || 'ds-2';
-    const monitor = await alertSvc.createOSMonitor(dsId, body);
+    const monitor = await alertSvc.createOSMonitor(body.datasourceId, body);
     return { status: 201, body: monitor };
   } catch (e) {
     return { status: 400, body: { error: safeError(e) } };
@@ -49,9 +50,11 @@ export async function handleUpdateMonitor(
   id: string,
   body: any
 ): Promise<Result> {
+  if (!body.datasourceId) {
+    return { status: 400, body: { error: 'datasourceId is required' } };
+  }
   try {
-    const dsId = body.datasourceId || 'ds-2';
-    const monitor = await alertSvc.updateOSMonitor(dsId, id, body);
+    const monitor = await alertSvc.updateOSMonitor(body.datasourceId, id, body);
     if (!monitor) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: monitor };
   } catch (e) {
@@ -64,9 +67,11 @@ export async function handleDeleteMonitor(
   id: string,
   dsId?: string
 ): Promise<Result> {
+  if (!dsId) {
+    return { status: 400, body: { error: 'datasourceId is required' } };
+  }
   try {
-    const targetDsId = dsId || 'ds-2';
-    const ok = await alertSvc.deleteOSMonitor(targetDsId, id);
+    const ok = await alertSvc.deleteOSMonitor(dsId, id);
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
   } catch (e) {
@@ -82,24 +87,54 @@ export async function handleImportMonitors(
   alertSvc: MultiBackendAlertService,
   body: any
 ): Promise<Result> {
+  const dsId = body.datasourceId;
   const configs = Array.isArray(body) ? body : body.monitors;
   if (!Array.isArray(configs))
     return { status: 400, body: { error: 'Expected array of monitor configs' } };
 
-  const results: { index: number; success: boolean; errors?: string[] }[] = [];
+  // Phase 1: validate all configs
+  const importResults: { index: number; success: boolean; errors?: string[]; id?: string }[] = [];
+  const validConfigs: { index: number; config: any }[] = [];
   for (let i = 0; i < configs.length; i++) {
     const { config, errors } = deserializeMonitor(configs[i]);
     if (!config) {
-      results.push({ index: i, success: false, errors });
+      importResults.push({ index: i, success: false, errors });
     } else {
-      results.push({ index: i, success: true });
+      validConfigs.push({ index: i, config });
     }
   }
-  const failed = results.filter((r) => !r.success);
-  if (failed.length > 0) {
-    return { status: 400, body: { error: 'Validation errors', details: failed } };
+
+  const validationFailed = importResults.filter((r) => !r.success);
+  if (validationFailed.length > 0) {
+    return { status: 400, body: { error: 'Validation errors', details: validationFailed } };
   }
-  return { status: 200, body: { imported: configs.length } };
+
+  // Phase 2: create monitors via backend (if datasourceId provided)
+  if (dsId) {
+    for (const { index, config } of validConfigs) {
+      try {
+        const created = await alertSvc.createOSMonitor(dsId, config);
+        importResults.push({ index, success: true, id: created.id });
+      } catch (e) {
+        importResults.push({ index, success: false, errors: [safeError(e)] });
+      }
+    }
+  } else {
+    // No datasourceId — validation-only mode (dry run)
+    for (const { index } of validConfigs) {
+      importResults.push({ index, success: true });
+    }
+  }
+
+  const failed = importResults.filter((r) => !r.success);
+  return {
+    status: failed.length > 0 ? 207 : 200,
+    body: {
+      imported: importResults.filter((r) => r.success).length,
+      total: configs.length,
+      results: importResults,
+    },
+  };
 }
 
 export async function handleExportMonitors(
@@ -159,10 +194,20 @@ export function handleDeleteSuppressionRule(svc: SuppressionRuleService, id: str
 
 export async function handleAcknowledgeAlert(
   alertSvc: MultiBackendAlertService,
-  alertId: string
+  alertId: string,
+  body?: { datasourceId?: string; monitorId?: string }
 ): Promise<Result> {
-  // In a real implementation, this would update the alert state in the backend
-  return { status: 200, body: { id: alertId, state: 'acknowledged' } };
+  const dsId = body?.datasourceId;
+  const monitorId = body?.monitorId;
+  if (!dsId || !monitorId) {
+    return { status: 400, body: { error: 'datasourceId and monitorId are required' } };
+  }
+  try {
+    const result = await alertSvc.acknowledgeOSAlerts(dsId, monitorId, [alertId]);
+    return { status: 200, body: { id: alertId, state: 'acknowledged', result } };
+  } catch (e) {
+    return { status: 400, body: { error: safeError(e) } };
+  }
 }
 
 export async function handleSilenceAlert(

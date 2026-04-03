@@ -189,10 +189,23 @@ export function defineRoutes(
     }
   );
 
+  const monitorBodySchema = schema.object(
+    {
+      name: schema.string(),
+      type: schema.maybe(schema.string()),
+      monitor_type: schema.maybe(schema.string()),
+      enabled: schema.maybe(schema.boolean()),
+      schedule: schema.maybe(schema.any()),
+      inputs: schema.maybe(schema.arrayOf(schema.any())),
+      triggers: schema.maybe(schema.arrayOf(schema.any())),
+    },
+    { unknowns: 'allow' }
+  );
+
   router.post(
     {
       path: '/api/alerting/opensearch/{dsId}/monitors',
-      validate: { params: schema.object({ dsId: schema.string() }), body: schema.any() },
+      validate: { params: schema.object({ dsId: schema.string() }), body: monitorBodySchema },
     },
     async (_ctx, req, res) => {
       const result = await handleCreateOSMonitor(alertService, req.params.dsId, req.body);
@@ -205,7 +218,7 @@ export function defineRoutes(
       path: '/api/alerting/opensearch/{dsId}/monitors/{monitorId}',
       validate: {
         params: schema.object({ dsId: schema.string(), monitorId: schema.string() }),
-        body: schema.any(),
+        body: monitorBodySchema,
       },
     },
     async (_ctx, req, res) => {

@@ -16,6 +16,8 @@ import { defineRoutes } from './routes';
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
+  HttpOpenSearchBackend,
+  DirectQueryPrometheusBackend,
   Logger as AlarmsLogger,
 } from '../core';
 import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
@@ -41,15 +43,40 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     const datasourceService = new InMemoryDatasourceService(logger);
     const alertService = new MultiBackendAlertService(datasourceService, logger);
 
-    const osBackend = new MockOpenSearchBackend(logger);
-    const promBackend = new MockPrometheusBackend(logger);
-    alertService.registerOpenSearch(osBackend);
-    alertService.registerPrometheus(promBackend);
+    // Use mock backends only when explicitly enabled via environment variable.
+    // In production (inside OSD), real backends should be registered by the
+    // consuming application or configured via opensearch_dashboards.yml.
+    const mockMode = process.env.ALERT_MANAGER_MOCK_MODE === 'true';
 
-    datasourceService.seed([
-      { name: 'Local OpenSearch', type: 'opensearch', url: 'http://localhost:9200', enabled: true },
-      { name: 'Local Prometheus', type: 'prometheus', url: 'http://localhost:9090', enabled: true },
-    ]);
+    if (mockMode) {
+      this.logger.info('alertManager: Running in MOCK mode');
+      const osBackend = new MockOpenSearchBackend(logger);
+      const promBackend = new MockPrometheusBackend(logger);
+      alertService.registerOpenSearch(osBackend);
+      alertService.registerPrometheus(promBackend);
+
+      datasourceService.seed([
+        {
+          name: 'Mock OpenSearch',
+          type: 'opensearch',
+          url: 'http://localhost:9200',
+          enabled: true,
+        },
+        {
+          name: 'Mock Prometheus',
+          type: 'prometheus',
+          url: 'http://localhost:9090',
+          enabled: true,
+        },
+      ]);
+    } else {
+      this.logger.info('alertManager: Running in LIVE mode — register backends via API');
+      // Real backends are registered when datasources are created via the API.
+      // The HttpOpenSearchBackend and DirectQueryPrometheusBackend are used
+      // automatically based on datasource type.
+      alertService.registerOpenSearch(new HttpOpenSearchBackend(logger));
+      alertService.registerPrometheus(new DirectQueryPrometheusBackend(logger));
+    }
 
     defineRoutes(router, datasourceService, alertService);
 

@@ -247,12 +247,20 @@ describe('handleDeleteSuppressionRule', () => {
 // ---------------------------------------------------------------------------
 
 describe('handleAcknowledgeAlert', () => {
-  it('returns 200 with acknowledged state', async () => {
+  it('returns 400 when datasourceId or monitorId is missing', async () => {
     const { alertSvc } = createServices();
     const result = await handleAcknowledgeAlert(alertSvc, 'alert-123');
-    expect(result.status).toBe(200);
-    expect(result.body.state).toBe('acknowledged');
-    expect(result.body.id).toBe('alert-123');
+    expect(result.status).toBe(400);
+    expect(result.body.error).toContain('required');
+  });
+
+  it('returns 400 when backend throws for unknown datasource', async () => {
+    const { alertSvc } = createServices();
+    const result = await handleAcknowledgeAlert(alertSvc, 'alert-123', {
+      datasourceId: 'bad-ds',
+      monitorId: 'mon-1',
+    });
+    expect(result.status).toBe(400);
   });
 });
 

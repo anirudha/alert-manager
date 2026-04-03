@@ -582,34 +582,15 @@ function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlertSummary {
 function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleSummary {
   const trigger = m.triggers[0];
   const isEnabled = m.enabled;
-  const hasError = false;
-  // Derive labels from monitor metadata
+
+  // Derive labels from actual monitor metadata (indices targeted)
   const labels: Record<string, string> = {};
   const indices = m.inputs[0]?.search?.indices ?? [];
-  if (indices.some((i) => i.startsWith('logs-'))) {
-    labels.service = 'log-analytics';
-    labels.application = 'observability';
-  } else if (indices.some((i) => i.startsWith('apm-'))) {
-    labels.service = 'apm';
-    labels.application = 'checkout';
-  } else if (indices.some((i) => i.startsWith('metrics-'))) {
-    labels.service = 'metrics';
-    labels.application = 'platform';
-  } else if (indices.some((i) => i.startsWith('security-'))) {
-    labels.service = 'security';
-    labels.application = 'auth';
-  } else if (indices.some((i) => i.startsWith('payments-'))) {
-    labels.service = 'payments';
-    labels.application = 'checkout';
+  if (indices.length > 0) {
+    labels.indices = indices.join(',');
   }
-  // Common labels
-  labels.environment = dsId === 'ds-1' ? 'production' : 'staging';
-  labels.team = indices.some((i) => i.startsWith('security-'))
-    ? 'security'
-    : indices.some((i) => i.startsWith('payments-'))
-      ? 'payments'
-      : 'platform';
-  labels.region = dsId === 'ds-1' ? 'us-east-1' : 'us-west-2';
+  labels.monitor_type = m.monitor_type;
+  labels.datasource_id = dsId;
 
   const annotations: Record<string, string> = {};
   if (trigger?.actions?.[0]?.message_template?.source) {
@@ -623,11 +604,7 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
       ? 'infrastructure'
       : m.monitor_type === 'doc_level_monitor'
         ? 'log'
-        : indices.some((i) => i.startsWith('apm-'))
-          ? 'apm'
-          : indices.some((i) => i.startsWith('metrics-'))
-            ? 'metric'
-            : 'log';
+        : 'metric';
   const destNames = trigger?.actions?.map((a) => a.name) ?? [];
   const intervalUnit = m.schedule.period.unit;
   const intervalVal = m.schedule.period.interval;
@@ -646,8 +623,8 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
     annotations,
     monitorType,
     status,
-    healthStatus: hasError ? 'failing' : 'healthy',
-    createdBy: dsId === 'ds-1' ? 'admin' : 'devops-bot',
+    healthStatus: 'healthy',
+    createdBy: '',
     createdAt: new Date(m.last_update_time - 86400000).toISOString(),
     lastModified: new Date(m.last_update_time).toISOString(),
     lastTriggered: undefined,
