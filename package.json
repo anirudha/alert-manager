@@ -15,7 +15,11 @@
     "start:standalone": "cd standalone && npm run start",
     "dev:standalone": "cd standalone && npm run dev",
     "plugin-helpers": "../../scripts/use_node ../../scripts/plugin_helpers",
-    "osd": "../../scripts/use_node ../../scripts/osd"
+    "osd": "../../scripts/use_node ../../scripts/osd",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js}": ["prettier --write"]
   },
   "type": "commonjs",
   "repository": {
@@ -33,7 +37,9 @@
     "eslint-plugin-jest": "^27.0.0",
     "eslint-plugin-prettier": "^5.0.0",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^9.1.7",
     "jest": "^30.3.0",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.0.0",
     "ts-jest": "^29.4.9",
     "typescript": "^6.0.2"

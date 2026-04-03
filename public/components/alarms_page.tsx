@@ -154,24 +154,43 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       if (!loading && alerts.length === 0)
         return (
           <EuiEmptyPrompt
+            data-test-subj="alertManagerEmptyAlerts"
             title={<h2>No Active Alerts</h2>}
             body={<p>All systems operating normally.</p>}
           />
         );
-      return <EuiBasicTable items={alerts} columns={alertColumns} loading={loading} />;
+      return (
+        <EuiBasicTable
+          items={alerts}
+          columns={alertColumns}
+          loading={loading}
+          data-test-subj="alertManagerAlertsTable"
+        />
+      );
     }
     if (activeTab === 'rules') {
       if (!loading && rules.length === 0)
         return (
-          <EuiEmptyPrompt title={<h2>No Rules</h2>} body={<p>No alerting rules configured.</p>} />
+          <EuiEmptyPrompt
+            data-test-subj="alertManagerEmptyRules"
+            title={<h2>No Rules</h2>}
+            body={<p>No alerting rules configured.</p>}
+          />
         );
-      return <EuiBasicTable items={rules} columns={ruleColumns} loading={loading} />;
+      return (
+        <EuiBasicTable
+          items={rules}
+          columns={ruleColumns}
+          loading={loading}
+          data-test-subj="alertManagerRulesTable"
+        />
+      );
     }
     return null;
   };
 
   return (
-    <EuiPage restrictWidth="1200px">
+    <EuiPage restrictWidth="1200px" data-test-subj="alertManagerPage">
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>
@@ -181,9 +200,14 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           </EuiPageHeaderSection>
         </EuiPageHeader>
         <EuiSpacer size="m" />
-        <EuiTabs>
+        <EuiTabs data-test-subj="alertManagerTabs">
           {tabs.map((t) => (
-            <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
+            <EuiTab
+              key={t.id}
+              isSelected={activeTab === t.id}
+              onClick={() => setActiveTab(t.id)}
+              data-test-subj={`alertManagerTab-${t.id}`}
+            >
               {t.name}
             </EuiTab>
           ))}
