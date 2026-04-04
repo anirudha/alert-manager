@@ -838,7 +838,12 @@ function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlertSummary {
     message: a.error_message || undefined,
     startTime: new Date(a.start_time).toISOString(),
     lastUpdated: new Date(a.last_notification_time).toISOString(),
-    labels: { monitor_id: a.monitor_id, trigger_id: a.trigger_id },
+    labels: {
+      monitor_name: a.monitor_name,
+      trigger_name: a.trigger_name,
+      monitor_id: a.monitor_id,
+      trigger_id: a.trigger_id,
+    },
     annotations: {},
   };
 }
