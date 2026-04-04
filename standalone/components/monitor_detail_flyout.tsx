@@ -8,7 +8,7 @@
  * configuration, behavior, and impact with quick actions.
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import * as echarts from 'echarts';
+import type { EChartsOption, SeriesOption } from 'echarts';
 import { EchartsRender } from './echarts_render';
 import {
   EuiFlyout,
@@ -92,13 +92,13 @@ const ConditionPreviewGraph: React.FC<{
       </EuiText>
     );
 
-  const spec = useMemo((): echarts.EChartsOption => {
+  const spec = useMemo((): EChartsOption => {
     const timestamps = data.map((d) =>
       new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     );
     const values = data.map((d) => d.value);
 
-    const series: echarts.SeriesOption[] = [
+    const series: SeriesOption[] = [
       {
         type: 'line',
         data: values,
@@ -193,7 +193,9 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
       .then((data) => {
         if (!cancelled && data) setDetail(data);
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('Failed to load monitor details:', err);
+      })
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
       });
@@ -668,21 +670,11 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
             <EuiFlexItem grow={false}>
               <EuiFlexGroup gutterSize="s" responsive={false}>
                 <EuiFlexItem grow={false}>
-                  {monitor.status === 'disabled' || (monitor as any).enabled === false ? (
-                    <EuiButton
-                      color="secondary"
-                      onClick={() => console.log('Enable monitor:', monitor.id)}
-                    >
-                      Enable Monitor
+                  <EuiToolTip content="Enable/disable is not yet wired to the backend API">
+                    <EuiButton size="s" isDisabled>
+                      {monitor.enabled === false ? 'Enable Monitor' : 'Disable Monitor'}
                     </EuiButton>
-                  ) : (
-                    <EuiButton
-                      color="text"
-                      onClick={() => console.log('Disable monitor:', monitor.id)}
-                    >
-                      Disable Monitor
-                    </EuiButton>
-                  )}
+                  </EuiToolTip>
                 </EuiFlexItem>
                 <EuiFlexItem grow={false}>
                   <EuiButton fill onClick={() => onSilence(monitor.id)}>

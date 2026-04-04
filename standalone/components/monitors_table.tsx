@@ -13,6 +13,7 @@ import {
   EuiHealth,
   EuiBadge,
   EuiFieldSearch,
+  EuiFieldText,
   EuiFlexGroup,
   EuiFlexItem,
   EuiSpacer,
@@ -34,7 +35,6 @@ import {
   EuiListGroupItem,
   EuiButtonIcon,
   EuiResizableContainer,
-  EuiPopover as EuiPopoverOui,
   EuiContextMenuPanel,
   EuiContextMenuItem,
 } from '@opensearch-project/oui';
@@ -228,33 +228,8 @@ function collectLabelValues(rules: UnifiedRule[], key: string): string[] {
 }
 
 // ============================================================================
-// Filter Popover Component
+// Filter Dropdown Component
 // ============================================================================
-
-const FilterPopover: React.FC<{
-  label: string;
-  options: string[];
-  selected: string[];
-  onChange: (selected: string[]) => void;
-  displayMap?: Record<string, string>;
-}> = ({ label, options, selected, onChange, displayMap }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const numActive = selected.length;
-  return (
-    <EuiFilterButton
-      iconType="arrowDown"
-      onClick={() => setIsOpen(!isOpen)}
-      isSelected={isOpen}
-      numFilters={options.length}
-      hasActiveFilters={numActive > 0}
-      numActiveFilters={numActive}
-    >
-      {label}
-    </EuiFilterButton>
-  );
-};
-
-// We need a proper popover-based filter. Let me use a simpler approach with EuiPopover:
 const FilterDropdown: React.FC<{
   label: string;
   options: string[];
@@ -466,7 +441,7 @@ function useResizableColumns(
     return () => {
       handles.forEach((h) => h.remove());
     };
-  }); // runs every render to re-attach after OUI re-renders the table
+  }, [visibleColumns]); // Only re-attach when visible columns change
 }
 
 // ============================================================================
@@ -497,7 +472,7 @@ const TablePagination: React.FC<{
       <style>{PAGINATION_CSS}</style>
       <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
         <EuiFlexItem grow={false}>
-          <EuiPopoverOui
+          <EuiPopover
             button={
               <EuiButtonEmpty
                 size="xs"
@@ -529,7 +504,7 @@ const TablePagination: React.FC<{
                 </EuiContextMenuItem>
               ))}
             />
-          </EuiPopoverOui>
+          </EuiPopover>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
@@ -610,6 +585,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
+  const [showSaveSearchInput, setShowSaveSearchInput] = useState(false);
+  const [saveSearchName, setSaveSearchName] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -739,17 +716,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
 
   // Saved searches
   const saveCurrentSearch = () => {
-    const name = prompt('Name this search:');
-    if (!name) return;
-    setSavedSearches((prev) => [
-      ...prev,
-      {
-        id: `ss-${Date.now()}`,
-        name,
-        query: searchQuery,
-        filters: { ...filters },
-      },
-    ]);
+    setShowSaveSearchInput(true);
   };
   const loadSavedSearch = (ss: SavedSearch) => {
     setSearchQuery(ss.query);
@@ -1382,15 +1349,82 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                       </EuiFlexGroup>
                     ))
                   )}
-                  <EuiButtonEmpty
-                    size="xs"
-                    iconType="plusInCircle"
-                    onClick={saveCurrentSearch}
-                    disabled={!searchQuery && activeFilterCount === 0}
-                    flush="left"
-                  >
-                    Save current
-                  </EuiButtonEmpty>
+                  {showSaveSearchInput ? (
+                    <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                      <EuiFlexItem>
+                        <EuiFieldText
+                          placeholder="Search name"
+                          value={saveSearchName}
+                          onChange={(e) => setSaveSearchName(e.target.value)}
+                          compressed
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && saveSearchName.trim()) {
+                              setSavedSearches((prev) => [
+                                ...prev,
+                                {
+                                  id: `ss-${Date.now()}`,
+                                  name: saveSearchName.trim(),
+                                  query: searchQuery,
+                                  filters: { ...filters },
+                                },
+                              ]);
+                              setSaveSearchName('');
+                              setShowSaveSearchInput(false);
+                            }
+                            if (e.key === 'Escape') {
+                              setShowSaveSearchInput(false);
+                              setSaveSearchName('');
+                            }
+                          }}
+                          autoFocus
+                        />
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>
+                        <EuiButtonEmpty
+                          size="xs"
+                          onClick={() => {
+                            if (saveSearchName.trim()) {
+                              setSavedSearches((prev) => [
+                                ...prev,
+                                {
+                                  id: `ss-${Date.now()}`,
+                                  name: saveSearchName.trim(),
+                                  query: searchQuery,
+                                  filters: { ...filters },
+                                },
+                              ]);
+                              setSaveSearchName('');
+                              setShowSaveSearchInput(false);
+                            }
+                          }}
+                        >
+                          Save
+                        </EuiButtonEmpty>
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>
+                        <EuiButtonIcon
+                          iconType="cross"
+                          size="s"
+                          aria-label="Cancel"
+                          onClick={() => {
+                            setShowSaveSearchInput(false);
+                            setSaveSearchName('');
+                          }}
+                          color="text"
+                        />
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                  ) : (
+                    <EuiButtonEmpty
+                      size="xs"
+                      iconType="plusInCircle"
+                      onClick={saveCurrentSearch}
+                      disabled={!searchQuery && activeFilterCount === 0}
+                      flush="left"
+                    >
+                      Save current
+                    </EuiButtonEmpty>
+                  )}
                 </div>
               </EuiPanel>
             </EuiResizablePanel>

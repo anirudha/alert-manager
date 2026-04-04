@@ -85,7 +85,9 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
       .then((data) => {
         if (!cancelled && data) setDetailData(data);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('Failed to load alert details:', err);
+      });
     return () => {
       cancelled = true;
     };

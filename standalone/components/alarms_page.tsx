@@ -556,54 +556,54 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     try {
       await apiClient.acknowledgeAlert(alertId, alert?.datasourceId, alert?.labels?.monitor_id);
       addToast('Alert acknowledged');
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === alertId
+            ? { ...a, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
+            : a
+        )
+      );
+      // Update the flyout's selected alert inline so it stays open with fresh state
+      setSelectedAlert((prev) =>
+        prev && prev.id === alertId
+          ? { ...prev, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
+          : prev
+      );
     } catch (e: any) {
       addToast('Failed to acknowledge alert', 'danger', e?.message || 'Unknown error');
     }
-    setAlerts((prev) =>
-      prev.map((a) =>
-        a.id === alertId
-          ? { ...a, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
-          : a
-      )
-    );
-    // Update the flyout's selected alert inline so it stays open with fresh state
-    setSelectedAlert((prev) =>
-      prev && prev.id === alertId
-        ? { ...prev, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
-        : prev
-    );
   };
 
   const handleSilenceAlert = async (alertId: string) => {
     try {
       await apiClient.silenceAlert(alertId);
       addToast('Alert silenced');
+      // Silence creates a suppression rule — the alert remains active but is silenced.
+      // We add a 'silenced' label as a visual indicator; the state stays unchanged.
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === alertId
+            ? {
+                ...a,
+                labels: { ...a.labels, _silenced: 'true' },
+                lastUpdated: new Date().toISOString(),
+              }
+            : a
+        )
+      );
+      // Update the flyout's selected alert inline so it stays open with fresh state
+      setSelectedAlert((prev) =>
+        prev && prev.id === alertId
+          ? {
+              ...prev,
+              labels: { ...prev.labels, _silenced: 'true' },
+              lastUpdated: new Date().toISOString(),
+            }
+          : prev
+      );
     } catch (e: any) {
       addToast('Failed to silence alert', 'danger', e?.message || 'Unknown error');
     }
-    // Silence creates a suppression rule — the alert remains active but is silenced.
-    // We add a 'silenced' label as a visual indicator; the state stays unchanged.
-    setAlerts((prev) =>
-      prev.map((a) =>
-        a.id === alertId
-          ? {
-              ...a,
-              labels: { ...a.labels, _silenced: 'true' },
-              lastUpdated: new Date().toISOString(),
-            }
-          : a
-      )
-    );
-    // Update the flyout's selected alert inline so it stays open with fresh state
-    setSelectedAlert((prev) =>
-      prev && prev.id === alertId
-        ? {
-            ...prev,
-            labels: { ...prev.labels, _silenced: 'true' },
-            lastUpdated: new Date().toISOString(),
-          }
-        : prev
-    );
   };
 
   const handleDeleteRules = async (ids: string[]) => {

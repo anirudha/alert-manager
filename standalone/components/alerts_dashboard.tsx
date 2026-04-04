@@ -290,11 +290,11 @@ function matchesAlertFilters(alert: UnifiedAlert, filters: AlertFilterState): bo
 // ============================================================================
 
 const SeverityDonut: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
-  const counts = countBy(alerts, (a) => a.severity);
   const order: UnifiedAlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
-  const total = alerts.length;
 
   const spec = useMemo(() => {
+    const counts = countBy(alerts, (a) => a.severity);
+    const total = alerts.length;
     if (total === 0) return null;
     return {
       tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
@@ -341,9 +341,9 @@ const SeverityDonut: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
         },
       ],
     };
-  }, [alerts, counts, total]);
+  }, [alerts]);
 
-  if (total === 0)
+  if (alerts.length === 0)
     return (
       <EuiText size="s" color="subdued" textAlign="center">
         No alerts
@@ -506,17 +506,18 @@ const StateBreakdown: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
 
 /** Group alerts by datasource type (opensearch vs prometheus). */
 const AlertsByDatasource: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
-  const groups = countBy(alerts, (a) => a.datasourceType || 'unknown');
-  const sorted = Object.entries(groups)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-
   const spec = useMemo(() => {
+    const groups = countBy(alerts, (a) => a.datasourceType || 'unknown');
+    const sorted = Object.entries(groups)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
     if (sorted.length === 0) return null;
-    const names = sorted.map(
-      ([name]) => DATASOURCE_DISPLAY_NAMES[name] || name.charAt(0).toUpperCase() + name.slice(1)
-    );
-    const values = sorted.map(([, count]) => count);
+    const names = [...sorted]
+      .map(
+        ([name]) => DATASOURCE_DISPLAY_NAMES[name] || name.charAt(0).toUpperCase() + name.slice(1)
+      )
+      .reverse();
+    const values = [...sorted].map(([, count]) => count).reverse();
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -529,7 +530,7 @@ const AlertsByDatasource: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) =>
       },
       yAxis: {
         type: 'category' as const,
-        data: names.reverse(),
+        data: names,
         axisLabel: {
           fontSize: 11,
           color: '#343741',
@@ -542,7 +543,7 @@ const AlertsByDatasource: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) =>
       series: [
         {
           type: 'bar' as const,
-          data: values.reverse(),
+          data: values,
           itemStyle: { color: '#006BB4', borderRadius: [0, 4, 4, 0] },
           barMaxWidth: 12,
           label: {
@@ -555,32 +556,32 @@ const AlertsByDatasource: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) =>
         },
       ],
     };
-  }, [alerts, sorted]);
+  }, [alerts]);
 
-  if (sorted.length === 0)
+  if (!spec)
     return (
       <EuiText size="s" color="subdued">
         No data
       </EuiText>
     );
 
-  return <EchartsRender spec={spec!} height={Math.max(80, sorted.length * 28 + 16)} />;
+  const barCount = spec.yAxis.data.length;
+  return <EchartsRender spec={spec} height={Math.max(80, barCount * 28 + 16)} />;
 };
 
 /** Group alerts by monitor name (extracted from alert name before " — "). */
 const AlertsByMonitor: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
-  const groups = countBy(alerts, (a) => {
-    const dashIdx = a.name.indexOf(' — ');
-    return dashIdx > 0 ? a.name.substring(0, dashIdx) : a.name;
-  });
-  const sorted = Object.entries(groups)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-
   const spec = useMemo(() => {
+    const groups = countBy(alerts, (a) => {
+      const dashIdx = a.name.indexOf(' — ');
+      return dashIdx > 0 ? a.name.substring(0, dashIdx) : a.name;
+    });
+    const sorted = Object.entries(groups)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
     if (sorted.length === 0) return null;
-    const names = sorted.map(([name]) => name);
-    const values = sorted.map(([, count]) => count);
+    const names = [...sorted].map(([name]) => name).reverse();
+    const values = [...sorted].map(([, count]) => count).reverse();
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -593,7 +594,7 @@ const AlertsByMonitor: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
       },
       yAxis: {
         type: 'category' as const,
-        data: names.reverse(),
+        data: names,
         axisLabel: {
           fontSize: 11,
           color: '#343741',
@@ -606,7 +607,7 @@ const AlertsByMonitor: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
       series: [
         {
           type: 'bar' as const,
-          data: values.reverse(),
+          data: values,
           itemStyle: { color: '#006BB4', borderRadius: [0, 4, 4, 0] },
           barMaxWidth: 12,
           label: {
@@ -619,16 +620,17 @@ const AlertsByMonitor: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
         },
       ],
     };
-  }, [alerts, sorted]);
+  }, [alerts]);
 
-  if (sorted.length === 0)
+  if (!spec)
     return (
       <EuiText size="s" color="subdued">
         No data
       </EuiText>
     );
 
-  return <EchartsRender spec={spec!} height={Math.max(80, sorted.length * 28 + 16)} />;
+  const barCount = spec.yAxis.data.length;
+  return <EchartsRender spec={spec} height={Math.max(80, barCount * 28 + 16)} />;
 };
 
 const AlertsByGroup: React.FC<{ alerts: UnifiedAlert[]; groupKey: string }> = ({
@@ -1292,6 +1294,16 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     setStateFilter('all');
                     setFilters((prev) => ({ ...prev, severity: [], state: [] }));
                   }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSeverityFilter('all');
+                      setStateFilter('all');
+                      setFilters((prev) => ({ ...prev, severity: [], state: [] }));
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
                   style={{
                     cursor: 'pointer',
                     outline:
@@ -1327,6 +1339,16 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     setStateFilter(stateFilter === 'active' ? 'all' : 'active');
                     setFilters((prev) => ({ ...prev, severity: [], state: [] }));
                   }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSeverityFilter('all');
+                      setStateFilter(stateFilter === 'active' ? 'all' : 'active');
+                      setFilters((prev) => ({ ...prev, severity: [], state: [] }));
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
                   style={{
                     cursor: 'pointer',
                     outline: stateFilter === 'active' ? '2px solid #BD271E' : 'none',
@@ -1356,6 +1378,16 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     setSeverityFilter(severityFilter === 'critical' ? 'all' : 'critical');
                     setFilters((prev) => ({ ...prev, severity: [], state: [] }));
                   }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setStateFilter('all');
+                      setSeverityFilter(severityFilter === 'critical' ? 'all' : 'critical');
+                      setFilters((prev) => ({ ...prev, severity: [], state: [] }));
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
                   style={{
                     cursor: 'pointer',
                     outline: severityFilter === 'critical' ? '2px solid #BD271E' : 'none',
@@ -1385,6 +1417,16 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     setSeverityFilter(severityFilter === 'high' ? 'all' : 'high');
                     setFilters((prev) => ({ ...prev, severity: [], state: [] }));
                   }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setStateFilter('all');
+                      setSeverityFilter(severityFilter === 'high' ? 'all' : 'high');
+                      setFilters((prev) => ({ ...prev, severity: [], state: [] }));
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
                   style={{
                     cursor: 'pointer',
                     outline: severityFilter === 'high' ? '2px solid #F5A700' : 'none',
@@ -1414,6 +1456,16 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     setSeverityFilter(severityFilter === 'medium' ? 'all' : 'medium');
                     setFilters((prev) => ({ ...prev, severity: [], state: [] }));
                   }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setStateFilter('all');
+                      setSeverityFilter(severityFilter === 'medium' ? 'all' : 'medium');
+                      setFilters((prev) => ({ ...prev, severity: [], state: [] }));
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
                   style={{
                     cursor: 'pointer',
                     outline: severityFilter === 'medium' ? '2px solid #006BB4' : 'none',
