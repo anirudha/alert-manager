@@ -530,7 +530,13 @@ export interface DatasourceService {
 // ============================================================================
 
 export type UnifiedAlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
-export type UnifiedAlertState = 'active' | 'pending' | 'acknowledged' | 'resolved' | 'error';
+export type UnifiedAlertState =
+  | 'active'
+  | 'pending'
+  | 'acknowledged'
+  | 'silenced'
+  | 'resolved'
+  | 'error';
 
 /** Lightweight alert representation for list views and tables. */
 export interface UnifiedAlertSummary {

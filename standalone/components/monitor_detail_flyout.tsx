@@ -34,6 +34,7 @@ import {
   EuiCodeBlock,
   EuiHorizontalRule,
   EuiIcon,
+  EuiLoadingContent,
 } from '@opensearch-project/oui';
 import {
   UnifiedRule,
@@ -87,7 +88,7 @@ const ConditionPreviewGraph: React.FC<{
   if (!data || data.length === 0)
     return (
       <EuiText size="s" color="subdued">
-        No preview data available
+        Not configured
       </EuiText>
     );
 
@@ -208,7 +209,7 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
   const notificationRouting = (full as UnifiedRule).notificationRouting ?? [];
   const suppressionRules = (full as UnifiedRule).suppressionRules ?? [];
   const description = (full as UnifiedRule).description ?? '';
-  const aiSummary = (full as UnifiedRule).aiSummary ?? 'No AI summary available.';
+  const aiSummary = (full as UnifiedRule).aiSummary ?? '';
   const evaluationInterval = full.evaluationInterval ?? '—';
   const pendingPeriod = full.pendingPeriod ?? '—';
 
@@ -298,7 +299,7 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
           {/* Quick actions */}
           <EuiFlexGroup gutterSize="s" responsive={false}>
             <EuiFlexItem grow={false}>
-              <EuiToolTip content="Edit monitor (placeholder)">
+              <EuiToolTip content="Editing not yet available">
                 <EuiButtonEmpty size="s" iconType="pencil" isDisabled>
                   Edit
                 </EuiButtonEmpty>
@@ -332,303 +333,331 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
         </EuiFlyoutHeader>
 
         <EuiFlyoutBody>
-          {/* Description */}
-          <EuiText size="s">
-            <p>{description}</p>
-          </EuiText>
-          <EuiSpacer size="m" />
-
-          {/* AI Summary */}
-          <EuiAccordion
-            id="aiSummary"
-            buttonContent={
-              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-                <EuiFlexItem grow={false}>
-                  <EuiIcon type="compute" />
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <strong>AI Summary</strong>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiBadge color="hollow">Beta</EuiBadge>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-            }
-            initialIsOpen={true}
-            paddingSize="m"
-          >
-            <EuiPanel color="subdued" paddingSize="m">
+          {detailLoading ? (
+            <EuiLoadingContent lines={10} />
+          ) : (
+            <>
+              {/* Description */}
               <EuiText size="s">
-                <p>{aiSummary}</p>
+                <p>{description}</p>
               </EuiText>
-            </EuiPanel>
-          </EuiAccordion>
+              <EuiSpacer size="m" />
 
-          <EuiSpacer size="m" />
+              {/* AI Summary */}
+              <EuiAccordion
+                id={`aiSummary-${monitor.id}`}
+                buttonContent={
+                  <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                    <EuiFlexItem grow={false}>
+                      <EuiIcon type="compute" />
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      <strong>AI Summary</strong>
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      <EuiBadge color="hollow">Beta</EuiBadge>
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                }
+                initialIsOpen={true}
+                paddingSize="m"
+              >
+                <EuiPanel color="subdued" paddingSize="m">
+                  {aiSummary ? (
+                    <EuiText size="s">
+                      <p>{aiSummary}</p>
+                    </EuiText>
+                  ) : (
+                    <EuiText size="s" color="subdued">
+                      Not configured
+                    </EuiText>
+                  )}
+                </EuiPanel>
+              </EuiAccordion>
 
-          {/* Query Definition — type-aware rendering */}
-          <EuiAccordion
-            id="queryDef"
-            buttonContent={
-              <strong>
-                {monitorKind === 'cluster_metrics'
-                  ? 'Cluster API Configuration'
-                  : monitorKind === 'doc'
-                    ? 'Document-Level Queries'
-                    : 'Query Definition'}
-              </strong>
-            }
-            initialIsOpen={true}
-            paddingSize="m"
-          >
-            {monitorKind === 'cluster_metrics' && rawInput && 'uri' in rawInput ? (
-              <>
+              <EuiSpacer size="m" />
+
+              {/* Query Definition — type-aware rendering */}
+              <EuiAccordion
+                id={`queryDef-${monitor.id}`}
+                buttonContent={
+                  <strong>
+                    {monitorKind === 'cluster_metrics'
+                      ? 'Cluster API Configuration'
+                      : monitorKind === 'doc'
+                        ? 'Document-Level Queries'
+                        : 'Query Definition'}
+                  </strong>
+                }
+                initialIsOpen={true}
+                paddingSize="m"
+              >
+                {monitorKind === 'cluster_metrics' && rawInput && 'uri' in rawInput ? (
+                  <>
+                    <EuiDescriptionList
+                      type="column"
+                      compressed
+                      listItems={[
+                        { title: 'API Type', description: rawInput.uri.api_type },
+                        { title: 'Path', description: rawInput.uri.path || '—' },
+                        { title: 'Path Params', description: rawInput.uri.path_params || '—' },
+                        { title: 'URL', description: rawInput.uri.url || '—' },
+                        {
+                          title: 'Clusters',
+                          description: rawInput.uri.clusters?.join(', ') || 'Local cluster',
+                        },
+                      ]}
+                    />
+                  </>
+                ) : monitorKind === 'doc' && rawInput && 'doc_level_input' in rawInput ? (
+                  <>
+                    <EuiText size="s">
+                      <strong>Target indices:</strong>{' '}
+                      {rawInput.doc_level_input.indices?.join(', ') || '—'}
+                    </EuiText>
+                    {rawInput.doc_level_input.description && (
+                      <EuiText size="xs" color="subdued">
+                        {rawInput.doc_level_input.description}
+                      </EuiText>
+                    )}
+                    <EuiSpacer size="s" />
+                    {(rawInput.doc_level_input.queries ?? []).map((q, idx) => (
+                      <EuiPanel
+                        key={q.id || idx}
+                        paddingSize="s"
+                        color="subdued"
+                        style={{ marginBottom: 8 }}
+                      >
+                        <EuiText size="s">
+                          <strong>{q.name}</strong>
+                        </EuiText>
+                        <EuiCodeBlock language="json" fontSize="s" paddingSize="s" isCopyable>
+                          {q.query}
+                        </EuiCodeBlock>
+                        {q.tags?.length > 0 && (
+                          <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
+                            {q.tags.map((tag) => (
+                              <EuiFlexItem grow={false} key={tag}>
+                                <EuiBadge color="hollow">{tag}</EuiBadge>
+                              </EuiFlexItem>
+                            ))}
+                          </EuiFlexGroup>
+                        )}
+                      </EuiPanel>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <EuiCodeBlock language={queryLang} fontSize="s" paddingSize="m" isCopyable>
+                      {queryDisplay}
+                    </EuiCodeBlock>
+                    {monitorKind === 'bucket' && (
+                      <EuiText size="xs" color="subdued">
+                        <em>Bucket-level monitor — triggers evaluate per aggregation bucket</em>
+                      </EuiText>
+                    )}
+                  </>
+                )}
+                {monitor.condition && (
+                  <>
+                    <EuiSpacer size="s" />
+                    <EuiText size="xs" color="subdued">
+                      Condition: {monitor.condition}
+                    </EuiText>
+                  </>
+                )}
+              </EuiAccordion>
+
+              <EuiSpacer size="m" />
+
+              {/* Conditions & Thresholds */}
+              <EuiAccordion
+                id={`conditions-${monitor.id}`}
+                buttonContent={<strong>Conditions &amp; Evaluation</strong>}
+                initialIsOpen={true}
+                paddingSize="m"
+              >
                 <EuiDescriptionList
                   type="column"
                   compressed
                   listItems={[
-                    { title: 'API Type', description: rawInput.uri.api_type },
-                    { title: 'Path', description: rawInput.uri.path || '—' },
-                    { title: 'Path Params', description: rawInput.uri.path_params || '—' },
-                    { title: 'URL', description: rawInput.uri.url || '—' },
-                    {
-                      title: 'Clusters',
-                      description: rawInput.uri.clusters?.join(', ') || 'Local cluster',
-                    },
+                    { title: 'Evaluation Interval', description: evaluationInterval },
+                    { title: 'Pending Period', description: pendingPeriod },
+                    ...(monitor.firingPeriod
+                      ? [{ title: 'Firing Period', description: monitor.firingPeriod }]
+                      : []),
+                    ...(monitor.lookbackPeriod
+                      ? [{ title: 'Lookback Period', description: monitor.lookbackPeriod }]
+                      : []),
+                    ...(monitor.threshold
+                      ? [
+                          {
+                            title: 'Threshold',
+                            description: `${monitor.threshold.operator} ${monitor.threshold.value}${monitor.threshold.unit || ''}`,
+                          },
+                        ]
+                      : []),
                   ]}
                 />
-              </>
-            ) : monitorKind === 'doc' && rawInput && 'doc_level_input' in rawInput ? (
-              <>
-                <EuiText size="s">
-                  <strong>Target indices:</strong>{' '}
-                  {rawInput.doc_level_input.indices?.join(', ') || '—'}
-                </EuiText>
-                {rawInput.doc_level_input.description && (
-                  <EuiText size="xs" color="subdued">
-                    {rawInput.doc_level_input.description}
+              </EuiAccordion>
+
+              <EuiSpacer size="m" />
+
+              {/* Labels */}
+              <EuiAccordion
+                id={`labels-${monitor.id}`}
+                buttonContent={<strong>Labels</strong>}
+                initialIsOpen={true}
+                paddingSize="m"
+              >
+                {(() => {
+                  const INTERNAL_LABEL_KEYS = [
+                    'monitor_type',
+                    'monitor_kind',
+                    'datasource_id',
+                    '_workspace',
+                  ];
+                  const visibleLabels = Object.entries(monitor.labels).filter(
+                    ([k]) => !INTERNAL_LABEL_KEYS.includes(k)
+                  );
+                  return (
+                    <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
+                      {visibleLabels.map(([k, v]) => (
+                        <EuiFlexItem grow={false} key={k}>
+                          <EuiBadge color="hollow">
+                            {k}: {v}
+                          </EuiBadge>
+                        </EuiFlexItem>
+                      ))}
+                      {visibleLabels.length === 0 && (
+                        <EuiText size="s" color="subdued">
+                          Not configured
+                        </EuiText>
+                      )}
+                    </EuiFlexGroup>
+                  );
+                })()}
+              </EuiAccordion>
+
+              <EuiSpacer size="m" />
+
+              {/* Condition Preview Graph */}
+              <EuiAccordion
+                id={`preview-${monitor.id}`}
+                buttonContent={<strong>Condition Preview</strong>}
+                initialIsOpen={true}
+                paddingSize="m"
+              >
+                <ConditionPreviewGraph data={conditionPreviewData} threshold={monitor.threshold} />
+              </EuiAccordion>
+
+              <EuiSpacer size="m" />
+
+              {/* Alert History */}
+              <EuiAccordion
+                id={`alertHistory-${monitor.id}`}
+                buttonContent={<strong>Recent Alert History ({alertHistory.length})</strong>}
+                initialIsOpen={false}
+                paddingSize="m"
+              >
+                <EuiBasicTable items={alertHistory} columns={historyColumns} compressed />
+              </EuiAccordion>
+
+              <EuiSpacer size="m" />
+
+              {/* Notification Routing */}
+              <EuiAccordion
+                id={`routing-${monitor.id}`}
+                buttonContent={<strong>Notification Routing ({notificationRouting.length})</strong>}
+                initialIsOpen={false}
+                paddingSize="m"
+              >
+                {notificationRouting.length > 0 ? (
+                  <EuiBasicTable items={notificationRouting} columns={routingColumns} compressed />
+                ) : (
+                  <EuiText size="s" color="subdued">
+                    No notification routing configured
                   </EuiText>
                 )}
-                <EuiSpacer size="s" />
-                {(rawInput.doc_level_input.queries ?? []).map((q, idx) => (
-                  <EuiPanel
-                    key={q.id || idx}
-                    paddingSize="s"
-                    color="subdued"
-                    style={{ marginBottom: 8 }}
-                  >
-                    <EuiText size="s">
-                      <strong>{q.name}</strong>
-                    </EuiText>
-                    <EuiCodeBlock language="json" fontSize="s" paddingSize="s" isCopyable>
-                      {q.query}
-                    </EuiCodeBlock>
-                    {q.tags?.length > 0 && (
-                      <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
-                        {q.tags.map((tag) => (
-                          <EuiFlexItem grow={false} key={tag}>
-                            <EuiBadge color="hollow">{tag}</EuiBadge>
-                          </EuiFlexItem>
-                        ))}
+              </EuiAccordion>
+
+              <EuiSpacer size="m" />
+
+              {/* Suppression Rules */}
+              <EuiAccordion
+                id={`suppression-${monitor.id}`}
+                buttonContent={<strong>Suppression Rules ({suppressionRules.length})</strong>}
+                initialIsOpen={false}
+                paddingSize="m"
+              >
+                {suppressionRules.length > 0 ? (
+                  suppressionRules.map((sr) => (
+                    <EuiPanel
+                      key={sr.id}
+                      paddingSize="s"
+                      color={sr.active ? 'plain' : 'subdued'}
+                      style={{ marginBottom: 8 }}
+                    >
+                      <EuiFlexGroup alignItems="center" responsive={false}>
+                        <EuiFlexItem>
+                          <EuiText size="s">
+                            <strong>{sr.name}</strong>
+                          </EuiText>
+                          <EuiText size="xs" color="subdued">
+                            {sr.reason}
+                          </EuiText>
+                          {sr.schedule && <EuiText size="xs">Schedule: {sr.schedule}</EuiText>}
+                        </EuiFlexItem>
+                        <EuiFlexItem grow={false}>
+                          <EuiBadge color={sr.active ? 'success' : 'default'}>
+                            {sr.active ? 'Active' : 'Inactive'}
+                          </EuiBadge>
+                        </EuiFlexItem>
                       </EuiFlexGroup>
-                    )}
-                  </EuiPanel>
-                ))}
-              </>
-            ) : (
-              <>
-                <EuiCodeBlock language={queryLang} fontSize="s" paddingSize="m" isCopyable>
-                  {queryDisplay}
-                </EuiCodeBlock>
-                {monitorKind === 'bucket' && (
-                  <EuiText size="xs" color="subdued">
-                    <em>Bucket-level monitor — triggers evaluate per aggregation bucket</em>
+                    </EuiPanel>
+                  ))
+                ) : (
+                  <EuiText size="s" color="subdued">
+                    No suppression rules applied
                   </EuiText>
                 )}
-              </>
-            )}
-            {monitor.condition && (
-              <>
-                <EuiSpacer size="s" />
-                <EuiText size="xs" color="subdued">
-                  Condition: {monitor.condition}
-                </EuiText>
-              </>
-            )}
-          </EuiAccordion>
+              </EuiAccordion>
 
-          <EuiSpacer size="m" />
+              <EuiSpacer size="m" />
 
-          {/* Conditions & Thresholds */}
-          <EuiAccordion
-            id="conditions"
-            buttonContent={<strong>Conditions &amp; Evaluation</strong>}
-            initialIsOpen={true}
-            paddingSize="m"
-          >
-            <EuiDescriptionList
-              type="column"
-              compressed
-              listItems={[
-                { title: 'Evaluation Interval', description: evaluationInterval },
-                { title: 'Pending Period', description: pendingPeriod },
-                ...(monitor.firingPeriod
-                  ? [{ title: 'Firing Period', description: monitor.firingPeriod }]
-                  : []),
-                ...(monitor.lookbackPeriod
-                  ? [{ title: 'Lookback Period', description: monitor.lookbackPeriod }]
-                  : []),
-                ...(monitor.threshold
-                  ? [
-                      {
-                        title: 'Threshold',
-                        description: `${monitor.threshold.operator} ${monitor.threshold.value}${monitor.threshold.unit || ''}`,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </EuiAccordion>
-
-          <EuiSpacer size="m" />
-
-          {/* Labels */}
-          <EuiAccordion
-            id="labels"
-            buttonContent={<strong>Labels</strong>}
-            initialIsOpen={true}
-            paddingSize="m"
-          >
-            <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
-              {Object.entries(monitor.labels).map(([k, v]) => (
-                <EuiFlexItem grow={false} key={k}>
-                  <EuiBadge color="hollow">
-                    {k}: {v}
-                  </EuiBadge>
-                </EuiFlexItem>
-              ))}
-              {Object.keys(monitor.labels).length === 0 && (
-                <EuiText size="s" color="subdued">
-                  No labels
-                </EuiText>
-              )}
-            </EuiFlexGroup>
-          </EuiAccordion>
-
-          <EuiSpacer size="m" />
-
-          {/* Condition Preview Graph */}
-          <EuiAccordion
-            id="preview"
-            buttonContent={<strong>Condition Preview</strong>}
-            initialIsOpen={true}
-            paddingSize="m"
-          >
-            <ConditionPreviewGraph data={conditionPreviewData} threshold={monitor.threshold} />
-          </EuiAccordion>
-
-          <EuiSpacer size="m" />
-
-          {/* Alert History */}
-          <EuiAccordion
-            id="alertHistory"
-            buttonContent={<strong>Recent Alert History ({alertHistory.length})</strong>}
-            initialIsOpen={false}
-            paddingSize="m"
-          >
-            <EuiBasicTable items={alertHistory} columns={historyColumns} compressed />
-          </EuiAccordion>
-
-          <EuiSpacer size="m" />
-
-          {/* Notification Routing */}
-          <EuiAccordion
-            id="routing"
-            buttonContent={<strong>Notification Routing ({notificationRouting.length})</strong>}
-            initialIsOpen={false}
-            paddingSize="m"
-          >
-            {notificationRouting.length > 0 ? (
-              <EuiBasicTable items={notificationRouting} columns={routingColumns} compressed />
-            ) : (
-              <EuiText size="s" color="subdued">
-                No notification routing configured
-              </EuiText>
-            )}
-          </EuiAccordion>
-
-          <EuiSpacer size="m" />
-
-          {/* Suppression Rules */}
-          <EuiAccordion
-            id="suppression"
-            buttonContent={<strong>Suppression Rules ({suppressionRules.length})</strong>}
-            initialIsOpen={false}
-            paddingSize="m"
-          >
-            {suppressionRules.length > 0 ? (
-              suppressionRules.map((sr) => (
-                <EuiPanel
-                  key={sr.id}
-                  paddingSize="s"
-                  color={sr.active ? 'plain' : 'subdued'}
-                  style={{ marginBottom: 8 }}
-                >
-                  <EuiFlexGroup alignItems="center" responsive={false}>
-                    <EuiFlexItem>
-                      <EuiText size="s">
-                        <strong>{sr.name}</strong>
-                      </EuiText>
-                      <EuiText size="xs" color="subdued">
-                        {sr.reason}
-                      </EuiText>
-                      {sr.schedule && <EuiText size="xs">Schedule: {sr.schedule}</EuiText>}
-                    </EuiFlexItem>
-                    <EuiFlexItem grow={false}>
-                      <EuiBadge color={sr.active ? 'success' : 'default'}>
-                        {sr.active ? 'Active' : 'Inactive'}
-                      </EuiBadge>
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
-                </EuiPanel>
-              ))
-            ) : (
-              <EuiText size="s" color="subdued">
-                No suppression rules applied
-              </EuiText>
-            )}
-          </EuiAccordion>
-
-          <EuiSpacer size="m" />
-
-          {/* Creation / Modification History */}
-          <EuiAccordion
-            id="history"
-            buttonContent={<strong>History</strong>}
-            initialIsOpen={false}
-            paddingSize="m"
-          >
-            <EuiDescriptionList
-              type="column"
-              compressed
-              listItems={[
-                { title: 'Created By', description: monitor.createdBy },
-                { title: 'Created At', description: new Date(monitor.createdAt).toLocaleString() },
-                {
-                  title: 'Last Modified',
-                  description: new Date(monitor.lastModified).toLocaleString(),
-                },
-                {
-                  title: 'Last Triggered',
-                  description: monitor.lastTriggered
-                    ? new Date(monitor.lastTriggered).toLocaleString()
-                    : 'Never',
-                },
-                { title: 'Backend', description: monitor.datasourceType },
-                { title: 'Datasource ID', description: monitor.datasourceId },
-              ]}
-            />
-          </EuiAccordion>
+              {/* Creation / Modification History */}
+              <EuiAccordion
+                id={`history-${monitor.id}`}
+                buttonContent={<strong>History</strong>}
+                initialIsOpen={false}
+                paddingSize="m"
+              >
+                <EuiDescriptionList
+                  type="column"
+                  compressed
+                  listItems={[
+                    { title: 'Created By', description: monitor.createdBy },
+                    {
+                      title: 'Created At',
+                      description: new Date(monitor.createdAt).toLocaleString(),
+                    },
+                    {
+                      title: 'Last Modified',
+                      description: new Date(monitor.lastModified).toLocaleString(),
+                    },
+                    {
+                      title: 'Last Triggered',
+                      description: monitor.lastTriggered
+                        ? new Date(monitor.lastTriggered).toLocaleString()
+                        : '—',
+                    },
+                    { title: 'Backend', description: monitor.datasourceType },
+                    { title: 'Datasource ID', description: monitor.datasourceId },
+                  ]}
+                />
+              </EuiAccordion>
+            </>
+          )}
         </EuiFlyoutBody>
 
         <EuiFlyoutFooter>
@@ -637,9 +666,30 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
               <EuiButtonEmpty onClick={onClose}>Close</EuiButtonEmpty>
             </EuiFlexItem>
             <EuiFlexItem grow={false}>
-              <EuiButton fill onClick={() => onSilence(monitor.id)}>
-                {monitor.status === 'muted' ? 'Unmute Monitor' : 'Silence Monitor'}
-              </EuiButton>
+              <EuiFlexGroup gutterSize="s" responsive={false}>
+                <EuiFlexItem grow={false}>
+                  {monitor.status === 'disabled' || (monitor as any).enabled === false ? (
+                    <EuiButton
+                      color="secondary"
+                      onClick={() => console.log('Enable monitor:', monitor.id)}
+                    >
+                      Enable Monitor
+                    </EuiButton>
+                  ) : (
+                    <EuiButton
+                      color="text"
+                      onClick={() => console.log('Disable monitor:', monitor.id)}
+                    >
+                      Disable Monitor
+                    </EuiButton>
+                  )}
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiButton fill onClick={() => onSilence(monitor.id)}>
+                    {monitor.status === 'muted' ? 'Unmute Monitor' : 'Silence Monitor'}
+                  </EuiButton>
+                </EuiFlexItem>
+              </EuiFlexGroup>
             </EuiFlexItem>
           </EuiFlexGroup>
         </EuiFlyoutFooter>

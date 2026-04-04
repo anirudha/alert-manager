@@ -48,37 +48,33 @@ import {
 } from '../../core';
 import { serializeMonitors } from '../../core/serializer';
 import { MonitorDetailFlyout } from './monitor_detail_flyout';
+import {
+  SEVERITY_COLORS,
+  STATUS_COLORS,
+  HEALTH_COLORS,
+  TYPE_LABELS,
+  PAGINATION_BUTTON_STYLE,
+  PAGINATION_BUTTON_HOVER_CLASS,
+  PAGINATION_CSS,
+} from './shared_constants';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'primary',
-  low: 'subdued',
-  info: 'default',
-};
-const STATUS_COLORS: Record<string, string> = {
-  active: 'danger',
-  pending: 'warning',
-  muted: 'default',
-  disabled: 'subdued',
-};
-const HEALTH_COLORS: Record<string, string> = {
-  healthy: 'success',
-  failing: 'danger',
-  no_data: 'subdued',
-};
-const TYPE_LABELS: Record<string, string> = {
-  metric: 'Metric',
-  log: 'Log',
-  apm: 'APM',
-  composite: 'Composite',
-  infrastructure: 'Infrastructure',
-  cluster_metrics: 'Cluster Metrics',
-  synthetics: 'Synthetics',
+const INTERNAL_LABEL_KEYS = new Set([
+  'monitor_type',
+  'monitor_kind',
+  'datasource_id',
+  '_workspace',
+  'monitor_id',
+  'trigger_id',
+  'trigger_name',
+]);
+
+const BACKEND_DISPLAY: Record<string, string> = {
+  opensearch: 'OpenSearch',
+  prometheus: 'Prometheus',
 };
 
 // ============================================================================
@@ -497,90 +493,84 @@ const TablePagination: React.FC<{
   for (let i = startPage; i < endPage; i++) pages.push(i);
 
   return (
-    <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
-      <EuiFlexItem grow={false}>
-        <EuiPopoverOui
-          button={
-            <EuiButtonEmpty
-              size="xs"
-              color="text"
-              iconType="arrowDown"
-              iconSide="right"
-              onClick={() => setIsPopoverOpen(!isPopoverOpen)}
-            >
-              Rows per page: {pageSize}
-            </EuiButtonEmpty>
-          }
-          isOpen={isPopoverOpen}
-          closePopover={() => setIsPopoverOpen(false)}
-          panelPaddingSize="none"
-          anchorPosition="upCenter"
-        >
-          <EuiContextMenuPanel
-            items={pageSizeOptions.map((size) => (
-              <EuiContextMenuItem
-                key={size}
-                icon={size === pageSize ? 'check' : 'empty'}
-                onClick={() => {
-                  onChangePageSize(size);
-                  onChangePage(0);
-                  setIsPopoverOpen(false);
-                }}
+    <>
+      <style>{PAGINATION_CSS}</style>
+      <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiPopoverOui
+            button={
+              <EuiButtonEmpty
+                size="xs"
+                color="text"
+                iconType="arrowDown"
+                iconSide="right"
+                onClick={() => setIsPopoverOpen(!isPopoverOpen)}
               >
-                {size} rows
-              </EuiContextMenuItem>
-            ))}
-          />
-        </EuiPopoverOui>
-      </EuiFlexItem>
-      <EuiFlexItem grow={false}>
-        <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiButtonIcon
-              iconType="arrowLeft"
-              aria-label="Previous page"
-              onClick={() => onChangePage(pageIndex - 1)}
-              isDisabled={pageIndex === 0}
-              size="s"
-              color="text"
+                Rows per page: {pageSize}
+              </EuiButtonEmpty>
+            }
+            isOpen={isPopoverOpen}
+            closePopover={() => setIsPopoverOpen(false)}
+            panelPaddingSize="none"
+            anchorPosition="upCenter"
+          >
+            <EuiContextMenuPanel
+              items={pageSizeOptions.map((size) => (
+                <EuiContextMenuItem
+                  key={size}
+                  icon={size === pageSize ? 'check' : 'empty'}
+                  onClick={() => {
+                    onChangePageSize(size);
+                    onChangePage(0);
+                    setIsPopoverOpen(false);
+                  }}
+                >
+                  {size} rows
+                </EuiContextMenuItem>
+              ))}
             />
-          </EuiFlexItem>
-          {pages.map((p) => (
-            <EuiFlexItem grow={false} key={p}>
-              <button
-                onClick={() => onChangePage(p)}
-                disabled={p === pageIndex}
-                aria-label={`Page ${p + 1} of ${pageCount}`}
-                aria-current={p === pageIndex ? 'page' : undefined}
-                style={{
-                  minWidth: 32,
-                  height: 32,
-                  border: 'none',
-                  borderRadius: 4,
-                  background: p === pageIndex ? '#006BB4' : 'transparent',
-                  color: p === pageIndex ? '#fff' : '#006BB4',
-                  fontWeight: p === pageIndex ? 700 : 400,
-                  cursor: p === pageIndex ? 'default' : 'pointer',
-                  fontSize: 14,
-                }}
-              >
-                {p + 1}
-              </button>
+          </EuiPopoverOui>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+            <EuiFlexItem grow={false}>
+              <EuiButtonIcon
+                iconType="arrowLeft"
+                aria-label="Previous page"
+                onClick={() => onChangePage(pageIndex - 1)}
+                isDisabled={pageIndex === 0}
+                size="s"
+                color="text"
+              />
             </EuiFlexItem>
-          ))}
-          <EuiFlexItem grow={false}>
-            <EuiButtonIcon
-              iconType="arrowRight"
-              aria-label="Next page"
-              onClick={() => onChangePage(pageIndex + 1)}
-              isDisabled={pageIndex >= pageCount - 1}
-              size="s"
-              color="text"
-            />
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiFlexItem>
-    </EuiFlexGroup>
+            {pages.map((p) => (
+              <EuiFlexItem grow={false} key={p}>
+                <button
+                  onClick={() => onChangePage(p)}
+                  disabled={p === pageIndex}
+                  aria-label={`Page ${p + 1} of ${pageCount}`}
+                  aria-current={p === pageIndex ? 'page' : undefined}
+                  className={PAGINATION_BUTTON_HOVER_CLASS}
+                  style={PAGINATION_BUTTON_STYLE(p === pageIndex)}
+                >
+                  {p + 1}
+                </button>
+              </EuiFlexItem>
+            ))}
+            <EuiFlexItem grow={false}>
+              <EuiButtonIcon
+                iconType="arrowRight"
+                aria-label="Next page"
+                onClick={() => onChangePage(pageIndex + 1)}
+                isDisabled={pageIndex >= pageCount - 1}
+                size="s"
+                color="text"
+              />
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    </>
   );
 };
 
@@ -743,8 +733,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     setSelectedIds(next);
   };
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filtered.map((r) => r.id)));
+    if (selectedIds.size === paginatedRules.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(paginatedRules.map((r) => r.id)));
   };
 
   // Saved searches
@@ -822,7 +812,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
         name: (
           <input
             type="checkbox"
-            checked={filtered.length > 0 && selectedIds.size === filtered.length}
+            checked={paginatedRules.length > 0 && selectedIds.size === paginatedRules.length}
             onChange={toggleSelectAll}
             aria-label="Select all monitors"
           />
@@ -1312,7 +1302,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                     uniqueBackends,
                     filters.backend,
                     (v) => updateFilter('backend', v),
-                    facetCounts.counts.backend
+                    facetCounts.counts.backend,
+                    BACKEND_DISPLAY
                   )}
                   {renderFacetGroup(
                     'createdBy',
@@ -1330,16 +1321,18 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                       <EuiText size="xs" color="subdued" style={{ marginBottom: 6 }}>
                         <strong>Labels</strong>
                       </EuiText>
-                      {labelKeys.map((key) =>
-                        renderFacetGroup(
-                          `label:${key}`,
-                          key,
-                          collectLabelValues(rules, key),
-                          filters.labels[key] || [],
-                          (v) => updateLabelFilter(key, v),
-                          facetCounts.labelCounts[key] || {}
-                        )
-                      )}
+                      {labelKeys
+                        .filter((k) => !INTERNAL_LABEL_KEYS.has(k))
+                        .map((key) =>
+                          renderFacetGroup(
+                            `label:${key}`,
+                            key,
+                            collectLabelValues(rules, key),
+                            filters.labels[key] || [],
+                            (v) => updateLabelFilter(key, v),
+                            facetCounts.labelCounts[key] || {}
+                          )
+                        )}
                     </>
                   )}
 

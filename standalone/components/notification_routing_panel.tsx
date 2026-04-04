@@ -350,6 +350,15 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
 
   return (
     <div>
+      {/* Read-only explanation banner (UX audit M6 + S-m8) */}
+      <EuiCallOut title="Read-only view" color="primary" iconType="iInCircle" size="s">
+        <p>
+          Routing configuration is managed via the Alertmanager configuration file or API. This view
+          shows the current routing tree for all Prometheus datasources.
+        </p>
+      </EuiCallOut>
+      <EuiSpacer size="m" />
+
       {/* Cluster status bar */}
       <EuiPanel paddingSize="s" hasBorder>
         <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>

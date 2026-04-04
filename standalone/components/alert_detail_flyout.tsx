@@ -28,6 +28,8 @@ import {
   EuiCodeBlock,
   EuiHorizontalRule,
   EuiIcon,
+  EuiToolTip,
+  EuiLink,
 } from '@opensearch-project/oui';
 import { UnifiedAlert, Datasource } from '../../core';
 
@@ -45,6 +47,18 @@ const STATE_COLORS: Record<string, string> = {
   resolved: 'success',
   error: 'danger',
 };
+
+/** Internal label keys filtered from the Labels accordion display. */
+const INTERNAL_LABEL_KEYS = new Set([
+  'monitor_id',
+  'datasource_id',
+  '_workspace',
+  'monitor_type',
+  'monitor_kind',
+  'trigger_id',
+  'trigger_name',
+  'datasource_type',
+]);
 
 export interface AlertDetailFlyoutProps {
   alert: UnifiedAlert;
@@ -83,8 +97,13 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const alertData = mergedAlert;
 
-  const dsName = datasources.find((d) => d.id === alert.datasourceId)?.name || alert.datasourceId;
-  const labels = alertData.labels || {};
+  const dsName =
+    datasources.find((d) => d.id === alert.datasourceId)?.name || alert.datasourceId || '\u2014';
+  const allLabels = alertData.labels || {};
+  // Filter out internal/system labels for display (fix S-m2/6)
+  const labels = Object.fromEntries(
+    Object.entries(allLabels).filter(([k]) => !INTERNAL_LABEL_KEYS.has(k))
+  );
   const annotations = alertData.annotations || {};
 
   // Generate a mock AI analysis for the alert
@@ -95,9 +114,19 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
       <EuiFlyoutHeader hasBorder>
         <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
           <EuiFlexItem>
-            <EuiTitle size="m">
-              <h2 id="alertDetailTitle">{alert.name}</h2>
-            </EuiTitle>
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+              <EuiFlexItem grow={false}>
+                <EuiTitle size="m">
+                  <h2 id="alertDetailTitle">{alert.name}</h2>
+                </EuiTitle>
+              </EuiFlexItem>
+              {/* S-m8: Datasource type badge for visual distinction */}
+              <EuiFlexItem grow={false}>
+                <EuiBadge color={alert.datasourceType === 'opensearch' ? 'primary' : 'accent'}>
+                  {alert.datasourceType === 'opensearch' ? 'OpenSearch' : 'Prometheus'}
+                </EuiBadge>
+              </EuiFlexItem>
+            </EuiFlexGroup>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiFlexGroup gutterSize="xs" responsive={false}>
@@ -111,9 +140,13 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
           </EuiFlexItem>
         </EuiFlexGroup>
         <EuiSpacer size="s" />
-        {(alert.message || annotations.summary || annotations.description) && (
+        {alert.message || annotations.summary || annotations.description ? (
           <EuiText size="s" color="subdued">
             {alert.message || annotations.summary || annotations.description}
+          </EuiText>
+        ) : (
+          <EuiText size="s" color="subdued">
+            Not available
           </EuiText>
         )}
       </EuiFlyoutHeader>
@@ -121,7 +154,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
       <EuiFlyoutBody>
         {/* AI Analysis */}
         <EuiAccordion
-          id="alertAiAnalysis"
+          id={`alertAiAnalysis-${alert.id}`}
           buttonContent={
             <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
               <EuiFlexItem grow={false}>
@@ -149,7 +182,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         {/* Alert Details */}
         <EuiAccordion
-          id="alertDetails"
+          id={`alertDetails-${alert.id}`}
           buttonContent={<strong>Alert Details</strong>}
           initialIsOpen={true}
           paddingSize="m"
@@ -158,18 +191,22 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
             type="column"
             compressed
             listItems={[
-              { title: 'Alert ID', description: alert.id },
-              { title: 'State', description: alert.state },
-              { title: 'Severity', description: alert.severity },
-              { title: 'Backend', description: alert.datasourceType },
+              { title: 'Alert ID', description: alert.id || '\u2014' },
+              { title: 'State', description: alert.state || '\u2014' },
+              { title: 'Severity', description: alert.severity || '\u2014' },
+              { title: 'Backend', description: alert.datasourceType || '\u2014' },
               { title: 'Datasource', description: dsName },
               {
                 title: 'Started',
-                description: alert.startTime ? new Date(alert.startTime).toLocaleString() : '—',
+                description: alert.startTime
+                  ? new Date(alert.startTime).toLocaleString()
+                  : '\u2014',
               },
               {
                 title: 'Last Updated',
-                description: alert.lastUpdated ? new Date(alert.lastUpdated).toLocaleString() : '—',
+                description: alert.lastUpdated
+                  ? new Date(alert.lastUpdated).toLocaleString()
+                  : '\u2014',
               },
               { title: 'Duration', description: getAlertDuration(alert.startTime) },
             ]}
@@ -178,9 +215,9 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         <EuiSpacer size="m" />
 
-        {/* Labels */}
+        {/* Labels (internal keys filtered — see INTERNAL_LABEL_KEYS) */}
         <EuiAccordion
-          id="alertLabels"
+          id={`alertLabels-${alert.id}`}
           buttonContent={<strong>Labels ({Object.keys(labels).length})</strong>}
           initialIsOpen={true}
           paddingSize="m"
@@ -190,14 +227,14 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
               {Object.entries(labels).map(([k, v]) => (
                 <EuiFlexItem grow={false} key={k}>
                   <EuiBadge color="hollow">
-                    {k}: {v}
+                    {k}: {v || '\u2014'}
                   </EuiBadge>
                 </EuiFlexItem>
               ))}
             </EuiFlexGroup>
           ) : (
             <EuiText size="s" color="subdued">
-              No labels
+              Not available
             </EuiText>
           )}
         </EuiAccordion>
@@ -206,7 +243,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         {/* Annotations */}
         <EuiAccordion
-          id="alertAnnotations"
+          id={`alertAnnotations-${alert.id}`}
           buttonContent={<strong>Annotations ({Object.keys(annotations).length})</strong>}
           initialIsOpen={true}
           paddingSize="m"
@@ -217,12 +254,12 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
               compressed
               listItems={Object.entries(annotations).map(([k, v]) => ({
                 title: k,
-                description: v,
+                description: v || '\u2014',
               }))}
             />
           ) : (
             <EuiText size="s" color="subdued">
-              No annotations
+              Not available
             </EuiText>
           )}
         </EuiAccordion>
@@ -231,7 +268,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         {/* Suppression Status */}
         <EuiAccordion
-          id="suppressionStatus"
+          id={`suppressionStatus-${alert.id}`}
           buttonContent={
             <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
               <EuiFlexItem grow={false}>
@@ -269,7 +306,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         {/* Routing Information */}
         <EuiAccordion
-          id="routingInfo"
+          id={`routingInfo-${alert.id}`}
           buttonContent={
             <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
               <EuiFlexItem grow={false}>
@@ -306,7 +343,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         {/* Raw Data */}
         <EuiAccordion
-          id="alertRaw"
+          id={`alertRaw-${alert.id}`}
           buttonContent={<strong>Raw Alert Data</strong>}
           initialIsOpen={false}
           paddingSize="m"
@@ -318,9 +355,9 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 
         <EuiSpacer size="m" />
 
-        {/* Suggested Actions */}
+        {/* Suggested Actions (S-m4: interactive where possible) */}
         <EuiAccordion
-          id="suggestedActions"
+          id={`suggestedActions-${alert.id}`}
           buttonContent={
             <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
               <EuiFlexItem grow={false}>
@@ -334,23 +371,62 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
           initialIsOpen={true}
           paddingSize="m"
         >
-          {getSuggestedActions(alert).map((action, i) => (
-            <EuiPanel key={i} paddingSize="s" color="subdued" style={{ marginBottom: 6 }}>
-              <EuiFlexGroup alignItems="center" responsive={false} gutterSize="s">
-                <EuiFlexItem grow={false}>
-                  <EuiIcon type={action.icon} color={action.color} />
-                </EuiFlexItem>
-                <EuiFlexItem>
-                  <EuiText size="s">
-                    <strong>{action.title}</strong>
-                  </EuiText>
-                  <EuiText size="xs" color="subdued">
-                    {action.description}
-                  </EuiText>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-            </EuiPanel>
-          ))}
+          {getSuggestedActions(alert).map((action, i) => {
+            // Determine interactivity: acknowledge action is clickable,
+            // URL-containing actions link out, others are manual.
+            const isAcknowledge = action.actionType === 'acknowledge';
+            const isSilence = action.actionType === 'silence';
+            const hasUrl = action.url !== undefined;
+            const isClickable = isAcknowledge || isSilence || hasUrl;
+
+            const handleClick = () => {
+              if (isAcknowledge) onAcknowledge(alert.id);
+              else if (isSilence) onSilence(alert.id);
+            };
+
+            return (
+              <EuiPanel
+                key={i}
+                paddingSize="s"
+                color="subdued"
+                style={{
+                  marginBottom: 6,
+                  cursor: isClickable ? 'pointer' : 'default',
+                }}
+                onClick={isClickable && !hasUrl ? handleClick : undefined}
+              >
+                <EuiFlexGroup alignItems="center" responsive={false} gutterSize="s">
+                  <EuiFlexItem grow={false}>
+                    <EuiIcon type={action.icon} color={action.color} />
+                  </EuiFlexItem>
+                  <EuiFlexItem>
+                    {hasUrl ? (
+                      <EuiLink href={action.url} target="_blank">
+                        <EuiText size="s">
+                          <strong>{action.title}</strong>
+                        </EuiText>
+                      </EuiLink>
+                    ) : (
+                      <EuiText size="s">
+                        <strong>{action.title}</strong>
+                      </EuiText>
+                    )}
+                    <EuiText size="xs" color="subdued">
+                      {action.description}
+                      {!isClickable && (
+                        <em style={{ marginLeft: 4 }}> &mdash; Manual action required</em>
+                      )}
+                    </EuiText>
+                  </EuiFlexItem>
+                  {isClickable && !hasUrl && (
+                    <EuiFlexItem grow={false}>
+                      <EuiIcon type="arrowRight" size="s" />
+                    </EuiFlexItem>
+                  )}
+                </EuiFlexGroup>
+              </EuiPanel>
+            );
+          })}
         </EuiAccordion>
       </EuiFlyoutBody>
 
@@ -366,11 +442,21 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
                   Silence
                 </EuiButton>
               </EuiFlexItem>
-              {alert.state === 'active' && (
+              {/* S-C4: Hide Acknowledge for Prometheus alerts — not supported */}
+              {alert.state === 'active' && alert.datasourceType !== 'prometheus' && (
                 <EuiFlexItem grow={false}>
                   <EuiButton fill size="s" iconType="check" onClick={() => onAcknowledge(alert.id)}>
                     Acknowledge
                   </EuiButton>
+                </EuiFlexItem>
+              )}
+              {alert.state === 'active' && alert.datasourceType === 'prometheus' && (
+                <EuiFlexItem grow={false}>
+                  <EuiToolTip content="Acknowledgement not supported for Prometheus alerts — use Silence instead">
+                    <EuiButton fill size="s" iconType="check" isDisabled>
+                      Acknowledge
+                    </EuiButton>
+                  </EuiToolTip>
                 </EuiFlexItem>
               )}
             </EuiFlexGroup>
@@ -417,10 +503,19 @@ function getAlertAiAnalysis(alert: UnifiedAlert): string {
   );
 }
 
-function getSuggestedActions(
-  alert: UnifiedAlert
-): Array<{ title: string; description: string; icon: string; color: string }> {
-  const actions: Array<{ title: string; description: string; icon: string; color: string }> = [];
+interface SuggestedAction {
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  /** Identifies the action type so the UI can make it interactive. */
+  actionType: 'acknowledge' | 'silence' | 'link' | 'manual';
+  /** Optional URL for link-type actions. */
+  url?: string;
+}
+
+function getSuggestedActions(alert: UnifiedAlert): SuggestedAction[] {
+  const actions: SuggestedAction[] = [];
 
   if (alert.state === 'active') {
     actions.push({
@@ -428,16 +523,19 @@ function getSuggestedActions(
       description: 'Mark as acknowledged to stop repeated notifications while you investigate.',
       icon: 'check',
       color: 'primary',
+      actionType: alert.datasourceType === 'prometheus' ? 'manual' : 'acknowledge',
     });
   }
 
   if (alert.severity === 'critical' || alert.severity === 'high') {
+    const runbookUrl = alert.annotations?.runbook_url;
     actions.push({
       title: 'Check related runbook',
-      description:
-        alert.annotations?.runbook_url || 'No runbook URL configured — consider adding one.',
+      description: runbookUrl || 'No runbook URL configured \u2014 consider adding one.',
       icon: 'document',
       color: 'warning',
+      actionType: runbookUrl ? 'link' : 'manual',
+      url: runbookUrl || undefined,
     });
   }
 
@@ -447,6 +545,7 @@ function getSuggestedActions(
       description: 'Open host metrics dashboard to correlate with other system indicators.',
       icon: 'compute',
       color: 'default',
+      actionType: 'manual',
     });
   }
 
@@ -456,6 +555,7 @@ function getSuggestedActions(
       description: 'Check service-level metrics, recent deployments, and dependency health.',
       icon: 'apps',
       color: 'default',
+      actionType: 'manual',
     });
   }
 
@@ -464,6 +564,7 @@ function getSuggestedActions(
     description: 'Create a temporary silence rule if this alert is expected during maintenance.',
     icon: 'bellSlash',
     color: 'subdued',
+    actionType: 'silence',
   });
 
   return actions;

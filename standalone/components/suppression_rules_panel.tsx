@@ -6,7 +6,7 @@
 /**
  * Suppression Rules Panel — manage suppression rules with CRUD and conflict detection.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   EuiBasicTable,
   EuiBadge,
@@ -28,12 +28,14 @@ import {
   EuiSelect,
   EuiSpacer,
   EuiSwitch,
+  EuiText,
   EuiTextArea,
   EuiTitle,
   EuiToolTip,
   EuiFieldNumber,
   EuiDatePicker,
 } from '@opensearch-project/oui';
+import moment, { Moment } from 'moment';
 import { AlarmsApiClient } from './alarms_page';
 
 interface SuppressionRuleItem {
@@ -72,10 +74,57 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
   const [formMatcherValue, setFormMatcherValue] = useState('');
   const [formMatchers, setFormMatchers] = useState<Record<string, string>>({});
   const [formScheduleType, setFormScheduleType] = useState<'one_time' | 'recurring'>('one_time');
-  const [formStart, setFormStart] = useState('');
-  const [formEnd, setFormEnd] = useState('');
+  const [formStartMoment, setFormStartMoment] = useState<Moment>(moment());
+  const [formEndMoment, setFormEndMoment] = useState<Moment>(moment().add(1, 'hour'));
   const [formRecurrenceDays, setFormRecurrenceDays] = useState('');
   const [formTimezone, setFormTimezone] = useState('UTC');
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  // Derive ISO strings from moment objects for the API
+  const formStart = formStartMoment.toISOString();
+  const formEnd = formEndMoment.toISOString();
+
+  // Duration summary
+  const durationSummary = useMemo(() => {
+    if (!formStartMoment.isValid() || !formEndMoment.isValid()) return '';
+    const diffMs = formEndMoment.diff(formStartMoment);
+    if (diffMs <= 0) return '';
+    const dur = moment.duration(diffMs);
+    const parts: string[] = [];
+    if (dur.days() > 0) parts.push(`${dur.days()} day${dur.days() > 1 ? 's' : ''}`);
+    if (dur.hours() > 0) parts.push(`${dur.hours()} hour${dur.hours() > 1 ? 's' : ''}`);
+    if (dur.minutes() > 0) parts.push(`${dur.minutes()} minute${dur.minutes() > 1 ? 's' : ''}`);
+    const durationText = parts.join(', ') || 'less than 1 minute';
+    const startStr = formStartMoment.format('h:mm A');
+    const endStr = formEndMoment.format('h:mm A');
+    return `Duration: ${durationText} (${startStr} \u2013 ${endStr})`;
+  }, [formStartMoment, formEndMoment]);
+
+  // Validation
+  const validationErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    if (!formName.trim()) errors.name = 'Name is required';
+    if (Object.keys(formMatchers).length === 0) {
+      errors.matchers = 'At least one matcher is required to prevent suppressing all alerts';
+    }
+    if (
+      formStartMoment.isValid() &&
+      formEndMoment.isValid() &&
+      formEndMoment.isSameOrBefore(formStartMoment)
+    ) {
+      errors.endTime = 'End time must be after start time';
+    }
+    // Matcher input validation: partial fill
+    if (formMatcherKey.trim() && !formMatcherValue.trim()) {
+      errors.matcherValue = 'Matcher value is required when name is filled';
+    }
+    if (formMatcherValue.trim() && !formMatcherKey.trim()) {
+      errors.matcherKey = 'Matcher name is required when value is filled';
+    }
+    return errors;
+  }, [formName, formMatchers, formStartMoment, formEndMoment, formMatcherKey, formMatcherValue]);
+
+  const isFormValid = Object.keys(validationErrors).length === 0;
 
   const fetchRules = useCallback(async () => {
     setLoading(true);
@@ -99,14 +148,13 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
     setFormMatcherKey('');
     setFormMatcherValue('');
     setFormScheduleType('one_time');
-    // Default to current time and +6 hours
-    const now = new Date();
-    const sixHoursLater = new Date(now.getTime() + 6 * 3600000);
-    setFormStart(now.toISOString().replace(/\.\d{3}Z$/, 'Z'));
-    setFormEnd(sixHoursLater.toISOString().replace(/\.\d{3}Z$/, 'Z'));
+    // Default to NOW and NOW + 1 hour
+    setFormStartMoment(moment());
+    setFormEndMoment(moment().add(1, 'hour'));
     setFormRecurrenceDays('');
     setFormTimezone('UTC');
     setConflicts([]);
+    setHasSubmitted(false);
   };
 
   const openCreate = () => {
@@ -121,15 +169,19 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
     setFormDescription(rule.description || '');
     setFormMatchers(rule.matchers || {});
     setFormScheduleType(rule.schedule?.type || 'one_time');
-    setFormStart(rule.schedule?.start || '');
-    setFormEnd(rule.schedule?.end || '');
+    setFormStartMoment(rule.schedule?.start ? moment(rule.schedule.start) : moment());
+    setFormEndMoment(rule.schedule?.end ? moment(rule.schedule.end) : moment().add(1, 'hour'));
     setFormRecurrenceDays((rule.schedule?.recurrence?.days || []).join(', '));
     setFormTimezone(rule.schedule?.recurrence?.timezone || 'UTC');
     setConflicts([]);
+    setHasSubmitted(false);
     setShowFlyout(true);
   };
 
   const handleSave = async () => {
+    setHasSubmitted(true);
+    if (!isFormValid) return;
+
     const data = {
       name: formName,
       description: formDescription,
@@ -184,6 +236,20 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
     }
   };
 
+  // Quick preset handlers for duration
+  const applyPreset = (hours: number) => {
+    const start = moment();
+    setFormStartMoment(start);
+    setFormEndMoment(moment(start).add(hours, 'hours'));
+  };
+
+  const applyUntilTomorrowMorning = () => {
+    const start = moment();
+    const tomorrow9am = moment().add(1, 'day').startOf('day').add(9, 'hours');
+    setFormStartMoment(start);
+    setFormEndMoment(tomorrow9am);
+  };
+
   const STATUS_COLORS: Record<string, string> = {
     active: 'success',
     scheduled: 'primary',
@@ -202,9 +268,9 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
       field: 'schedule',
       name: 'Schedule',
       render: (sch: SuppressionRuleItem['schedule']) => {
-        if (!sch) return '—';
+        if (!sch) return '\u2014';
         const type = sch.type === 'recurring' ? 'Recurring' : 'One-time';
-        return `${type}: ${sch.start || '?'} → ${sch.end || '?'}`;
+        return `${type}: ${sch.start || '?'} \u2192 ${sch.end || '?'}`;
       },
     },
     {
@@ -227,13 +293,13 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
       field: 'affectedMonitors',
       name: 'Monitors',
       width: '80px',
-      render: (n: number | undefined) => n ?? '—',
+      render: (n: number | undefined) => n ?? '\u2014',
     },
     {
       field: 'suppressedAlerts',
       name: 'Suppressed',
       width: '80px',
-      render: (n: number | undefined) => n ?? '—',
+      render: (n: number | undefined) => n ?? '\u2014',
     },
     {
       name: 'Actions',
@@ -268,6 +334,12 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
 
   return (
     <div>
+      {/* S-m8: Datasource scoping banner */}
+      <EuiCallOut color="primary" iconType="iInCircle" size="s">
+        Suppression rules apply globally across all Prometheus datasources.
+      </EuiCallOut>
+      <EuiSpacer size="m" />
+
       <EuiFlexGroup justifyContent="spaceBetween" alignItems="center">
         <EuiFlexItem grow={false}>
           <EuiTitle size="xs">
@@ -291,7 +363,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
       )}
 
       {showFlyout && (
-        <EuiFlyout onClose={() => setShowFlyout(false)} size="s" ownFocus>
+        <EuiFlyout onClose={() => setShowFlyout(false)} size="m" ownFocus>
           <EuiFlyoutHeader hasBorder>
             <EuiTitle size="m">
               <h2>{editingRule ? 'Edit' : 'Create'} Suppression Rule</h2>
@@ -306,7 +378,11 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                 <EuiSpacer size="m" />
               </>
             )}
-            <EuiFormRow label="Name">
+            <EuiFormRow
+              label="Name"
+              isInvalid={hasSubmitted && !!validationErrors.name}
+              error={hasSubmitted ? validationErrors.name : undefined}
+            >
               <EuiFieldText value={formName} onChange={(e) => setFormName(e.target.value)} />
             </EuiFormRow>
             <EuiSpacer size="m" />
@@ -318,7 +394,11 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
               />
             </EuiFormRow>
             <EuiSpacer size="m" />
-            <EuiFormRow label="Label Matchers">
+            <EuiFormRow
+              label="Label Matchers"
+              isInvalid={hasSubmitted && !!validationErrors.matchers}
+              error={hasSubmitted ? validationErrors.matchers : undefined}
+            >
               <div>
                 {Object.entries(formMatchers).map(([k, v]) => (
                   <EuiBadge
@@ -346,6 +426,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                       compressed
                       value={formMatcherKey}
                       onChange={(e) => setFormMatcherKey(e.target.value)}
+                      isInvalid={hasSubmitted && !!validationErrors.matcherKey}
                     />
                   </EuiFlexItem>
                   <EuiFlexItem>
@@ -354,6 +435,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                       compressed
                       value={formMatcherValue}
                       onChange={(e) => setFormMatcherValue(e.target.value)}
+                      isInvalid={hasSubmitted && !!validationErrors.matcherValue}
                     />
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>
@@ -362,6 +444,16 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                     </EuiButtonEmpty>
                   </EuiFlexItem>
                 </EuiFlexGroup>
+                {hasSubmitted && validationErrors.matcherKey && (
+                  <EuiText size="xs" color="danger">
+                    {validationErrors.matcherKey}
+                  </EuiText>
+                )}
+                {hasSubmitted && validationErrors.matcherValue && (
+                  <EuiText size="xs" color="danger">
+                    {validationErrors.matcherValue}
+                  </EuiText>
+                )}
               </div>
             </EuiFormRow>
             <EuiSpacer size="m" />
@@ -376,21 +468,66 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
               />
             </EuiFormRow>
             <EuiSpacer size="m" />
-            <EuiFormRow label="Start Time (ISO)">
-              <EuiFieldText
-                value={formStart}
-                onChange={(e) => setFormStart(e.target.value)}
-                placeholder="ISO 8601 format, e.g. 2026-04-03T00:00:00Z"
+
+            {/* Quick duration presets */}
+            <EuiFlexGroup gutterSize="s" responsive={false} wrap>
+              <EuiFlexItem grow={false}>
+                <EuiButtonEmpty size="xs" onClick={() => applyPreset(1)}>
+                  1 hour
+                </EuiButtonEmpty>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiButtonEmpty size="xs" onClick={() => applyPreset(6)}>
+                  6 hours
+                </EuiButtonEmpty>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiButtonEmpty size="xs" onClick={applyUntilTomorrowMorning}>
+                  Until tomorrow 9am
+                </EuiButtonEmpty>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+            <EuiSpacer size="s" />
+
+            <EuiFormRow label="Start Time">
+              <EuiDatePicker
+                selected={formStartMoment}
+                onChange={(date: Moment | null) => {
+                  if (date) setFormStartMoment(date);
+                }}
+                showTimeSelect
+                timeFormat="HH:mm"
+                dateFormat="YYYY-MM-DD HH:mm"
               />
             </EuiFormRow>
             <EuiSpacer size="m" />
-            <EuiFormRow label="End Time (ISO)">
-              <EuiFieldText
-                value={formEnd}
-                onChange={(e) => setFormEnd(e.target.value)}
-                placeholder="ISO 8601 format, e.g. 2026-04-03T06:00:00Z"
+            <EuiFormRow
+              label="End Time"
+              isInvalid={hasSubmitted && !!validationErrors.endTime}
+              error={hasSubmitted ? validationErrors.endTime : undefined}
+            >
+              <EuiDatePicker
+                selected={formEndMoment}
+                onChange={(date: Moment | null) => {
+                  if (date) setFormEndMoment(date);
+                }}
+                showTimeSelect
+                timeFormat="HH:mm"
+                dateFormat="YYYY-MM-DD HH:mm"
+                minDate={formStartMoment}
               />
             </EuiFormRow>
+
+            {/* Duration summary */}
+            {durationSummary && (
+              <>
+                <EuiSpacer size="s" />
+                <EuiText size="xs" color="subdued">
+                  {durationSummary}
+                </EuiText>
+              </>
+            )}
+
             {formScheduleType === 'recurring' && (
               <>
                 <EuiSpacer size="m" />
@@ -417,7 +554,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                 <EuiButtonEmpty onClick={() => setShowFlyout(false)}>Cancel</EuiButtonEmpty>
               </EuiFlexItem>
               <EuiFlexItem grow={false}>
-                <EuiButton fill onClick={handleSave} isDisabled={!formName}>
+                <EuiButton fill onClick={handleSave} isDisabled={hasSubmitted && !isFormValid}>
                   {editingRule ? 'Update' : 'Create'}
                 </EuiButton>
               </EuiFlexItem>

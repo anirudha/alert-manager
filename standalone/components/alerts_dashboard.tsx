@@ -93,90 +93,97 @@ const TablePagination: React.FC<{
   for (let i = startPage; i < endPage; i++) pages.push(i);
 
   return (
-    <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
-      <EuiFlexItem grow={false}>
-        <EuiPopover
-          button={
-            <EuiButtonEmpty
-              size="xs"
-              color="text"
-              iconType="arrowDown"
-              iconSide="right"
-              onClick={() => setIsPopoverOpen(!isPopoverOpen)}
-            >
-              Rows per page: {pageSize}
-            </EuiButtonEmpty>
-          }
-          isOpen={isPopoverOpen}
-          closePopover={() => setIsPopoverOpen(false)}
-          panelPaddingSize="none"
-          anchorPosition="upCenter"
-        >
-          <EuiContextMenuPanel
-            items={pageSizeOptions.map((size) => (
-              <EuiContextMenuItem
-                key={size}
-                icon={size === pageSize ? 'check' : 'empty'}
-                onClick={() => {
-                  onChangePageSize(size);
-                  onChangePage(0);
-                  setIsPopoverOpen(false);
-                }}
+    <>
+      <style>{`
+      .alert-mgr-page-btn:not(:disabled):hover { background-color: #E6F0FF !important; }
+      .alert-mgr-page-btn:focus-visible { outline: 2px solid #006BB4; outline-offset: 2px; border-radius: 4px; }
+    `}</style>
+      <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiPopover
+            button={
+              <EuiButtonEmpty
+                size="xs"
+                color="text"
+                iconType="arrowDown"
+                iconSide="right"
+                onClick={() => setIsPopoverOpen(!isPopoverOpen)}
               >
-                {size} rows
-              </EuiContextMenuItem>
-            ))}
-          />
-        </EuiPopover>
-      </EuiFlexItem>
-      <EuiFlexItem grow={false}>
-        <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiButtonIcon
-              iconType="arrowLeft"
-              aria-label="Previous page"
-              onClick={() => onChangePage(pageIndex - 1)}
-              isDisabled={pageIndex === 0}
-              size="s"
-              color="text"
+                Rows per page: {pageSize}
+              </EuiButtonEmpty>
+            }
+            isOpen={isPopoverOpen}
+            closePopover={() => setIsPopoverOpen(false)}
+            panelPaddingSize="none"
+            anchorPosition="upCenter"
+          >
+            <EuiContextMenuPanel
+              items={pageSizeOptions.map((size) => (
+                <EuiContextMenuItem
+                  key={size}
+                  icon={size === pageSize ? 'check' : 'empty'}
+                  onClick={() => {
+                    onChangePageSize(size);
+                    onChangePage(0);
+                    setIsPopoverOpen(false);
+                  }}
+                >
+                  {size} rows
+                </EuiContextMenuItem>
+              ))}
             />
-          </EuiFlexItem>
-          {pages.map((p) => (
-            <EuiFlexItem grow={false} key={p}>
-              <button
-                onClick={() => onChangePage(p)}
-                disabled={p === pageIndex}
-                aria-label={`Page ${p + 1} of ${pageCount}`}
-                aria-current={p === pageIndex ? 'page' : undefined}
-                style={{
-                  minWidth: 32,
-                  height: 32,
-                  border: 'none',
-                  borderRadius: 4,
-                  background: p === pageIndex ? '#006BB4' : 'transparent',
-                  color: p === pageIndex ? '#fff' : '#006BB4',
-                  fontWeight: p === pageIndex ? 700 : 400,
-                  cursor: p === pageIndex ? 'default' : 'pointer',
-                  fontSize: 14,
-                }}
-              >
-                {p + 1}
-              </button>
+          </EuiPopover>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+            <EuiFlexItem grow={false}>
+              <EuiButtonIcon
+                iconType="arrowLeft"
+                aria-label="Previous page"
+                onClick={() => onChangePage(pageIndex - 1)}
+                isDisabled={pageIndex === 0}
+                size="s"
+                color="text"
+              />
             </EuiFlexItem>
-          ))}
-          <EuiFlexItem grow={false}>
-            <EuiButtonIcon
-              iconType="arrowRight"
-              aria-label="Next page"
-              onClick={() => onChangePage(pageIndex + 1)}
-              isDisabled={pageIndex >= pageCount - 1}
-              size="s"
-              color="text"
-            />
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiFlexItem>
-    </EuiFlexGroup>
+            {pages.map((p) => (
+              <EuiFlexItem grow={false} key={p}>
+                <button
+                  className="alert-mgr-page-btn"
+                  onClick={() => onChangePage(p)}
+                  disabled={p === pageIndex}
+                  aria-label={`Page ${p + 1} of ${pageCount}`}
+                  aria-current={p === pageIndex ? 'page' : undefined}
+                  style={{
+                    minWidth: 32,
+                    height: 32,
+                    border: 'none',
+                    borderRadius: 4,
+                    background: p === pageIndex ? '#006BB4' : 'transparent',
+                    color: p === pageIndex ? '#fff' : '#006BB4',
+                    fontWeight: p === pageIndex ? 700 : 400,
+                    cursor: p === pageIndex ? 'default' : 'pointer',
+                    fontSize: 14,
+                  }}
+                >
+                  {p + 1}
+                </button>
+              </EuiFlexItem>
+            ))}
+            <EuiFlexItem grow={false}>
+              <EuiButtonIcon
+                iconType="arrowRight"
+                aria-label="Next page"
+                onClick={() => onChangePage(pageIndex + 1)}
+                isDisabled={pageIndex >= pageCount - 1}
+                size="s"
+                color="text"
+              />
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    </>
   );
 };
 
@@ -192,6 +199,31 @@ function countBy<T>(items: T[], key: (item: T) => string): Record<string, number
   }
   return counts;
 }
+
+function formatDuration(startTime: string | number): string {
+  const start = typeof startTime === 'number' ? startTime : new Date(startTime).getTime();
+  const ms = Date.now() - start;
+  if (ms < 60000) return '<1m';
+  if (ms < 3600000) return Math.floor(ms / 60000) + 'm';
+  if (ms < 86400000) return Math.floor(ms / 3600000) + 'h ' + (Math.floor(ms / 60000) % 60) + 'm';
+  return Math.floor(ms / 86400000) + 'd ' + (Math.floor(ms / 3600000) % 24) + 'h';
+}
+
+const DATASOURCE_DISPLAY_NAMES: Record<string, string> = {
+  opensearch: 'OpenSearch',
+  prometheus: 'Prometheus',
+};
+
+/** Internal label keys to hide from the filter panel */
+const INTERNAL_LABEL_KEYS = new Set([
+  'monitor_id',
+  'datasource_id',
+  '_workspace',
+  'monitor_type',
+  'monitor_kind',
+  'trigger_id',
+  'trigger_name',
+]);
 
 // ============================================================================
 // Alert Filter State
@@ -481,7 +513,9 @@ const AlertsByDatasource: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) =>
 
   const spec = useMemo(() => {
     if (sorted.length === 0) return null;
-    const names = sorted.map(([name]) => name);
+    const names = sorted.map(
+      ([name]) => DATASOURCE_DISPLAY_NAMES[name] || name.charAt(0).toUpperCase() + name.slice(1)
+    );
     const values = sorted.map(([, count]) => count);
     return {
       tooltip: {
@@ -612,6 +646,16 @@ const AlertsByGroup: React.FC<{ alerts: UnifiedAlert[]; groupKey: string }> = ({
         No data
       </EuiText>
     );
+
+  // If the chart is entirely "unknown", show a helpful info message instead
+  const allUnknown = sorted.length === 1 && sorted[0][0] === 'unknown';
+  if (allUnknown) {
+    return (
+      <EuiText size="s" color="subdued" style={{ fontStyle: 'italic', padding: '8px 0' }}>
+        Add <code>{groupKey}</code> labels to your alerts for grouping.
+      </EuiText>
+    );
+  }
 
   const maxCount = sorted[0][1];
 
@@ -1022,10 +1066,12 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
     {
       field: 'datasourceType',
       name: 'Source',
-      width: '100px',
-      render: (t: string) => (
-        <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>
-      ),
+      width: '130px',
+      render: (t: string) => {
+        const displayName =
+          t === 'opensearch' ? 'OpenSearch' : t === 'prometheus' ? 'Prometheus' : t;
+        return <EuiText size="xs">{displayName}</EuiText>;
+      },
     },
     {
       field: 'message',
@@ -1040,15 +1086,27 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
     {
       field: 'startTime',
       name: 'Started',
-      width: '150px',
+      width: '120px',
       sortable: true,
-      render: (ts: string) => (
-        <EuiText size="xs">{ts ? new Date(ts).toLocaleString() : '—'}</EuiText>
-      ),
+      render: (ts: string) => {
+        if (!ts) return <EuiText size="xs">---</EuiText>;
+        const abs = new Date(ts).toLocaleString();
+        return (
+          <EuiToolTip content={abs}>
+            <span style={{ fontSize: 12 }}>{formatDuration(ts)} ago</span>
+          </EuiToolTip>
+        );
+      },
+    },
+    {
+      field: 'startTime',
+      name: 'Duration',
+      width: '90px',
+      render: (ts: string) => <EuiText size="xs">{ts ? formatDuration(ts) : '—'}</EuiText>,
     },
     {
       name: 'Actions',
-      width: '120px',
+      width: '150px',
       render: (alert: UnifiedAlert) => (
         <EuiFlexGroup gutterSize="xs" responsive={false} wrap={false} alignItems="center">
           <EuiFlexItem grow={false}>
@@ -1061,17 +1119,16 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               />
             </EuiToolTip>
           </EuiFlexItem>
-          {alert.state === 'active' && (
+          {alert.state === 'active' && alert.datasourceType !== 'prometheus' && (
             <EuiFlexItem grow={false}>
-              <EuiToolTip content="Acknowledge">
-                <EuiButtonIcon
-                  iconType="check"
-                  aria-label="Acknowledge"
-                  size="s"
-                  color="primary"
-                  onClick={() => onAcknowledge(alert.id)}
-                />
-              </EuiToolTip>
+              <EuiButtonEmpty
+                iconType="check"
+                size="xs"
+                color="primary"
+                onClick={() => onAcknowledge(alert.id)}
+              >
+                Ack
+              </EuiButtonEmpty>
             </EuiFlexItem>
           )}
           <EuiFlexItem grow={false}>
@@ -1197,16 +1254,18 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     <EuiText size="xs" color="subdued" style={{ marginBottom: 6 }}>
                       <strong>Labels</strong>
                     </EuiText>
-                    {labelKeys.map((key) =>
-                      renderFacetGroup(
-                        `label:${key}`,
-                        key,
-                        collectAlertLabelValues(alerts, key),
-                        filters.labels[key] || [],
-                        (v) => updateLabelFilter(key, v),
-                        facetCounts.labelCounts[key] || {}
-                      )
-                    )}
+                    {labelKeys
+                      .filter((key) => !INTERNAL_LABEL_KEYS.has(key))
+                      .map((key) =>
+                        renderFacetGroup(
+                          `label:${key}`,
+                          key,
+                          collectAlertLabelValues(alerts, key),
+                          filters.labels[key] || [],
+                          (v) => updateLabelFilter(key, v),
+                          facetCounts.labelCounts[key] || {}
+                        )
+                      )}
                   </>
                 )}
               </div>
@@ -1242,6 +1301,13 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                       filters.state.length === 0
                         ? '2px solid #006BB4'
                         : 'none',
+                    backgroundColor:
+                      severityFilter === 'all' &&
+                      stateFilter === 'all' &&
+                      filters.severity.length === 0 &&
+                      filters.state.length === 0
+                        ? '#E6F0FF'
+                        : undefined,
                     borderRadius: 6,
                   }}
                 >
@@ -1264,6 +1330,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   style={{
                     cursor: 'pointer',
                     outline: stateFilter === 'active' ? '2px solid #BD271E' : 'none',
+                    backgroundColor: stateFilter === 'active' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
                 >
@@ -1273,6 +1340,11 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     titleColor="danger"
                     titleSize="m"
                   />
+                  {stateFilter === 'active' && (
+                    <EuiText size="xs" color="subdued">
+                      <em>Filtered</em>
+                    </EuiText>
+                  )}
                 </EuiPanel>
               </EuiFlexItem>
               <EuiFlexItem>
@@ -1287,6 +1359,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   style={{
                     cursor: 'pointer',
                     outline: severityFilter === 'critical' ? '2px solid #BD271E' : 'none',
+                    backgroundColor: severityFilter === 'critical' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
                 >
@@ -1296,6 +1369,11 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     titleColor="danger"
                     titleSize="m"
                   />
+                  {severityFilter === 'critical' && (
+                    <EuiText size="xs" color="subdued">
+                      <em>Filtered</em>
+                    </EuiText>
+                  )}
                 </EuiPanel>
               </EuiFlexItem>
               <EuiFlexItem>
@@ -1310,6 +1388,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   style={{
                     cursor: 'pointer',
                     outline: severityFilter === 'high' ? '2px solid #F5A700' : 'none',
+                    backgroundColor: severityFilter === 'high' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
                 >
@@ -1319,6 +1398,11 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     titleColor="default"
                     titleSize="m"
                   />
+                  {severityFilter === 'high' && (
+                    <EuiText size="xs" color="subdued">
+                      <em>Filtered</em>
+                    </EuiText>
+                  )}
                 </EuiPanel>
               </EuiFlexItem>
               <EuiFlexItem>
@@ -1333,6 +1417,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   style={{
                     cursor: 'pointer',
                     outline: severityFilter === 'medium' ? '2px solid #006BB4' : 'none',
+                    backgroundColor: severityFilter === 'medium' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
                 >
@@ -1345,6 +1430,11 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     description="Medium / Low"
                     titleSize="m"
                   />
+                  {severityFilter === 'medium' && (
+                    <EuiText size="xs" color="subdued">
+                      <em>Filtered</em>
+                    </EuiText>
+                  )}
                 </EuiPanel>
               </EuiFlexItem>
             </EuiFlexGroup>
@@ -1356,7 +1446,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               <EuiFlexItem grow={3}>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>Alert Timeline (24h)</h3>
+                    <h4>Alert Timeline (24h)</h4>
                   </EuiTitle>
                   <EuiSpacer size="s" />
                   <AlertTimeline alerts={filteredAlerts} />
@@ -1365,7 +1455,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               <EuiFlexItem grow={1}>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>By Severity</h3>
+                    <h4>By Severity</h4>
                   </EuiTitle>
                   <EuiSpacer size="s" />
                   <SeverityDonut alerts={filteredAlerts} />
@@ -1380,7 +1470,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               <EuiFlexItem>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>By State</h3>
+                    <h4>By State</h4>
                   </EuiTitle>
                   <EuiSpacer size="s" />
                   <StateBreakdown alerts={filteredAlerts} />
@@ -1389,7 +1479,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               <EuiFlexItem>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>By Source</h3>
+                    <h4>By Source</h4>
                   </EuiTitle>
                   <EuiSpacer size="s" />
                   <AlertsByDatasource alerts={filteredAlerts} />
@@ -1398,7 +1488,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               <EuiFlexItem>
                 <EuiPanel paddingSize="m" hasBorder>
                   <EuiTitle size="xxs">
-                    <h3>By Monitor</h3>
+                    <h4>By Monitor</h4>
                   </EuiTitle>
                   <EuiSpacer size="s" />
                   <AlertsByMonitor alerts={filteredAlerts} />
@@ -1411,7 +1501,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
             {/* ---- Search + Table ---- */}
             <EuiPanel paddingSize="m" hasBorder>
               <EuiTitle size="xs">
-                <h3>All Alerts</h3>
+                <h2>All Alerts</h2>
               </EuiTitle>
               <EuiSpacer size="s" />
               <EuiFieldSearch

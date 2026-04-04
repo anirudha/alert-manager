@@ -30,6 +30,7 @@ import {
   EuiComboBox,
   EuiLoadingSpinner,
   EuiCallOut,
+  EuiGlobalToastList,
 } from '@opensearch-project/oui';
 import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../core';
 import { MonitorsTable } from './monitors_table';
@@ -389,6 +390,17 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [deletedRuleIds, setDeletedRuleIds] = useState<Set<string>>(new Set());
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; title: string; color: string; text?: string }>
+  >([]);
+
+  const addToast = (
+    title: string,
+    color: 'success' | 'danger' | 'warning' = 'success',
+    text?: string
+  ) => {
+    setToasts((prev) => [...prev, { id: String(Date.now()), title, color, text }]);
+  };
 
   const visibleRules = rules.filter((r) => !deletedRuleIds.has(r.id));
 
@@ -427,8 +439,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             try {
               const ws = await apiClient.listWorkspaces(pds.id);
               allWs.push(...ws);
-            } catch (_e) {
-              /* skip failed workspace discovery */
+            } catch (e: any) {
+              addToast('Failed to discover workspaces', 'warning', e?.message || 'Unknown error');
             }
           }
           setWorkspaceOptions(allWs);
@@ -543,8 +555,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     const alert = alerts.find((a) => a.id === alertId);
     try {
       await apiClient.acknowledgeAlert(alertId, alert?.datasourceId, alert?.labels?.monitor_id);
-    } catch (_e) {
-      /* fallback — optimistic update still applies */
+      addToast('Alert acknowledged');
+    } catch (e: any) {
+      addToast('Failed to acknowledge alert', 'danger', e?.message || 'Unknown error');
     }
     setAlerts((prev) =>
       prev.map((a) =>
@@ -553,13 +566,20 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           : a
       )
     );
+    // Update the flyout's selected alert inline so it stays open with fresh state
+    setSelectedAlert((prev) =>
+      prev && prev.id === alertId
+        ? { ...prev, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
+        : prev
+    );
   };
 
   const handleSilenceAlert = async (alertId: string) => {
     try {
       await apiClient.silenceAlert(alertId);
-    } catch (_e) {
-      /* fallback */
+      addToast('Alert silenced');
+    } catch (e: any) {
+      addToast('Failed to silence alert', 'danger', e?.message || 'Unknown error');
     }
     // Silence creates a suppression rule — the alert remains active but is silenced.
     // We add a 'silenced' label as a visual indicator; the state stays unchanged.
@@ -574,19 +594,35 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           : a
       )
     );
+    // Update the flyout's selected alert inline so it stays open with fresh state
+    setSelectedAlert((prev) =>
+      prev && prev.id === alertId
+        ? {
+            ...prev,
+            labels: { ...prev.labels, _silenced: 'true' },
+            lastUpdated: new Date().toISOString(),
+          }
+        : prev
+    );
   };
 
   const handleDeleteRules = async (ids: string[]) => {
+    const failed: string[] = [];
     for (const id of ids) {
       try {
         await apiClient.deleteMonitor(id);
-      } catch (_e) {
-        /* continue */
+      } catch (e: any) {
+        failed.push(id);
+        addToast('Failed to delete monitor', 'danger', e?.message || 'Unknown error');
       }
+    }
+    const succeeded = ids.filter((id) => !failed.includes(id));
+    if (succeeded.length > 0) {
+      addToast(succeeded.length + ' monitor(s) deleted');
     }
     setDeletedRuleIds((prev) => {
       const next = new Set(prev);
-      ids.forEach((id) => next.add(id));
+      succeeded.forEach((id) => next.add(id));
       return next;
     });
   };
@@ -596,8 +632,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     if (rule && rule.status === 'muted') {
       try {
         await apiClient.deleteSuppressionRule(id);
-      } catch (_e) {
-        /* fallback */
+        addToast('Monitor unmuted');
+      } catch (e: any) {
+        addToast('Failed to unmute monitor', 'danger', e?.message || 'Unknown error');
       }
     } else {
       try {
@@ -611,8 +648,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           },
           enabled: true,
         });
-      } catch (_e) {
-        /* fallback */
+        addToast('Monitor muted for 1 hour');
+      } catch (e: any) {
+        addToast('Failed to mute monitor', 'danger', e?.message || 'Unknown error');
       }
     }
     setRules((prev) =>
@@ -637,8 +675,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     };
     try {
       await apiClient.createMonitor(clone);
-    } catch (_e) {
-      /* fallback */
+      addToast('Monitor cloned');
+    } catch (e: any) {
+      addToast('Failed to clone monitor', 'danger', e?.message || 'Unknown error');
     }
     setRules((prev) => [clone, ...prev]);
   };
@@ -646,9 +685,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const handleImportMonitors = async (configs: any[]) => {
     try {
       await apiClient.importMonitors(configs);
+      addToast('Monitors imported successfully');
       fetchRules(selectedDsIds, rulesPage, rulesPageSize);
-    } catch (_e) {
-      /* silently handle */
+    } catch (e: any) {
+      addToast('Failed to import monitors', 'danger', e?.message || 'Unknown error');
     }
   };
 
@@ -776,8 +816,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     const newRule = formStateToRule(formState);
     try {
       await apiClient.createMonitor(formState);
-    } catch (_e) {
-      /* local-only fallback */
+      addToast('Monitor created successfully');
+    } catch (e: any) {
+      addToast('Failed to create monitor', 'danger', e?.message || 'Unknown error');
     }
     setRules((prev) => [newRule, ...prev]);
     setShowCreateMonitor(false);
@@ -785,12 +826,17 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const handleBatchCreateMonitors = async (forms: MonitorFormState[]) => {
     const newRules = forms.map((f, i) => formStateToRule(f, i));
+    let succeeded = 0;
     for (const f of forms) {
       try {
         await apiClient.createMonitor(f);
-      } catch (_e) {
-        /* local-only fallback */
+        succeeded++;
+      } catch (e: any) {
+        addToast('Failed to create monitor', 'danger', e?.message || 'Unknown error');
       }
+    }
+    if (succeeded > 0) {
+      addToast(succeeded + ' monitor(s) created successfully');
     }
     setRules((prev) => [...newRules, ...prev]);
     // Don't close flyout — AI wizard shows its own summary step and "Done" button
@@ -920,14 +966,17 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             onClose={() => setSelectedAlert(null)}
             onAcknowledge={(id) => {
               handleAcknowledgeAlert(id);
-              setSelectedAlert(null);
             }}
             onSilence={(id) => {
               handleSilenceAlert(id);
-              setSelectedAlert(null);
             }}
           />
         )}
+        <EuiGlobalToastList
+          toasts={toasts}
+          dismissToast={(t: any) => setToasts((prev) => prev.filter((p) => p.id !== t.id))}
+          toastLifeTimeMs={4000}
+        />
       </EuiPageBody>
     </EuiPage>
   );

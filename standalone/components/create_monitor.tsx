@@ -485,8 +485,9 @@ const PrometheusFormSection: React.FC<{
   form: PrometheusFormState;
   onUpdate: <K extends keyof PrometheusFormState>(key: K, value: PrometheusFormState[K]) => void;
   validationErrors: Record<string, string>;
+  hasSubmitted: boolean;
   context?: { service?: string; team?: string };
-}> = ({ form, onUpdate, validationErrors, context }) => {
+}> = ({ form, onUpdate, validationErrors, hasSubmitted, context }) => {
   const [queryTab, setQueryTab] = useState<'editor' | 'browser'>('editor');
 
   const updateThreshold = <K extends keyof ThresholdCondition>(
@@ -750,8 +751,9 @@ const OpenSearchFormSection: React.FC<{
   form: OpenSearchFormState;
   onUpdate: <K extends keyof OpenSearchFormState>(key: K, value: OpenSearchFormState[K]) => void;
   validationErrors: Record<string, string>;
+  hasSubmitted: boolean;
   context?: { service?: string; team?: string };
-}> = ({ form, onUpdate, validationErrors, context }) => {
+}> = ({ form, onUpdate, validationErrors, hasSubmitted, context }) => {
   const isPPL = form.monitorType === 'ppl_monitor';
   const isClusterMetrics = form.monitorType === 'cluster_metrics_monitor';
 
@@ -849,8 +851,8 @@ const OpenSearchFormSection: React.FC<{
                   : 'Comma-separated index patterns, e.g. logs-*, metrics-*'
               }
               fullWidth
-              isInvalid={!!validationErrors.indices}
-              error={validationErrors.indices}
+              isInvalid={hasSubmitted && !!validationErrors.indices}
+              error={hasSubmitted ? validationErrors.indices : undefined}
             >
               <EuiFieldText
                 placeholder="logs-*, metrics-*"
@@ -1244,6 +1246,7 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
     datasourceId: initialType === 'opensearch' && initialDs ? initialDs.id : '',
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const updateProm = <K extends keyof PrometheusFormState>(
     key: K,
@@ -1298,6 +1301,7 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
           : osForm.indices.trim() !== '' && osForm.triggerCondition.trim() !== '');
 
   const handleSave = () => {
+    setHasSubmitted(true);
     if (backendType === 'prometheus') {
       const result = validateMonitorForm(promForm as any);
       if (!result.valid) {
@@ -1435,10 +1439,12 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
         <EuiFormRow
           label="Monitor Name"
           fullWidth
-          isInvalid={!!validationErrors.name || activeForm.name.trim() === ''}
+          isInvalid={hasSubmitted && (!!validationErrors.name || activeForm.name.trim() === '')}
           error={
-            validationErrors.name ||
-            (activeForm.name.trim() === '' ? 'Name is required' : undefined)
+            hasSubmitted
+              ? validationErrors.name ||
+                (activeForm.name.trim() === '' ? 'Name is required' : undefined)
+              : undefined
           }
         >
           <EuiFieldText
@@ -1488,6 +1494,7 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
             form={promForm}
             onUpdate={updateProm}
             validationErrors={validationErrors}
+            hasSubmitted={hasSubmitted}
             context={context}
           />
         ) : (
@@ -1495,6 +1502,7 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
             form={osForm}
             onUpdate={updateOs}
             validationErrors={validationErrors}
+            hasSubmitted={hasSubmitted}
             context={context}
           />
         )}
