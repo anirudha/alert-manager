@@ -7,7 +7,9 @@
  * Monitor Detail Flyout — comprehensive view of a single monitor's
  * configuration, behavior, and impact with quick actions.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as echarts from 'echarts';
+import { EchartsRender } from './echarts_render';
 import {
   EuiFlyout,
   EuiFlyoutHeader,
@@ -87,102 +89,67 @@ const ConditionPreviewGraph: React.FC<{
       </EuiText>
     );
 
-  const width = 520;
-  const height = 160;
-  const padding = { top: 20, right: 40, bottom: 30, left: 45 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
+  const spec = useMemo((): echarts.EChartsOption => {
+    const timestamps = data.map((d) =>
+      new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    );
+    const values = data.map((d) => d.value);
 
-  const values = data.map((d) => d.value);
-  const minVal = Math.min(...values, threshold?.value ?? Infinity) * 0.9;
-  const maxVal = Math.max(...values, threshold?.value ?? -Infinity) * 1.1;
-  const minTime = data[0].timestamp;
-  const maxTime = data[data.length - 1].timestamp;
+    const series: echarts.SeriesOption[] = [
+      {
+        type: 'line',
+        data: values,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { color: '#006BB4', width: 2 },
+        itemStyle: { color: '#006BB4' },
+        areaStyle: { color: 'rgba(0, 107, 180, 0.08)' },
+      },
+    ];
 
-  const scaleX = (t: number) => padding.left + ((t - minTime) / (maxTime - minTime)) * chartW;
-  const scaleY = (v: number) => padding.top + chartH - ((v - minVal) / (maxVal - minVal)) * chartH;
+    // Threshold line as a markLine
+    if (threshold) {
+      (series[0] as Record<string, unknown>).markLine = {
+        silent: true,
+        symbol: 'none',
+        lineStyle: { color: '#BD271E', type: 'dashed', width: 1.5 },
+        label: {
+          formatter: `${threshold.value}${threshold.unit || ''}`,
+          position: 'end',
+          color: '#BD271E',
+          fontSize: 10,
+        },
+        data: [{ yAxis: threshold.value }],
+      };
+    }
 
-  const linePath = data
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.timestamp)} ${scaleY(d.value)}`)
-    .join(' ');
-  const areaPath =
-    linePath +
-    ` L ${scaleX(data[data.length - 1].timestamp)} ${padding.top + chartH} L ${scaleX(data[0].timestamp)} ${padding.top + chartH} Z`;
+    return {
+      grid: { left: 45, right: 15, top: 15, bottom: 30 },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: unknown) => {
+          const p = (params as Array<{ axisValue: string; value: number }>)[0];
+          return `${p.axisValue}<br/>${p.value.toFixed(2)}`;
+        },
+      },
+      xAxis: {
+        type: 'category',
+        data: timestamps,
+        axisLine: { lineStyle: { color: '#EDF0F5' } },
+        axisLabel: { color: '#98A2B3', fontSize: 9 },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: '#EDF0F5' } },
+        axisLabel: { color: '#98A2B3', fontSize: 9 },
+      },
+      series,
+    };
+  }, [data, threshold]);
 
-  // Y-axis ticks
-  const yTicks = 5;
-  const yTickValues = Array.from(
-    { length: yTicks },
-    (_, i) => minVal + (i / (yTicks - 1)) * (maxVal - minVal)
-  );
-
-  return (
-    <svg width={width} height={height} style={{ fontFamily: 'Inter, sans-serif', fontSize: 10 }}>
-      {/* Grid lines */}
-      {yTickValues.map((v, i) => (
-        <g key={i}>
-          <line
-            x1={padding.left}
-            y1={scaleY(v)}
-            x2={width - padding.right}
-            y2={scaleY(v)}
-            stroke="#EDF0F5"
-            strokeWidth={1}
-          />
-          <text x={padding.left - 5} y={scaleY(v) + 3} textAnchor="end" fill="#98A2B3">
-            {v.toFixed(0)}
-          </text>
-        </g>
-      ))}
-      {/* Area fill */}
-      <path d={areaPath} fill="rgba(0, 107, 180, 0.08)" />
-      {/* Data line */}
-      <path d={linePath} fill="none" stroke="#006BB4" strokeWidth={2} />
-      {/* Threshold line */}
-      {threshold && (
-        <g>
-          <line
-            x1={padding.left}
-            y1={scaleY(threshold.value)}
-            x2={width - padding.right}
-            y2={scaleY(threshold.value)}
-            stroke="#BD271E"
-            strokeWidth={1.5}
-            strokeDasharray="6,3"
-          />
-          <text
-            x={width - padding.right + 3}
-            y={scaleY(threshold.value) + 3}
-            fill="#BD271E"
-            fontSize={9}
-          >
-            {threshold.value}
-            {threshold.unit || ''}
-          </text>
-        </g>
-      )}
-      {/* Data points */}
-      {data.map((d, i) => (
-        <circle key={i} cx={scaleX(d.timestamp)} cy={scaleY(d.value)} r={2} fill="#006BB4" />
-      ))}
-      {/* X-axis labels */}
-      {[0, Math.floor(data.length / 2), data.length - 1].map((i) => (
-        <text
-          key={i}
-          x={scaleX(data[i].timestamp)}
-          y={height - 5}
-          textAnchor="middle"
-          fill="#98A2B3"
-          fontSize={9}
-        >
-          {new Date(data[i].timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </text>
-      ))}
-    </svg>
-  );
+  return <EchartsRender spec={spec} height={180} />;
 };
 
 // ============================================================================
