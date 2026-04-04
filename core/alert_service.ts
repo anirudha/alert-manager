@@ -835,7 +835,7 @@ function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlertSummary {
     name: `${a.monitor_name} — ${a.trigger_name}`,
     state: osStateToUnified(a.state),
     severity: osSeverityToUnified(a.severity),
-    message: a.error_message || undefined,
+    message: a.error_message || a.trigger_name || undefined,
     startTime: new Date(a.start_time).toISOString(),
     lastUpdated: new Date(a.last_notification_time).toISOString(),
     labels: {

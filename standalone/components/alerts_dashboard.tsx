@@ -1056,7 +1056,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
             mode={['collapsible', { position: 'top' }]}
             onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
             paddingSize="none"
-            style={{ overflow: 'hidden', paddingRight: '4px' }}
+            style={{ overflow: 'auto', paddingRight: '4px' }}
           >
             <EuiPanel
               paddingSize="s"

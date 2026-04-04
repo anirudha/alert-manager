@@ -99,8 +99,11 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
     setFormMatcherKey('');
     setFormMatcherValue('');
     setFormScheduleType('one_time');
-    setFormStart('');
-    setFormEnd('');
+    // Default to current time and +6 hours
+    const now = new Date();
+    const sixHoursLater = new Date(now.getTime() + 6 * 3600000);
+    setFormStart(now.toISOString().replace(/\.\d{3}Z$/, 'Z'));
+    setFormEnd(sixHoursLater.toISOString().replace(/\.\d{3}Z$/, 'Z'));
     setFormRecurrenceDays('');
     setFormTimezone('UTC');
     setConflicts([]);
@@ -377,7 +380,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
               <EuiFieldText
                 value={formStart}
                 onChange={(e) => setFormStart(e.target.value)}
-                placeholder="2025-01-01T00:00:00Z"
+                placeholder="ISO 8601 format, e.g. 2026-04-03T00:00:00Z"
               />
             </EuiFormRow>
             <EuiSpacer size="m" />
@@ -385,7 +388,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
               <EuiFieldText
                 value={formEnd}
                 onChange={(e) => setFormEnd(e.target.value)}
-                placeholder="2025-01-01T06:00:00Z"
+                placeholder="ISO 8601 format, e.g. 2026-04-03T06:00:00Z"
               />
             </EuiFormRow>
             {formScheduleType === 'recurring' && (

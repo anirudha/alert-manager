@@ -558,10 +558,16 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     } catch (_e) {
       /* fallback */
     }
+    // Silence creates a suppression rule — the alert remains active but is silenced.
+    // We add a 'silenced' label as a visual indicator; the state stays unchanged.
     setAlerts((prev) =>
       prev.map((a) =>
         a.id === alertId
-          ? { ...a, state: 'resolved' as const, lastUpdated: new Date().toISOString() }
+          ? {
+              ...a,
+              labels: { ...a.labels, _silenced: 'true' },
+              lastUpdated: new Date().toISOString(),
+            }
           : a
       )
     );
