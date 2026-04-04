@@ -150,6 +150,104 @@ describe('SuppressionRuleService', () => {
     });
   });
 
+  describe('getActiveRules', () => {
+    it('returns only rules whose time window contains now', () => {
+      const now = new Date();
+      const past = new Date(now.getTime() - 7200000);
+      const pastEnd = new Date(now.getTime() - 3600000);
+      const activeStart = new Date(now.getTime() - 1800000);
+      const activeEnd = new Date(now.getTime() + 1800000);
+
+      service.create({
+        name: 'Past Rule',
+        description: '',
+        matchers: { service: 'api' },
+        scheduleType: 'one_time',
+        startTime: past.toISOString(),
+        endTime: pastEnd.toISOString(),
+        createdBy: 'x',
+      });
+      service.create({
+        name: 'Current Rule',
+        description: '',
+        matchers: { service: 'web' },
+        scheduleType: 'one_time',
+        startTime: activeStart.toISOString(),
+        endTime: activeEnd.toISOString(),
+        createdBy: 'x',
+      });
+
+      const active = service.getActiveRules();
+      expect(active).toHaveLength(1);
+      expect(active[0].name).toBe('Current Rule');
+    });
+
+    it('handles recurring rules that match the current day', () => {
+      const now = new Date();
+      const currentDay = now.getUTCDay();
+      // Build a recurring rule that is active now
+      // Use start/end times that bracket the current UTC hour
+      const startHour = now.getUTCHours() > 0 ? now.getUTCHours() - 1 : 0;
+      const endHour = now.getUTCHours() < 23 ? now.getUTCHours() + 1 : 23;
+
+      service.create({
+        name: 'Recurring Today',
+        description: '',
+        matchers: { env: 'staging' },
+        scheduleType: 'recurring',
+        startTime: `2024-01-01T${String(startHour).padStart(2, '0')}:00:00Z`,
+        endTime: `2024-01-01T${String(endHour).padStart(2, '0')}:59:00Z`,
+        recurrence: { days: [currentDay], timezone: 'UTC' },
+        createdBy: 'admin',
+      });
+
+      const active = service.getActiveRules();
+      expect(active.length).toBeGreaterThanOrEqual(1);
+      expect(active.some((r) => r.name === 'Recurring Today')).toBe(true);
+    });
+
+    it('excludes recurring rules that do not match current day', () => {
+      const now = new Date();
+      const currentDay = now.getUTCDay();
+      // Pick a day that is NOT today
+      const otherDay = (currentDay + 3) % 7;
+
+      service.create({
+        name: 'Recurring Other Day',
+        description: '',
+        matchers: { env: 'staging' },
+        scheduleType: 'recurring',
+        startTime: '2024-01-01T00:00:00Z',
+        endTime: '2024-01-01T23:59:00Z',
+        recurrence: { days: [otherDay], timezone: 'UTC' },
+        createdBy: 'admin',
+      });
+
+      const active = service.getActiveRules();
+      expect(active.every((r) => r.name !== 'Recurring Other Day')).toBe(true);
+    });
+
+    it('handles recurring rules with no recurrence field (falls through to date range)', () => {
+      const now = new Date();
+      const start = new Date(now.getTime() - 3600000);
+      const end = new Date(now.getTime() + 3600000);
+
+      service.create({
+        name: 'Recurring No Recurrence',
+        description: '',
+        matchers: {},
+        scheduleType: 'recurring',
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        // Note: no recurrence field -- will fall through to date range check
+        createdBy: 'admin',
+      });
+
+      const active = service.getActiveRules();
+      expect(active.some((r) => r.name === 'Recurring No Recurrence')).toBe(true);
+    });
+  });
+
   describe('detectConflicts', () => {
     it('detects overlapping rules with same matchers and schedule', () => {
       const rule1 = service.create({

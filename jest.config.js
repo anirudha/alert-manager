@@ -43,7 +43,18 @@ module.exports = {
     'core/**/*.ts',
     'server/**/*.ts',
     'public/**/*.{ts,tsx}',
+    // Exclude test utilities and mock data — no value in unit testing these
     '!core/mock_backend.ts',
+    '!core/mock_enrichment.ts',
+    '!core/testing.ts',
+    // Exclude integration-only modules — need real backend; TODO: CI integration tests
+    '!core/directquery_prometheus_backend.ts',
+    // Exclude OSD plugin shell — depends on OSD core; TODO: CI integration tests in OSD context
+    '!public/plugin.ts',
+    '!public/application.tsx',
+    '!public/types.ts',
+    '!public/components/app.tsx',
+    '!server/plugin.ts',
     '!**/index.ts',
     '!**/__tests__/**',
     '!**/__mocks__/**',
