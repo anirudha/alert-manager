@@ -481,6 +481,9 @@ export interface PrometheusBackend {
     step: number
   ): Promise<PromTimeSeriesPoint[]>;
 
+  /** Execute a PromQL instant query and return point-in-time values. */
+  queryInstant?(ds: Datasource, query: string, time?: number): Promise<PromTimeSeriesPoint[]>;
+
   // ---- Alertmanager operations (optional — only available when alertmanagerUrl is set) ----
 
   /** Get alerts from Alertmanager (richer than Prometheus /api/v1/alerts — includes routing info) */

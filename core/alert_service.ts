@@ -715,14 +715,13 @@ export class MultiBackendAlertService {
   /**
    * Fetch condition preview data for Prometheus rules.
    *
-   * Attempts queryRange first (works with direct Prometheus connections).
-   * When using OpenSearch DirectQuery, queryRange is NOT supported because
-   * the SQL plugin only proxies metadata resource types (RULES, ALERTS, LABELS,
-   * SERIES, METADATA, ALERTMANAGER_*) — QUERY and QUERY_RANGE are execution
-   * endpoints not included in DirectQueryResourceType enum.
+   * Uses the DirectQuery query execution API (POST /_plugins/_directquery/_query)
+   * which supports both instant and range PromQL queries via PrometheusQueryHandler.
+   * This is separate from the resource proxy (/_plugins/_directquery/_resources)
+   * which only supports metadata lookups.
    *
-   * Falls back to extracting current evaluation data from the rule's embedded
-   * alerts and lastEvaluation timestamp.
+   * Falls back to extracting evaluation data from rule.alerts[].value if
+   * queryRange is not available or fails.
    */
   private async fetchPromPreviewData(
     ds: Datasource,

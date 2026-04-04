@@ -456,18 +456,15 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   }
 
   /**
-   * Execute a PromQL range query and return time-series data.
-   * Uses: GET /api/v1/query_range?query=...&start=...&end=...&step=...
+   * Execute a PromQL range query via the DirectQuery query execution API.
    *
-   * NOTE: This works with direct Prometheus connections but NOT via OpenSearch
-   * DirectQuery proxy. The SQL plugin's DirectQuery resource proxy only supports
-   * metadata resource types (RULES, ALERTS, LABELS, SERIES, METADATA, ALERTMANAGER_*)
-   * defined in DirectQueryResourceType enum. QUERY and QUERY_RANGE are not supported
-   * because they are execution endpoints, not resource lookups.
-   * See: sql/direct-query-core/.../DirectQueryResourceType.java
+   * Uses: POST /_plugins/_directquery/_query/{dataSources}
+   * This is the query EXECUTION endpoint (separate from the resource proxy).
+   * The SQL plugin's PrometheusQueryHandler routes to PrometheusClient.queryRange()
+   * which calls Prometheus /api/v1/query_range.
    *
-   * When this fails (400 "Invalid resource type"), the caller should fall back to
-   * extracting data from rule.alerts[].value.
+   * Request body: { datasource, query, language: "PROMQL", options: { queryType: "range", start, end, step } }
+   * Response: Prometheus matrix result with time-series values.
    */
   async queryRange(
     ds: Datasource,
@@ -477,38 +474,181 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     step: number
   ): Promise<PromTimeSeriesPoint[]> {
     try {
-      const params = new URLSearchParams({
-        query,
-        start: start.toString(),
-        end: end.toString(),
-        step: step.toString(),
-      });
-      const data = await this.get<{
-        resultType?: string;
-        result?: Array<{
-          metric?: Record<string, string>;
-          values?: Array<[number, string]>;
-        }>;
-      }>(ds, `/api/v1/query_range?${params.toString()}`);
+      const dqName = this.resolveDqName(ds);
+      const osUrl = ds.url?.replace(/\/+$/, '') || this.baseUrl;
+      const url = `${osUrl}/_plugins/_directquery/_query/${encodeURIComponent(dqName)}`;
 
-      // Flatten all series into a single time-series (sum/first series)
-      const points: PromTimeSeriesPoint[] = [];
-      const result = data?.result || [];
-      if (result.length > 0) {
-        // Use the first result series
-        const values = result[0].values || [];
-        for (const [ts, val] of values) {
-          const numVal = parseFloat(val);
-          if (!isNaN(numVal)) {
+      this.logger.debug(`DirectQuery range query: ${query.substring(0, 80)}...`);
+
+      // First try via DirectQuery query execution API
+      const resp = await this.http.request<Record<string, unknown>>({
+        method: 'POST',
+        url,
+        body: {
+          datasource: dqName,
+          query,
+          language: 'PROMQL',
+          options: {
+            queryType: 'range',
+            start: start.toString(),
+            end: end.toString(),
+            step: step.toString(),
+          },
+        },
+        auth: this.resolveAuth(ds),
+        rejectUnauthorized: this.resolveTls(ds),
+        timeoutMs: 15_000,
+      });
+
+      return this.parseRangeQueryResponse(resp.body);
+    } catch (err) {
+      this.logger.warn(`Failed to execute DirectQuery range query: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Execute a PromQL instant query via the DirectQuery query execution API.
+   *
+   * Uses: POST /_plugins/_directquery/_query/{dataSources}
+   * Request body: { datasource, query, language: "PROMQL", options: { queryType: "instant", time } }
+   * Response: Prometheus vector result with point-in-time values.
+   */
+  async queryInstant(ds: Datasource, query: string, time?: number): Promise<PromTimeSeriesPoint[]> {
+    try {
+      const dqName = this.resolveDqName(ds);
+      const osUrl = ds.url?.replace(/\/+$/, '') || this.baseUrl;
+      const url = `${osUrl}/_plugins/_directquery/_query/${encodeURIComponent(dqName)}`;
+
+      this.logger.debug(`DirectQuery instant query: ${query.substring(0, 80)}...`);
+
+      const options: Record<string, string> = { queryType: 'instant' };
+      if (time !== undefined) {
+        options.time = time.toString();
+      }
+
+      const resp = await this.http.request<Record<string, unknown>>({
+        method: 'POST',
+        url,
+        body: {
+          datasource: dqName,
+          query,
+          language: 'PROMQL',
+          options,
+        },
+        auth: this.resolveAuth(ds),
+        rejectUnauthorized: this.resolveTls(ds),
+        timeoutMs: 15_000,
+      });
+
+      return this.parseInstantQueryResponse(resp.body);
+    } catch (err) {
+      this.logger.warn(`Failed to execute DirectQuery instant query: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Parse a DirectQuery query execution response.
+   *
+   * Response envelope from the SQL plugin:
+   * {
+   *   "queryId": "...",
+   *   "results": {
+   *     "{datasourceName}": {
+   *       "resultType": "matrix" | "vector",
+   *       "result": [{ metric: {...}, values: [[ts, val], ...] }]  // range
+   *                  [{ metric: {...}, value: [ts, val] }]         // instant
+   *     }
+   *   },
+   *   "sessionId": "..."
+   * }
+   *
+   * See: sql/direct-query/.../datasource/PrometheusResult.java
+   */
+  private parseRangeQueryResponse(body: Record<string, unknown>): PromTimeSeriesPoint[] {
+    const promResult = this.extractPrometheusResult(body);
+    if (!promResult) return [];
+
+    const points: PromTimeSeriesPoint[] = [];
+    const result = (promResult.result ?? []) as Array<{
+      metric?: Record<string, string>;
+      values?: Array<Array<unknown>>;
+    }>;
+
+    if (result.length > 0) {
+      const values = result[0].values || [];
+      for (const pair of values) {
+        if (Array.isArray(pair) && pair.length >= 2) {
+          const ts = Number(pair[0]);
+          const numVal = parseFloat(String(pair[1]));
+          if (!isNaN(ts) && !isNaN(numVal)) {
             points.push({ timestamp: ts * 1000, value: numVal });
           }
         }
       }
-      return points;
-    } catch (err) {
-      this.logger.warn(`Failed to execute range query: ${err}`);
-      return [];
     }
+
+    return points;
+  }
+
+  private parseInstantQueryResponse(body: Record<string, unknown>): PromTimeSeriesPoint[] {
+    const promResult = this.extractPrometheusResult(body);
+    if (!promResult) return [];
+
+    const points: PromTimeSeriesPoint[] = [];
+    const result = (promResult.result ?? []) as Array<{
+      metric?: Record<string, string>;
+      value?: Array<unknown>;
+    }>;
+
+    for (const entry of result) {
+      if (Array.isArray(entry.value) && entry.value.length >= 2) {
+        const ts = Number(entry.value[0]);
+        const numVal = parseFloat(String(entry.value[1]));
+        if (!isNaN(ts) && !isNaN(numVal)) {
+          points.push({ timestamp: ts * 1000, value: numVal });
+        }
+      }
+    }
+
+    return points;
+  }
+
+  /**
+   * Extract the PrometheusResult from the DirectQuery response envelope.
+   * Handles both direct data and the nested results.{datasourceName} wrapper.
+   */
+  private extractPrometheusResult(
+    body: Record<string, unknown>
+  ): { resultType?: string; result?: unknown[] } | null {
+    // Direct Prometheus response: { resultType, result }
+    if (body?.resultType || body?.result) {
+      return body as { resultType?: string; result?: unknown[] };
+    }
+
+    // Wrapped in data field: { data: { resultType, result } }
+    if (body?.data && typeof body.data === 'object') {
+      const data = body.data as Record<string, unknown>;
+      if (data.resultType || data.result) {
+        return data as { resultType?: string; result?: unknown[] };
+      }
+    }
+
+    // DirectQuery envelope: { results: { "DatasourceName": { resultType, result } } }
+    if (body?.results && typeof body.results === 'object') {
+      const results = body.results as Record<string, unknown>;
+      for (const val of Object.values(results)) {
+        if (val && typeof val === 'object') {
+          const dsResult = val as Record<string, unknown>;
+          if (dsResult.resultType || dsResult.result) {
+            return dsResult as { resultType?: string; result?: unknown[] };
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   private parseDurationToSeconds(dur: string): number {
