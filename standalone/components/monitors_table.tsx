@@ -34,6 +34,9 @@ import {
   EuiListGroupItem,
   EuiButtonIcon,
   EuiResizableContainer,
+  EuiPopover as EuiPopoverOui,
+  EuiContextMenuPanel,
+  EuiContextMenuItem,
 } from '@opensearch-project/oui';
 import {
   UnifiedRule,
@@ -74,6 +77,7 @@ const TYPE_LABELS: Record<string, string> = {
   apm: 'APM',
   composite: 'Composite',
   infrastructure: 'Infrastructure',
+  cluster_metrics: 'Cluster Metrics',
   synthetics: 'Synthetics',
 };
 
@@ -470,6 +474,117 @@ function useResizableColumns(
 }
 
 // ============================================================================
+// Custom Pagination — replaces OUI's broken <a href="#"> pagination buttons
+// ============================================================================
+
+const TablePagination: React.FC<{
+  pageIndex: number;
+  pageSize: number;
+  totalItemCount: number;
+  pageSizeOptions: number[];
+  onChangePage: (page: number) => void;
+  onChangePageSize: (size: number) => void;
+}> = ({ pageIndex, pageSize, totalItemCount, pageSizeOptions, onChangePage, onChangePageSize }) => {
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const pageCount = Math.max(1, Math.ceil(totalItemCount / pageSize));
+
+  const maxVisible = 5;
+  const half = Math.floor(maxVisible / 2);
+  let startPage = Math.max(0, Math.min(pageIndex - half, pageCount - maxVisible));
+  let endPage = Math.min(pageCount, startPage + maxVisible);
+  if (endPage - startPage < maxVisible) startPage = Math.max(0, endPage - maxVisible);
+  const pages: number[] = [];
+  for (let i = startPage; i < endPage; i++) pages.push(i);
+
+  return (
+    <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
+      <EuiFlexItem grow={false}>
+        <EuiPopoverOui
+          button={
+            <EuiButtonEmpty
+              size="xs"
+              color="text"
+              iconType="arrowDown"
+              iconSide="right"
+              onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+            >
+              Rows per page: {pageSize}
+            </EuiButtonEmpty>
+          }
+          isOpen={isPopoverOpen}
+          closePopover={() => setIsPopoverOpen(false)}
+          panelPaddingSize="none"
+          anchorPosition="upCenter"
+        >
+          <EuiContextMenuPanel
+            items={pageSizeOptions.map((size) => (
+              <EuiContextMenuItem
+                key={size}
+                icon={size === pageSize ? 'check' : 'empty'}
+                onClick={() => {
+                  onChangePageSize(size);
+                  onChangePage(0);
+                  setIsPopoverOpen(false);
+                }}
+              >
+                {size} rows
+              </EuiContextMenuItem>
+            ))}
+          />
+        </EuiPopoverOui>
+      </EuiFlexItem>
+      <EuiFlexItem grow={false}>
+        <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiButtonIcon
+              iconType="arrowLeft"
+              aria-label="Previous page"
+              onClick={() => onChangePage(pageIndex - 1)}
+              isDisabled={pageIndex === 0}
+              size="s"
+              color="text"
+            />
+          </EuiFlexItem>
+          {pages.map((p) => (
+            <EuiFlexItem grow={false} key={p}>
+              <button
+                onClick={() => onChangePage(p)}
+                disabled={p === pageIndex}
+                aria-label={`Page ${p + 1} of ${pageCount}`}
+                aria-current={p === pageIndex ? 'page' : undefined}
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  border: 'none',
+                  borderRadius: 4,
+                  background: p === pageIndex ? '#006BB4' : 'transparent',
+                  color: p === pageIndex ? '#fff' : '#006BB4',
+                  fontWeight: p === pageIndex ? 700 : 400,
+                  cursor: p === pageIndex ? 'default' : 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                {p + 1}
+              </button>
+            </EuiFlexItem>
+          ))}
+          <EuiFlexItem grow={false}>
+            <EuiButtonIcon
+              iconType="arrowRight"
+              aria-label="Next page"
+              onClick={() => onChangePage(pageIndex + 1)}
+              isDisabled={pageIndex >= pageCount - 1}
+              size="s"
+              color="text"
+            />
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+  );
+};
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -595,6 +710,17 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     });
     return result;
   }, [rules, searchQuery, filters, sortField, sortDirection, dsNameMap]);
+
+  // Reset to first page when filtered results change (avoids showing empty page)
+  useEffect(() => {
+    setPageIndex(0);
+  }, [filtered.length]);
+
+  // EuiBasicTable does NOT slice items internally — we must pass the correct page slice.
+  const paginatedRules = useMemo(() => {
+    const start = pageIndex * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, pageIndex, pageSize]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1487,32 +1613,37 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                       }
                     />
                   ) : (
-                    <EuiBasicTable
-                      items={filtered}
-                      columns={tableColumns}
-                      loading={loading}
-                      sorting={{
-                        sort: { field: sortField as any, direction: sortDirection },
-                      }}
-                      pagination={{
-                        pageIndex,
-                        pageSize,
-                        totalItemCount: filtered.length,
-                        pageSizeOptions: [10, 20, 50],
-                      }}
-                      onChange={(criteria: any) => {
-                        onTableChange(criteria);
-                        if (criteria.page) {
-                          setPageIndex(criteria.page.index);
-                          setPageSize(criteria.page.size);
-                        }
-                      }}
-                      rowProps={(item: UnifiedRule) => ({
-                        style: selectedIds.has(item.id)
-                          ? { backgroundColor: '#F0F5FF' }
-                          : undefined,
-                      })}
-                    />
+                    <>
+                      <EuiBasicTable
+                        items={paginatedRules}
+                        columns={tableColumns}
+                        loading={loading}
+                        sorting={{
+                          sort: { field: sortField as any, direction: sortDirection },
+                        }}
+                        onChange={(criteria: any) => {
+                          onTableChange(criteria);
+                        }}
+                        rowProps={(item: UnifiedRule) => ({
+                          style: selectedIds.has(item.id)
+                            ? { backgroundColor: '#F0F5FF' }
+                            : undefined,
+                        })}
+                      />
+                      {filtered.length > 0 && (
+                        <>
+                          <EuiSpacer size="m" />
+                          <TablePagination
+                            pageIndex={pageIndex}
+                            pageSize={pageSize}
+                            totalItemCount={filtered.length}
+                            pageSizeOptions={[10, 20, 50]}
+                            onChangePage={setPageIndex}
+                            onChangePageSize={setPageSize}
+                          />
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               </EuiPanel>

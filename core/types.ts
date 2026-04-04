@@ -107,12 +107,18 @@ export interface OSTrigger {
   actions: OSAction[];
 }
 
-export interface OSMonitorInput {
-  search: {
-    indices: string[];
-    query: Record<string, unknown>;
-  };
-}
+export type OSMonitorInput =
+  | { search: { indices: string[]; query: Record<string, unknown> } }
+  | {
+      uri: { api_type: string; path: string; path_params: string; url: string; clusters: string[] };
+    }
+  | {
+      doc_level_input: {
+        description: string;
+        indices: string[];
+        queries: Array<{ id: string; name: string; query: string; tags: string[] }>;
+      };
+    };
 
 export interface OSMonitor {
   id: string;
@@ -546,7 +552,14 @@ export interface UnifiedAlert extends UnifiedAlertSummary {
   raw: OSAlert | PromAlert;
 }
 
-export type MonitorType = 'metric' | 'log' | 'apm' | 'composite' | 'infrastructure' | 'synthetics';
+export type MonitorType =
+  | 'metric'
+  | 'log'
+  | 'apm'
+  | 'composite'
+  | 'infrastructure'
+  | 'synthetics'
+  | 'cluster_metrics';
 export type MonitorStatus = 'active' | 'pending' | 'muted' | 'disabled';
 export type MonitorHealthStatus = 'healthy' | 'failing' | 'no_data';
 

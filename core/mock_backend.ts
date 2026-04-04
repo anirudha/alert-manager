@@ -400,7 +400,33 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
         last_update_time: oneWeekAgo,
         schedule: { period: { interval: 10, unit: 'MINUTES' } },
         inputs: [
-          { search: { indices: ['logs-*'], query: { query: { match_all: {} }, size: 100 } } },
+          {
+            doc_level_input: {
+              description: 'Detect anomalous log patterns across application logs',
+              indices: ['logs-*', 'ss4o_logs-*'],
+              queries: [
+                {
+                  id: 'dlq-1',
+                  name: 'Critical errors',
+                  query: '{ "match": { "level": "CRITICAL" } }',
+                  tags: ['severity:critical', 'auto-remediate'],
+                },
+                {
+                  id: 'dlq-2',
+                  name: 'OOM events',
+                  query: '{ "match_phrase": { "message": "OutOfMemoryError" } }',
+                  tags: ['severity:high', 'memory'],
+                },
+                {
+                  id: 'dlq-3',
+                  name: 'Timeout patterns',
+                  query:
+                    '{ "bool": { "should": [{ "match_phrase": { "message": "timed out" } }, { "match_phrase": { "message": "deadline exceeded" } }] } }',
+                  tags: ['severity:medium', 'latency'],
+                },
+              ],
+            },
+          } as any,
         ],
         triggers: [
           {
@@ -418,6 +444,244 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
                 message_template: { source: 'Log anomaly detected' },
                 throttle_enabled: true,
                 throttle: { value: 30, unit: 'MINUTES' },
+              },
+            ],
+          },
+        ],
+      },
+      // --- Cluster Metrics Monitor ---
+      {
+        id: nextId(),
+        type: 'monitor',
+        monitor_type: 'query_level_monitor',
+        name: 'Cluster Health Status',
+        enabled: true,
+        last_update_time: now,
+        schedule: { period: { interval: 1, unit: 'MINUTES' } },
+        inputs: [
+          {
+            uri: {
+              api_type: 'CLUSTER_HEALTH',
+              path: '_cluster/health',
+              path_params: '',
+              url: '',
+              clusters: [],
+            },
+          } as any,
+        ],
+        triggers: [
+          {
+            id: nextId(),
+            name: 'Cluster not green',
+            severity: '1',
+            condition: {
+              script: {
+                source: "ctx.results[0].status != 'green'",
+                lang: 'painless',
+              },
+            },
+            actions: [
+              {
+                id: nextId(),
+                name: 'Notify Slack',
+                destination_id: slackDest.id,
+                message_template: {
+                  source:
+                    'Cluster health is {{ctx.results[0].status}} — {{ctx.results[0].number_of_nodes}} nodes, {{ctx.results[0].unassigned_shards}} unassigned shards',
+                },
+                throttle_enabled: true,
+                throttle: { value: 5, unit: 'MINUTES' },
+              },
+              {
+                id: nextId(),
+                name: 'Email Oncall',
+                destination_id: emailDest.id,
+                message_template: {
+                  source: 'URGENT: Cluster health degraded to {{ctx.results[0].status}}',
+                },
+                throttle_enabled: false,
+              },
+            ],
+          },
+        ],
+      },
+      // --- Cluster Metrics: Nodes Stats ---
+      {
+        id: nextId(),
+        type: 'monitor',
+        monitor_type: 'query_level_monitor',
+        name: 'Node JVM Heap Pressure',
+        enabled: true,
+        last_update_time: oneDayAgo,
+        schedule: { period: { interval: 5, unit: 'MINUTES' } },
+        inputs: [
+          {
+            uri: {
+              api_type: 'NODES_STATS',
+              path: '_nodes/stats/jvm',
+              path_params: '',
+              url: '',
+              clusters: [],
+            },
+          } as any,
+        ],
+        triggers: [
+          {
+            id: nextId(),
+            name: 'JVM heap > 85%',
+            severity: '2',
+            condition: {
+              script: {
+                source:
+                  'ctx.results[0].nodes.values().stream().anyMatch(n -> n.jvm.mem.heap_used_percent > 85)',
+                lang: 'painless',
+              },
+            },
+            actions: [
+              {
+                id: nextId(),
+                name: 'Notify Slack',
+                destination_id: slackDest.id,
+                message_template: {
+                  source:
+                    'JVM heap pressure detected on one or more nodes — check _nodes/stats/jvm',
+                },
+                throttle_enabled: true,
+                throttle: { value: 15, unit: 'MINUTES' },
+              },
+            ],
+          },
+        ],
+      },
+      // --- Bucket-Level: CPU by Service ---
+      {
+        id: nextId(),
+        type: 'monitor',
+        monitor_type: 'bucket_level_monitor',
+        name: 'CPU Usage by Service',
+        enabled: true,
+        last_update_time: oneHourAgo,
+        schedule: { period: { interval: 5, unit: 'MINUTES' } },
+        inputs: [
+          {
+            search: {
+              indices: ['metrics-*', 'ss4o_metrics-*'],
+              query: {
+                size: 0,
+                query: {
+                  bool: {
+                    filter: [
+                      {
+                        range: {
+                          '@timestamp': {
+                            gte: '{{period_end}}||-10m',
+                            lte: '{{period_end}}',
+                            format: 'epoch_millis',
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+                aggs: {
+                  services: {
+                    terms: { field: 'service.name', size: 50 },
+                    aggs: {
+                      avg_cpu: { avg: { field: 'system.cpu.total.pct' } },
+                      max_cpu: { max: { field: 'system.cpu.total.pct' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+        triggers: [
+          {
+            id: nextId(),
+            name: 'Service CPU > 80%',
+            severity: '2',
+            condition: {
+              script: {
+                source: 'params._count > 0 && params.avg_cpu > 0.8',
+                lang: 'painless',
+              },
+            },
+            actions: [
+              {
+                id: nextId(),
+                name: 'Notify Slack',
+                destination_id: slackDest.id,
+                message_template: {
+                  source: 'Service {{bucket_keys}} averaging {{params.avg_cpu}}% CPU over last 10m',
+                },
+                throttle_enabled: true,
+                throttle: { value: 10, unit: 'MINUTES' },
+              },
+            ],
+          },
+        ],
+      },
+      // --- Document-Level: Security audit events ---
+      {
+        id: nextId(),
+        type: 'monitor',
+        monitor_type: 'doc_level_monitor',
+        name: 'Security Audit Events',
+        enabled: true,
+        last_update_time: threeDaysAgo,
+        schedule: { period: { interval: 1, unit: 'MINUTES' } },
+        inputs: [
+          {
+            doc_level_input: {
+              description: 'Monitor security-sensitive events in audit logs',
+              indices: ['security-auditlog-*'],
+              queries: [
+                {
+                  id: 'sec-1',
+                  name: 'Privilege escalation',
+                  query: '{ "match": { "event.action": "role_escalation" } }',
+                  tags: ['compliance', 'severity:critical'],
+                },
+                {
+                  id: 'sec-2',
+                  name: 'Bulk data export',
+                  query: '{ "range": { "response.bytes": { "gte": 104857600 } } }',
+                  tags: ['data-exfiltration', 'severity:high'],
+                },
+              ],
+            },
+          } as any,
+        ],
+        triggers: [
+          {
+            id: nextId(),
+            name: 'Security event detected',
+            severity: '1',
+            condition: {
+              script: {
+                source: 'ctx.results[0].hits.total.value > 0',
+                lang: 'painless',
+              },
+            },
+            actions: [
+              {
+                id: nextId(),
+                name: 'Email Oncall',
+                destination_id: emailDest.id,
+                message_template: {
+                  source:
+                    'Security audit event: {{ctx.results[0].hits.hits[0]._source.event.action}}',
+                },
+                throttle_enabled: false,
+              },
+              {
+                id: nextId(),
+                name: 'Notify Slack',
+                destination_id: slackDest.id,
+                message_template: { source: 'Security audit event detected — check audit logs' },
+                throttle_enabled: true,
+                throttle: { value: 5, unit: 'MINUTES' },
               },
             ],
           },
@@ -483,6 +747,66 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
         last_notification_time: now,
         end_time: null,
         acknowledged_time: null,
+        action_execution_results: [],
+      },
+      // Alert for Cluster Health Status monitor (index 6)
+      {
+        id: nextId(),
+        version: 1,
+        monitor_id: monitors[6].id,
+        monitor_name: monitors[6].name,
+        monitor_version: 1,
+        trigger_id: monitors[6].triggers[0].id,
+        trigger_name: monitors[6].triggers[0].name,
+        state: 'ACTIVE',
+        severity: '1',
+        error_message: null,
+        start_time: fiveMinAgo,
+        last_notification_time: now,
+        end_time: null,
+        acknowledged_time: null,
+        action_execution_results: [
+          {
+            action_id: monitors[6].triggers[0].actions[0].id,
+            last_execution_time: now,
+            throttled_count: 1,
+          },
+        ],
+      },
+      // Alert for Security Audit Events monitor (index 9)
+      {
+        id: nextId(),
+        version: 1,
+        monitor_id: monitors[9].id,
+        monitor_name: monitors[9].name,
+        monitor_version: 1,
+        trigger_id: monitors[9].triggers[0].id,
+        trigger_name: monitors[9].triggers[0].name,
+        state: 'ACTIVE',
+        severity: '1',
+        error_message: null,
+        start_time: oneHourAgo,
+        last_notification_time: fiveMinAgo,
+        end_time: null,
+        acknowledged_time: null,
+        action_execution_results: [],
+      },
+      // Alert for CPU by Service bucket monitor (index 8)
+      {
+        id: nextId(),
+        version: 1,
+        monitor_id: monitors[8].id,
+        monitor_name: monitors[8].name,
+        monitor_version: 1,
+        trigger_id: monitors[8].triggers[0].id,
+        trigger_name: monitors[8].triggers[0].name,
+        state: 'ACKNOWLEDGED',
+        severity: '2',
+        error_message: null,
+        start_time: oneHourAgo,
+        last_notification_time: oneHourAgo,
+        end_time: null,
+        acknowledged_time: fiveMinAgo,
         action_execution_results: [],
       },
     ];

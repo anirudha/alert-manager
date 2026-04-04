@@ -357,7 +357,10 @@ interface AlarmsPageProps {
 
 type TabId = 'alerts' | 'rules' | 'routing' | 'suppression';
 
-const DEFAULT_PAGE_SIZE = 20;
+// Fetch a large page from the server so child tables can paginate client-side.
+// The child components (AlertsDashboard, MonitorsTable) handle their own
+// page-size controls (10/20/50/100 rows per page) over this full dataset.
+const DEFAULT_PAGE_SIZE = 1000;
 
 export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [activeTab, setActiveTab] = useState<TabId>('alerts');

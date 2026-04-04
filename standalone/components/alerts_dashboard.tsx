@@ -7,7 +7,7 @@
  * Alerts Dashboard — visualization-first view of alert history
  * with summary stats, charts, and drill-down table.
  */
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   EuiFlexGroup,
   EuiFlexItem,
@@ -27,6 +27,9 @@ import {
   EuiResizableContainer,
   EuiIcon,
   EuiCheckbox,
+  EuiPopover,
+  EuiContextMenuPanel,
+  EuiContextMenuItem,
 } from '@opensearch-project/oui';
 import { UnifiedAlert, UnifiedAlertSeverity, UnifiedAlertState, Datasource } from '../../core';
 import { filterAlerts } from '../../core/filter';
@@ -63,6 +66,118 @@ const STATE_HEALTH: Record<string, string> = {
   acknowledged: 'primary',
   resolved: 'success',
   error: 'danger',
+};
+
+// ============================================================================
+// Custom Pagination — replaces OUI's broken <a href="#"> pagination buttons
+// ============================================================================
+
+const TablePagination: React.FC<{
+  pageIndex: number;
+  pageSize: number;
+  totalItemCount: number;
+  pageSizeOptions: number[];
+  onChangePage: (page: number) => void;
+  onChangePageSize: (size: number) => void;
+}> = ({ pageIndex, pageSize, totalItemCount, pageSizeOptions, onChangePage, onChangePageSize }) => {
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const pageCount = Math.max(1, Math.ceil(totalItemCount / pageSize));
+
+  // Build visible page range (max 5 centered on current)
+  const maxVisible = 5;
+  const half = Math.floor(maxVisible / 2);
+  let startPage = Math.max(0, Math.min(pageIndex - half, pageCount - maxVisible));
+  let endPage = Math.min(pageCount, startPage + maxVisible);
+  if (endPage - startPage < maxVisible) startPage = Math.max(0, endPage - maxVisible);
+  const pages: number[] = [];
+  for (let i = startPage; i < endPage; i++) pages.push(i);
+
+  return (
+    <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
+      <EuiFlexItem grow={false}>
+        <EuiPopover
+          button={
+            <EuiButtonEmpty
+              size="xs"
+              color="text"
+              iconType="arrowDown"
+              iconSide="right"
+              onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+            >
+              Rows per page: {pageSize}
+            </EuiButtonEmpty>
+          }
+          isOpen={isPopoverOpen}
+          closePopover={() => setIsPopoverOpen(false)}
+          panelPaddingSize="none"
+          anchorPosition="upCenter"
+        >
+          <EuiContextMenuPanel
+            items={pageSizeOptions.map((size) => (
+              <EuiContextMenuItem
+                key={size}
+                icon={size === pageSize ? 'check' : 'empty'}
+                onClick={() => {
+                  onChangePageSize(size);
+                  onChangePage(0);
+                  setIsPopoverOpen(false);
+                }}
+              >
+                {size} rows
+              </EuiContextMenuItem>
+            ))}
+          />
+        </EuiPopover>
+      </EuiFlexItem>
+      <EuiFlexItem grow={false}>
+        <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiButtonIcon
+              iconType="arrowLeft"
+              aria-label="Previous page"
+              onClick={() => onChangePage(pageIndex - 1)}
+              isDisabled={pageIndex === 0}
+              size="s"
+              color="text"
+            />
+          </EuiFlexItem>
+          {pages.map((p) => (
+            <EuiFlexItem grow={false} key={p}>
+              <button
+                onClick={() => onChangePage(p)}
+                disabled={p === pageIndex}
+                aria-label={`Page ${p + 1} of ${pageCount}`}
+                aria-current={p === pageIndex ? 'page' : undefined}
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  border: 'none',
+                  borderRadius: 4,
+                  background: p === pageIndex ? '#006BB4' : 'transparent',
+                  color: p === pageIndex ? '#fff' : '#006BB4',
+                  fontWeight: p === pageIndex ? 700 : 400,
+                  cursor: p === pageIndex ? 'default' : 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                {p + 1}
+              </button>
+            </EuiFlexItem>
+          ))}
+          <EuiFlexItem grow={false}>
+            <EuiButtonIcon
+              iconType="arrowRight"
+              aria-label="Next page"
+              onClick={() => onChangePage(pageIndex + 1)}
+              isDisabled={pageIndex >= pageCount - 1}
+              size="s"
+              color="text"
+            />
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+  );
 };
 
 // ============================================================================
@@ -732,20 +847,11 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
     setPageIndex(0);
   }, [filteredAlerts.length]);
 
+  // EuiBasicTable does NOT slice items internally — we must pass the correct page slice.
   const paginatedAlerts = useMemo(() => {
     const start = pageIndex * pageSize;
     return filteredAlerts.slice(start, start + pageSize);
   }, [filteredAlerts, pageIndex, pageSize]);
-
-  const pagination = useMemo(
-    () => ({
-      pageIndex,
-      pageSize,
-      totalItemCount: filteredAlerts.length,
-      pageSizeOptions: [10, 20, 50, 100],
-    }),
-    [pageIndex, pageSize, filteredAlerts.length]
-  );
 
   const onTableSort = (col: { field: string; direction: 'asc' | 'desc' }) => {
     setSortField(col.field);
@@ -907,7 +1013,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
     {
       field: 'state',
       name: 'State',
-      width: '120px',
+      width: '140px',
       sortable: true,
       render: (state: string) => (
         <EuiHealth color={STATE_HEALTH[state] || 'subdued'}>{state}</EuiHealth>
@@ -1331,16 +1437,11 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                 items={paginatedAlerts}
                 columns={columns}
                 loading={loading}
-                pagination={pagination}
                 sorting={{
                   sort: { field: sortField as any, direction: sortDirection },
                 }}
-                onChange={({ sort, page }: any) => {
+                onChange={({ sort }: any) => {
                   if (sort) onTableSort(sort);
-                  if (page) {
-                    setPageIndex(page.index);
-                    setPageSize(page.size);
-                  }
                 }}
                 noItemsMessage={
                   searchQuery ||
@@ -1351,6 +1452,19 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     : 'No alerts'
                 }
               />
+              {filteredAlerts.length > 0 && (
+                <>
+                  <EuiSpacer size="m" />
+                  <TablePagination
+                    pageIndex={pageIndex}
+                    pageSize={pageSize}
+                    totalItemCount={filteredAlerts.length}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    onChangePage={setPageIndex}
+                    onChangePageSize={setPageSize}
+                  />
+                </>
+              )}
             </EuiPanel>
           </EuiResizablePanel>
         </>

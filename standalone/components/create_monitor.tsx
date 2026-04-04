@@ -90,7 +90,12 @@ interface PrometheusFormState extends BaseMonitorForm {
 /** OpenSearch-specific form state */
 interface OpenSearchFormState extends BaseMonitorForm {
   datasourceType: 'opensearch';
-  monitorType: 'ppl_monitor' | 'query_level_monitor' | 'bucket_level_monitor' | 'doc_level_monitor';
+  monitorType:
+    | 'ppl_monitor'
+    | 'query_level_monitor'
+    | 'bucket_level_monitor'
+    | 'doc_level_monitor'
+    | 'cluster_metrics_monitor';
   indices: string;
   query: string;
   // PPL monitor trigger fields (Prometheus-like)
@@ -106,6 +111,9 @@ interface OpenSearchFormState extends BaseMonitorForm {
   actionDestination: string;
   actionMessage: string;
   schedule: { interval: number; unit: 'MINUTES' | 'HOURS' | 'DAYS' };
+  // Cluster metrics fields
+  clusterMetricsApiType: string;
+  clusterMetricsPathParams: string;
 }
 
 export type MonitorFormState = PrometheusFormState | OpenSearchFormState;
@@ -153,6 +161,9 @@ const DEFAULT_OS_FORM: OpenSearchFormState = {
   actionDestination: '',
   actionMessage: '',
   schedule: { interval: 1, unit: 'MINUTES' },
+  // Cluster metrics defaults
+  clusterMetricsApiType: 'CLUSTER_HEALTH',
+  clusterMetricsPathParams: '',
   severity: 'medium',
   enabled: true,
 };
@@ -203,6 +214,20 @@ const OS_MONITOR_TYPE_OPTIONS = [
   { value: 'query_level_monitor', text: 'Per query (DSL)' },
   { value: 'bucket_level_monitor', text: 'Per bucket (DSL)' },
   { value: 'doc_level_monitor', text: 'Per document (DSL)' },
+  { value: 'cluster_metrics_monitor', text: 'Cluster Metrics' },
+];
+
+const CLUSTER_METRICS_API_OPTIONS = [
+  { value: 'CLUSTER_HEALTH', text: 'Cluster Health' },
+  { value: 'CLUSTER_STATS', text: 'Cluster Stats' },
+  { value: 'CLUSTER_SETTINGS', text: 'Cluster Settings' },
+  { value: 'NODES_STATS', text: 'Nodes Stats' },
+  { value: 'CAT_INDICES', text: 'CAT Indices' },
+  { value: 'CAT_PENDING_TASKS', text: 'CAT Pending Tasks' },
+  { value: 'CAT_RECOVERY', text: 'CAT Recovery' },
+  { value: 'CAT_SHARDS', text: 'CAT Shards' },
+  { value: 'CAT_SNAPSHOTS', text: 'CAT Snapshots' },
+  { value: 'CAT_TASKS', text: 'CAT Tasks' },
 ];
 
 const OS_SCHEDULE_UNIT_OPTIONS = [
@@ -728,13 +753,14 @@ const OpenSearchFormSection: React.FC<{
   context?: { service?: string; team?: string };
 }> = ({ form, onUpdate, validationErrors, context }) => {
   const isPPL = form.monitorType === 'ppl_monitor';
+  const isClusterMetrics = form.monitorType === 'cluster_metrics_monitor';
 
   const handleMonitorTypeChange = (type: OpenSearchFormState['monitorType']) => {
     onUpdate('monitorType', type);
     // Reset query to appropriate default when switching between PPL and DSL types
     const wasPPL = form.monitorType === 'ppl_monitor';
     const nowPPL = type === 'ppl_monitor';
-    if (wasPPL !== nowPPL) {
+    if (wasPPL !== nowPPL && type !== 'cluster_metrics_monitor') {
       const defaultPPL =
         'source = logs-* | where @timestamp > NOW() - INTERVAL 5 MINUTE | stats count() as cnt';
       const defaultDSL =
@@ -773,71 +799,109 @@ const OpenSearchFormSection: React.FC<{
 
       <EuiSpacer size="m" />
 
-      {/* Data Source — index pattern */}
-      <EuiPanel paddingSize="m" color="subdued">
-        <EuiTitle size="xs">
-          <h3>Data Source</h3>
-        </EuiTitle>
-        <EuiSpacer size="s" />
-        <EuiFormRow
-          label="Index Pattern"
-          helpText={
-            isPPL
-              ? 'Used as the PPL source if not specified in the query'
-              : 'Comma-separated index patterns, e.g. logs-*, metrics-*'
-          }
-          fullWidth
-          isInvalid={!!validationErrors.indices}
-          error={validationErrors.indices}
-        >
-          <EuiFieldText
-            placeholder="logs-*, metrics-*"
-            value={form.indices}
-            onChange={(e) => onUpdate('indices', e.target.value)}
+      {/* Data Source — index pattern or cluster metrics API */}
+      {isClusterMetrics ? (
+        <EuiPanel paddingSize="m" color="subdued">
+          <EuiTitle size="xs">
+            <h3>Cluster Metrics API</h3>
+          </EuiTitle>
+          <EuiText size="xs" color="subdued">
+            Select a cluster API to monitor. The monitor will call this API on the configured
+            schedule and evaluate the trigger condition against the response.
+          </EuiText>
+          <EuiSpacer size="s" />
+          <EuiFormRow label="API Type" fullWidth>
+            <EuiSelect
+              options={CLUSTER_METRICS_API_OPTIONS}
+              value={form.clusterMetricsApiType}
+              onChange={(e) => onUpdate('clusterMetricsApiType', e.target.value)}
+              fullWidth
+              aria-label="Cluster metrics API type"
+            />
+          </EuiFormRow>
+          <EuiSpacer size="s" />
+          <EuiFormRow
+            label="Path Parameters"
+            helpText="Optional path parameters, e.g. index name for CAT indices"
             fullWidth
-            aria-label="Index pattern"
-          />
-        </EuiFormRow>
-      </EuiPanel>
+          >
+            <EuiFieldText
+              placeholder="e.g. my-index-*"
+              value={form.clusterMetricsPathParams}
+              onChange={(e) => onUpdate('clusterMetricsPathParams', e.target.value)}
+              fullWidth
+              aria-label="Cluster metrics path parameters"
+            />
+          </EuiFormRow>
+        </EuiPanel>
+      ) : (
+        <>
+          <EuiPanel paddingSize="m" color="subdued">
+            <EuiTitle size="xs">
+              <h3>Data Source</h3>
+            </EuiTitle>
+            <EuiSpacer size="s" />
+            <EuiFormRow
+              label="Index Pattern"
+              helpText={
+                isPPL
+                  ? 'Used as the PPL source if not specified in the query'
+                  : 'Comma-separated index patterns, e.g. logs-*, metrics-*'
+              }
+              fullWidth
+              isInvalid={!!validationErrors.indices}
+              error={validationErrors.indices}
+            >
+              <EuiFieldText
+                placeholder="logs-*, metrics-*"
+                value={form.indices}
+                onChange={(e) => onUpdate('indices', e.target.value)}
+                fullWidth
+                aria-label="Index pattern"
+              />
+            </EuiFormRow>
+          </EuiPanel>
 
-      <EuiSpacer size="m" />
+          <EuiSpacer size="m" />
 
-      {/* Query */}
-      <EuiPanel paddingSize="m" color="subdued">
-        <EuiTitle size="xs">
-          <h3>Query</h3>
-        </EuiTitle>
-        <EuiText size="xs" color="subdued">
-          {isPPL
-            ? 'Piped Processing Language — pipe-delimited query syntax'
-            : 'OpenSearch Query DSL (JSON)'}
-        </EuiText>
-        <EuiSpacer size="s" />
-        <EuiTextArea
-          value={form.query}
-          onChange={(e) => onUpdate('query', e.target.value)}
-          rows={isPPL ? 4 : 8}
-          fullWidth
-          placeholder={
-            isPPL
-              ? 'source = logs-* | where status >= 500 | stats count() as error_count'
-              : '{ "size": 0, "query": { ... } }'
-          }
-          style={{ fontFamily: 'monospace', fontSize: 12 }}
-          aria-label={isPPL ? 'PPL query' : 'Query DSL'}
-        />
-        {isPPL && (
-          <>
-            <EuiSpacer size="xs" />
+          {/* Query */}
+          <EuiPanel paddingSize="m" color="subdued">
+            <EuiTitle size="xs">
+              <h3>Query</h3>
+            </EuiTitle>
             <EuiText size="xs" color="subdued">
-              Example:{' '}
-              <code>
-                source = logs-* | where status {'>'} 500 | stats count() as error_count by host
-              </code>
+              {isPPL
+                ? 'Piped Processing Language — pipe-delimited query syntax'
+                : 'OpenSearch Query DSL (JSON)'}
             </EuiText>
-          </>
-        )}
-      </EuiPanel>
+            <EuiSpacer size="s" />
+            <EuiTextArea
+              value={form.query}
+              onChange={(e) => onUpdate('query', e.target.value)}
+              rows={isPPL ? 4 : 8}
+              fullWidth
+              placeholder={
+                isPPL
+                  ? 'source = logs-* | where status >= 500 | stats count() as error_count'
+                  : '{ "size": 0, "query": { ... } }'
+              }
+              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              aria-label={isPPL ? 'PPL query' : 'Query DSL'}
+            />
+            {isPPL && (
+              <>
+                <EuiSpacer size="xs" />
+                <EuiText size="xs" color="subdued">
+                  Example:{' '}
+                  <code>
+                    source = logs-* | where status {'>'} 500 | stats count() as error_count by host
+                  </code>
+                </EuiText>
+              </>
+            )}
+          </EuiPanel>
+        </>
+      )}
 
       <EuiSpacer size="m" />
 
@@ -1229,7 +1293,9 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
       ? promForm.query.trim() !== '' && !hasQueryErrors
       : osForm.monitorType === 'ppl_monitor'
         ? osForm.query.trim() !== ''
-        : osForm.indices.trim() !== '' && osForm.triggerCondition.trim() !== '');
+        : osForm.monitorType === 'cluster_metrics_monitor'
+          ? osForm.clusterMetricsApiType.trim() !== ''
+          : osForm.indices.trim() !== '' && osForm.triggerCondition.trim() !== '');
 
   const handleSave = () => {
     if (backendType === 'prometheus') {
@@ -1244,6 +1310,9 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
       const errors: Record<string, string> = {};
       if (osForm.monitorType === 'ppl_monitor') {
         if (!osForm.query.trim()) errors.query = 'PPL query is required';
+      } else if (osForm.monitorType === 'cluster_metrics_monitor') {
+        if (!osForm.clusterMetricsApiType.trim())
+          errors.clusterMetricsApiType = 'API type is required';
       } else {
         if (!osForm.indices.trim()) errors.indices = 'At least one index pattern is required';
         if (!osForm.triggerCondition.trim())

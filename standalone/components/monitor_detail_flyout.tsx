@@ -42,6 +42,8 @@ import {
   AlertHistoryEntry,
   NotificationRouting,
   SuppressionRule,
+  OSMonitor,
+  OSMonitorInput,
 } from '../../core';
 
 // ============================================================================
@@ -223,6 +225,12 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
     : monitor.query;
   const queryLang = monitor.datasourceType === 'prometheus' ? 'promql' : 'json';
 
+  // Detect monitor kind from raw data for type-specific rendering
+  const monitorKind = monitor.labels?.monitor_kind as string | undefined;
+  const rawMonitor = (full as UnifiedRule).raw as OSMonitor | undefined;
+  const rawInput: OSMonitorInput | undefined =
+    rawMonitor && 'inputs' in rawMonitor ? rawMonitor.inputs?.[0] : undefined;
+
   // Alert history columns
   const historyColumns = [
     {
@@ -358,16 +366,87 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
 
           <EuiSpacer size="m" />
 
-          {/* Query Definition */}
+          {/* Query Definition — type-aware rendering */}
           <EuiAccordion
             id="queryDef"
-            buttonContent={<strong>Query Definition</strong>}
+            buttonContent={
+              <strong>
+                {monitorKind === 'cluster_metrics'
+                  ? 'Cluster API Configuration'
+                  : monitorKind === 'doc'
+                    ? 'Document-Level Queries'
+                    : 'Query Definition'}
+              </strong>
+            }
             initialIsOpen={true}
             paddingSize="m"
           >
-            <EuiCodeBlock language={queryLang} fontSize="s" paddingSize="m" isCopyable>
-              {queryDisplay}
-            </EuiCodeBlock>
+            {monitorKind === 'cluster_metrics' && rawInput && 'uri' in rawInput ? (
+              <>
+                <EuiDescriptionList
+                  type="column"
+                  compressed
+                  listItems={[
+                    { title: 'API Type', description: rawInput.uri.api_type },
+                    { title: 'Path', description: rawInput.uri.path || '—' },
+                    { title: 'Path Params', description: rawInput.uri.path_params || '—' },
+                    { title: 'URL', description: rawInput.uri.url || '—' },
+                    {
+                      title: 'Clusters',
+                      description: rawInput.uri.clusters?.join(', ') || 'Local cluster',
+                    },
+                  ]}
+                />
+              </>
+            ) : monitorKind === 'doc' && rawInput && 'doc_level_input' in rawInput ? (
+              <>
+                <EuiText size="s">
+                  <strong>Target indices:</strong>{' '}
+                  {rawInput.doc_level_input.indices?.join(', ') || '—'}
+                </EuiText>
+                {rawInput.doc_level_input.description && (
+                  <EuiText size="xs" color="subdued">
+                    {rawInput.doc_level_input.description}
+                  </EuiText>
+                )}
+                <EuiSpacer size="s" />
+                {(rawInput.doc_level_input.queries ?? []).map((q, idx) => (
+                  <EuiPanel
+                    key={q.id || idx}
+                    paddingSize="s"
+                    color="subdued"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <EuiText size="s">
+                      <strong>{q.name}</strong>
+                    </EuiText>
+                    <EuiCodeBlock language="json" fontSize="s" paddingSize="s" isCopyable>
+                      {q.query}
+                    </EuiCodeBlock>
+                    {q.tags?.length > 0 && (
+                      <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
+                        {q.tags.map((tag) => (
+                          <EuiFlexItem grow={false} key={tag}>
+                            <EuiBadge color="hollow">{tag}</EuiBadge>
+                          </EuiFlexItem>
+                        ))}
+                      </EuiFlexGroup>
+                    )}
+                  </EuiPanel>
+                ))}
+              </>
+            ) : (
+              <>
+                <EuiCodeBlock language={queryLang} fontSize="s" paddingSize="m" isCopyable>
+                  {queryDisplay}
+                </EuiCodeBlock>
+                {monitorKind === 'bucket' && (
+                  <EuiText size="xs" color="subdued">
+                    <em>Bucket-level monitor — triggers evaluate per aggregation bucket</em>
+                  </EuiText>
+                )}
+              </>
+            )}
             {monitor.condition && (
               <>
                 <EuiSpacer size="s" />

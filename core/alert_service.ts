@@ -400,11 +400,25 @@ export class MultiBackendAlertService {
       // Destination fetch is best-effort
     }
 
-    // Build description from trigger message template
+    // Build description from trigger message template or input type
     const trigger = monitor.triggers[0];
-    const description =
-      trigger?.actions?.[0]?.message_template?.source ||
-      `${summary.monitorType} monitor targeting ${monitor.inputs[0]?.search?.indices?.join(', ') || 'unknown indices'}`;
+    const kind = detectMonitorKind(monitor);
+    const input = monitor.inputs[0];
+    let descriptionFallback: string;
+    if (kind === 'cluster_metrics' && input && 'uri' in input) {
+      descriptionFallback = `Cluster metrics monitor: ${input.uri.api_type} (${input.uri.path})`;
+    } else if (kind === 'doc' && input && 'doc_level_input' in input) {
+      const docIndices = input.doc_level_input.indices?.join(', ') || 'unknown indices';
+      const queryCount = input.doc_level_input.queries?.length ?? 0;
+      descriptionFallback = `Document-level monitor targeting ${docIndices} with ${queryCount} queries`;
+    } else if (kind === 'bucket' && input && 'search' in input) {
+      const bucketIndices = input.search.indices?.join(', ') || 'unknown indices';
+      descriptionFallback = `Bucket aggregation monitor targeting ${bucketIndices}`;
+    } else {
+      const queryIndices = input && 'search' in input ? input.search.indices?.join(', ') : null;
+      descriptionFallback = `${summary.monitorType} monitor targeting ${queryIndices || 'unknown indices'}`;
+    }
+    const description = trigger?.actions?.[0]?.message_template?.source || descriptionFallback;
 
     // Fetch condition preview via monitor dry run
     let conditionPreviewData: Array<{ timestamp: number; value: number }> = [];
@@ -888,17 +902,44 @@ function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlertSummary {
   };
 }
 
+/**
+ * Detect the actual monitor kind from the OS monitor's inputs,
+ * since cluster metrics monitors share monitor_type 'query_level_monitor'.
+ */
+function detectMonitorKind(m: OSMonitor): 'query' | 'bucket' | 'doc' | 'cluster_metrics' {
+  if (m.monitor_type === 'bucket_level_monitor') return 'bucket';
+  if (m.monitor_type === 'doc_level_monitor') return 'doc';
+  if (m.inputs[0] && 'uri' in m.inputs[0]) return 'cluster_metrics';
+  return 'query';
+}
+
 function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleSummary {
   const trigger = m.triggers[0];
   const isEnabled = m.enabled;
+  const kind = detectMonitorKind(m);
+  const input = m.inputs[0];
 
-  // Derive labels from actual monitor metadata (indices targeted)
+  // Derive labels from actual monitor metadata per input type
   const labels: Record<string, string> = {};
-  const indices = m.inputs[0]?.search?.indices ?? [];
-  if (indices.length > 0) {
-    labels.indices = indices.join(',');
+  if (input && 'search' in input) {
+    const indices = input.search.indices ?? [];
+    if (indices.length > 0) {
+      labels.indices = indices.join(',');
+    }
+  } else if (input && 'uri' in input) {
+    labels.api_type = input.uri.api_type;
+    if (input.uri.clusters?.length > 0) {
+      labels.clusters = input.uri.clusters.join(',');
+    }
+  } else if (input && 'doc_level_input' in input) {
+    const indices = input.doc_level_input.indices ?? [];
+    if (indices.length > 0) {
+      labels.indices = indices.join(',');
+    }
+    labels.doc_queries = String(input.doc_level_input.queries?.length ?? 0);
   }
   labels.monitor_type = m.monitor_type;
+  labels.monitor_kind = kind;
   labels.datasource_id = dsId;
 
   const annotations: Record<string, string> = {};
@@ -908,19 +949,40 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
 
   const severity = trigger ? osSeverityToUnified(trigger.severity) : 'info';
   const status: MonitorStatus = !isEnabled ? 'disabled' : 'active';
-  // Derive monitor type from OS monitor_type and index patterns
-  let monitorType: MonitorType;
-  if (m.monitor_type === 'bucket_level_monitor') {
-    monitorType = 'infrastructure';
-  } else if (m.monitor_type === 'doc_level_monitor') {
-    monitorType = 'log';
-  } else if (indices.some((i) => i.startsWith('logs-') || i.startsWith('ss4o_logs'))) {
-    monitorType = 'log';
-  } else if (indices.some((i) => i.startsWith('otel-v1-apm') || i.startsWith('ss4o_traces'))) {
-    monitorType = 'apm';
+
+  // Extract query string based on input type
+  let query: string;
+  if (input && 'uri' in input) {
+    query = `${input.uri.api_type}: ${input.uri.path}`;
+  } else if (input && 'doc_level_input' in input) {
+    const docQueries = input.doc_level_input.queries ?? [];
+    query = docQueries.map((q) => `${q.name}: ${q.query}`).join('; ') || '(no queries)';
+  } else if (input && 'search' in input) {
+    query = JSON.stringify(input.search.query ?? {});
   } else {
-    monitorType = 'metric';
+    query = '{}';
   }
+
+  // Derive monitor type from kind and index patterns
+  let monitorType: MonitorType;
+  if (kind === 'cluster_metrics') {
+    monitorType = 'cluster_metrics';
+  } else if (kind === 'doc') {
+    monitorType = 'log';
+  } else if (kind === 'bucket') {
+    monitorType = 'infrastructure';
+  } else {
+    // query-level: derive from index patterns
+    const indices = input && 'search' in input ? (input.search.indices ?? []) : [];
+    if (indices.some((i) => i.startsWith('logs-') || i.startsWith('ss4o_logs'))) {
+      monitorType = 'log';
+    } else if (indices.some((i) => i.startsWith('otel-v1-apm') || i.startsWith('ss4o_traces'))) {
+      monitorType = 'apm';
+    } else {
+      monitorType = 'metric';
+    }
+  }
+
   const destNames = trigger?.actions?.map((a) => a.name) ?? [];
   const intervalUnit = m.schedule.period.unit;
   const intervalVal = m.schedule.period.interval;
@@ -933,7 +995,7 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
     name: m.name,
     enabled: isEnabled,
     severity,
-    query: JSON.stringify(m.inputs[0]?.search?.query ?? {}),
+    query,
     condition: trigger?.condition?.script?.source ?? '',
     labels,
     annotations,
