@@ -7,7 +7,7 @@
  * Alert Detail Flyout — drill-down view for a single alert
  * showing full context, labels, annotations, and actions.
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EuiFlyout,
   EuiFlyoutHeader,
@@ -61,9 +61,31 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   onAcknowledge,
   onSilence,
 }) => {
+  const [detailData, setDetailData] = useState<typeof alert | null>(null);
+
+  // Fetch full detail (with raw data) from the API when flyout opens
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/alerts/${encodeURIComponent(alert.datasourceId)}/${encodeURIComponent(alert.id)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setDetailData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [alert.datasourceId, alert.id]);
+
+  // Merge detail data over summary — detail has `raw` and potentially richer labels
+  const mergedAlert = detailData ? { ...alert, ...detailData } : alert;
+  // Re-alias so the rest of the component works unchanged
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const alertData = mergedAlert;
+
   const dsName = datasources.find((d) => d.id === alert.datasourceId)?.name || alert.datasourceId;
-  const labels = alert.labels || {};
-  const annotations = alert.annotations || {};
+  const labels = alertData.labels || {};
+  const annotations = alertData.annotations || {};
 
   // Generate a mock AI analysis for the alert
   const aiAnalysis = getAlertAiAnalysis(alert);
@@ -288,7 +310,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
           paddingSize="m"
         >
           <EuiCodeBlock language="json" fontSize="s" paddingSize="m" isCopyable>
-            {JSON.stringify(alert.raw, null, 2)}
+            {JSON.stringify(alertData.raw ?? alert, null, 2)}
           </EuiCodeBlock>
         </EuiAccordion>
 

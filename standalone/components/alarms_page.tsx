@@ -131,8 +131,11 @@ export class AlarmsApiClient {
   }
 
   // Alert actions
-  async acknowledgeAlert(id: string): Promise<any> {
-    return this.http.post(`/api/alerts/${id}/acknowledge`);
+  async acknowledgeAlert(id: string, datasourceId?: string, monitorId?: string): Promise<any> {
+    return this.http.post(`/api/alerts/${id}/acknowledge`, {
+      datasourceId,
+      monitorId,
+    });
   }
   async silenceAlert(id: string, duration?: string): Promise<any> {
     return this.http.post(`/api/alerts/${id}/silence`, { duration: duration || '1h' });
@@ -534,10 +537,11 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   // ---- Handlers ----
 
   const handleAcknowledgeAlert = async (alertId: string) => {
+    const alert = alerts.find((a) => a.id === alertId);
     try {
-      await apiClient.acknowledgeAlert(alertId);
+      await apiClient.acknowledgeAlert(alertId, alert?.datasourceId, alert?.labels?.monitor_id);
     } catch (_e) {
-      /* fallback */
+      /* fallback — optimistic update still applies */
     }
     setAlerts((prev) =>
       prev.map((a) =>

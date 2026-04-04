@@ -502,6 +502,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
@@ -1492,7 +1494,19 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                       sorting={{
                         sort: { field: sortField as any, direction: sortDirection },
                       }}
-                      onChange={onTableChange}
+                      pagination={{
+                        pageIndex,
+                        pageSize,
+                        totalItemCount: filtered.length,
+                        pageSizeOptions: [10, 20, 50],
+                      }}
+                      onChange={(criteria: any) => {
+                        onTableChange(criteria);
+                        if (criteria.page) {
+                          setPageIndex(criteria.page.index);
+                          setPageSize(criteria.page.size);
+                        }
+                      }}
                       rowProps={(item: UnifiedRule) => ({
                         style: selectedIds.has(item.id)
                           ? { backgroundColor: '#F0F5FF' }

@@ -7,7 +7,7 @@
  * Monitor Detail Flyout — comprehensive view of a single monitor's
  * configuration, behavior, and impact with quick actions.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EuiFlyout,
   EuiFlyoutHeader,
@@ -209,16 +209,39 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
   onClone,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [detail, setDetail] = useState<UnifiedRule | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
 
-  // Safe defaults for optional detail fields that may be undefined on stale data
-  const alertHistory = monitor.alertHistory ?? [];
-  const conditionPreviewData = monitor.conditionPreviewData ?? [];
-  const notificationRouting = monitor.notificationRouting ?? [];
-  const suppressionRules = monitor.suppressionRules ?? [];
-  const description = monitor.description ?? '';
-  const aiSummary = monitor.aiSummary ?? 'No AI summary available.';
-  const evaluationInterval = monitor.evaluationInterval ?? '—';
-  const pendingPeriod = monitor.pendingPeriod ?? '—';
+  // Fetch full detail from the API when flyout opens
+  useEffect(() => {
+    let cancelled = false;
+    setDetailLoading(true);
+    const dsId = monitor.datasourceId;
+    const ruleId = monitor.id;
+    fetch(`/api/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setDetail(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monitor.datasourceId, monitor.id]);
+
+  // Use detail data when available, fall back to summary props
+  const full = detail || monitor;
+  const alertHistory = (full as UnifiedRule).alertHistory ?? [];
+  const conditionPreviewData = (full as UnifiedRule).conditionPreviewData ?? [];
+  const notificationRouting = (full as UnifiedRule).notificationRouting ?? [];
+  const suppressionRules = (full as UnifiedRule).suppressionRules ?? [];
+  const description = (full as UnifiedRule).description ?? '';
+  const aiSummary = (full as UnifiedRule).aiSummary ?? 'No AI summary available.';
+  const evaluationInterval = full.evaluationInterval ?? '—';
+  const pendingPeriod = full.pendingPeriod ?? '—';
 
   const isJson = (s: string) => {
     try {
