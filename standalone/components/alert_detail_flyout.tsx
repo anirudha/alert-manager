@@ -111,9 +111,11 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
           </EuiFlexItem>
         </EuiFlexGroup>
         <EuiSpacer size="s" />
-        <EuiText size="s" color="subdued">
-          {alert.message || 'No message available'}
-        </EuiText>
+        {(alert.message || annotations.summary || annotations.description) && (
+          <EuiText size="s" color="subdued">
+            {alert.message || annotations.summary || annotations.description}
+          </EuiText>
+        )}
       </EuiFlyoutHeader>
 
       <EuiFlyoutBody>

@@ -494,11 +494,13 @@ const AlertsByMonitor: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
         <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <span
             style={{
-              width: 90,
+              minWidth: 120,
+              maxWidth: 180,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap' as const,
               color: '#343741',
+              fontSize: 11,
             }}
             title={name}
           >

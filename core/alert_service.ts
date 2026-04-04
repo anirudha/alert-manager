@@ -334,7 +334,20 @@ export class MultiBackendAlertService {
    * cannot be fetched from the API are marked as mock placeholders.
    */
   async getRuleDetail(dsId: string, ruleId: string): Promise<UnifiedRule | null> {
-    const ds = await this.datasourceService.get(dsId);
+    // Handle workspace-scoped datasource IDs (e.g., "ds-2::default" → parent "ds-2")
+    let ds = await this.datasourceService.get(dsId);
+    if (!ds && dsId.includes('::')) {
+      const parentId = dsId.split('::')[0];
+      const parentDs = await this.datasourceService.get(parentId);
+      if (parentDs) {
+        ds = {
+          ...parentDs,
+          id: dsId,
+          workspaceId: dsId.split('::')[1],
+          parentDatasourceId: parentId,
+        };
+      }
+    }
     if (!ds) return null;
 
     if (ds.type === 'opensearch' && this.osBackend) {
@@ -471,7 +484,20 @@ export class MultiBackendAlertService {
    * Get full detail for a single alert including raw backend data.
    */
   async getAlertDetail(dsId: string, alertId: string): Promise<UnifiedAlert | null> {
-    const ds = await this.datasourceService.get(dsId);
+    // Handle workspace-scoped datasource IDs (e.g., "ds-2::default" → parent "ds-2")
+    let ds = await this.datasourceService.get(dsId);
+    if (!ds && dsId.includes('::')) {
+      const parentId = dsId.split('::')[0];
+      const parentDs = await this.datasourceService.get(parentId);
+      if (parentDs) {
+        ds = {
+          ...parentDs,
+          id: dsId,
+          workspaceId: dsId.split('::')[1],
+          parentDatasourceId: parentId,
+        };
+      }
+    }
     if (!ds) return null;
 
     if (ds.type === 'opensearch' && this.osBackend) {
@@ -841,8 +867,6 @@ function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlertSummary {
     labels: {
       monitor_name: a.monitor_name,
       trigger_name: a.trigger_name,
-      monitor_id: a.monitor_id,
-      trigger_id: a.trigger_id,
     },
     annotations: {},
   };
@@ -884,12 +908,19 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
 
   const severity = trigger ? osSeverityToUnified(trigger.severity) : 'info';
   const status: MonitorStatus = !isEnabled ? 'disabled' : 'active';
-  const monitorType: MonitorType =
-    m.monitor_type === 'bucket_level_monitor'
-      ? 'infrastructure'
-      : m.monitor_type === 'doc_level_monitor'
-        ? 'log'
-        : 'metric';
+  // Derive monitor type from OS monitor_type and index patterns
+  let monitorType: MonitorType;
+  if (m.monitor_type === 'bucket_level_monitor') {
+    monitorType = 'infrastructure';
+  } else if (m.monitor_type === 'doc_level_monitor') {
+    monitorType = 'log';
+  } else if (indices.some((i) => i.startsWith('logs-') || i.startsWith('ss4o_logs'))) {
+    monitorType = 'log';
+  } else if (indices.some((i) => i.startsWith('otel-v1-apm') || i.startsWith('ss4o_traces'))) {
+    monitorType = 'apm';
+  } else {
+    monitorType = 'metric';
+  }
   const destNames = trigger?.actions?.map((a) => a.name) ?? [];
   const intervalUnit = m.schedule.period.unit;
   const intervalVal = m.schedule.period.interval;
@@ -908,7 +939,7 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
     annotations,
     monitorType,
     status,
-    healthStatus: 'healthy',
+    healthStatus: !isEnabled ? 'no_data' : 'healthy',
     createdBy: '',
     createdAt: new Date(m.last_update_time - 86400000).toISOString(),
     lastModified: new Date(m.last_update_time).toISOString(),
