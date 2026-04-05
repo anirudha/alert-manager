@@ -183,34 +183,32 @@ describe('SuppressionRuleService', () => {
     });
 
     it('handles recurring rules that match the current day', () => {
-      const now = new Date();
-      const currentDay = now.getUTCDay();
-      // Build a recurring rule that is active now
-      // Use start/end times that bracket the current UTC hour
-      const startHour = now.getUTCHours() > 0 ? now.getUTCHours() - 1 : 0;
-      const endHour = now.getUTCHours() < 23 ? now.getUTCHours() + 1 : 23;
+      // Pin to a known time: Wednesday 2025-06-11T14:30:00Z (day=3)
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2025-06-11T14:30:00Z'));
 
       service.create({
         name: 'Recurring Today',
         description: '',
         matchers: { env: 'staging' },
         scheduleType: 'recurring',
-        startTime: `2024-01-01T${String(startHour).padStart(2, '0')}:00:00Z`,
-        endTime: `2024-01-01T${String(endHour).padStart(2, '0')}:59:00Z`,
-        recurrence: { days: [currentDay], timezone: 'UTC' },
+        startTime: '2024-01-01T13:00:00Z',
+        endTime: '2024-01-01T15:59:00Z',
+        recurrence: { days: [3], timezone: 'UTC' }, // Wednesday
         createdBy: 'admin',
       });
 
       const active = service.getActiveRules();
       expect(active.length).toBeGreaterThanOrEqual(1);
       expect(active.some((r) => r.name === 'Recurring Today')).toBe(true);
+
+      jest.useRealTimers();
     });
 
     it('excludes recurring rules that do not match current day', () => {
-      const now = new Date();
-      const currentDay = now.getUTCDay();
-      // Pick a day that is NOT today
-      const otherDay = (currentDay + 3) % 7;
+      // Pin to Wednesday (day=3), rule is for Saturday (day=6)
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2025-06-11T14:30:00Z'));
 
       service.create({
         name: 'Recurring Other Day',
@@ -219,12 +217,14 @@ describe('SuppressionRuleService', () => {
         scheduleType: 'recurring',
         startTime: '2024-01-01T00:00:00Z',
         endTime: '2024-01-01T23:59:00Z',
-        recurrence: { days: [otherDay], timezone: 'UTC' },
+        recurrence: { days: [6], timezone: 'UTC' }, // Saturday, not Wednesday
         createdBy: 'admin',
       });
 
       const active = service.getActiveRules();
       expect(active.every((r) => r.name !== 'Recurring Other Day')).toBe(true);
+
+      jest.useRealTimers();
     });
 
     it('handles recurring rules with no recurrence field (falls through to date range)', () => {
