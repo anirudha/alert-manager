@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Notification Routing Panel — read-only view of live Alertmanager configuration.
  * Fetches the parsed config from GET /api/alertmanager/config (routed through
@@ -96,7 +101,7 @@ function flattenRoutes(route: AlertmanagerRoute | null | undefined, depth = 0): 
     repeatInterval: route.repeat_interval || '',
     continueMatching: route.continue || false,
   };
-  const children = (route.routes || []).flatMap(r => flattenRoutes(r, depth + 1));
+  const children = (route.routes || []).flatMap((r) => flattenRoutes(r, depth + 1));
   return [flat, ...children];
 }
 
@@ -143,7 +148,9 @@ export interface NotificationRoutingPanelProps {
   apiClient: AlarmsApiClient;
 }
 
-export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> = ({ apiClient }) => {
+export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> = ({
+  apiClient,
+}) => {
   const [config, setConfig] = useState<AlertmanagerConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,18 +167,26 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
     setLoading(false);
   }, [apiClient]);
 
-  useEffect(() => { fetchConfig(); }, [fetchConfig]);
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   if (loading) {
     return (
       <EuiFlexGroup justifyContent="center" style={{ padding: 40 }}>
-        <EuiFlexItem grow={false}><EuiLoadingSpinner size="xl" /></EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiLoadingSpinner size="xl" />
+        </EuiFlexItem>
       </EuiFlexGroup>
     );
   }
 
   if (error) {
-    return <EuiCallOut title="Error loading Alertmanager config" color="danger" iconType="alert">{error}</EuiCallOut>;
+    return (
+      <EuiCallOut title="Error loading Alertmanager config" color="danger" iconType="alert">
+        {error}
+      </EuiCallOut>
+    );
   }
 
   if (!config?.available) {
@@ -181,8 +196,8 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
         title={<h2>Alertmanager Not Available</h2>}
         body={
           <p>
-            No Alertmanager is connected. Ensure your Prometheus datasource in the OpenSearch SQL plugin
-            has <code>alertmanager.uri</code> configured in its properties.
+            No Alertmanager is connected. Ensure your Prometheus datasource in the OpenSearch SQL
+            plugin has <code>alertmanager.uri</code> configured in its properties.
           </p>
         }
       />
@@ -209,32 +224,64 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
 
   const routeColumns = [
     {
-      field: 'receiver', name: 'Receiver',
+      field: 'receiver',
+      name: 'Receiver',
       render: (val: string, item: FlatRoute) => (
         <span style={{ paddingLeft: item.depth * 20, fontWeight: item.depth === 0 ? 600 : 400 }}>
           {item.depth > 0 && <span style={{ color: '#98A2B3', marginRight: 6 }}>{'└'}</span>}
-          {val || <EuiText size="xs" color="subdued"><em>inherited</em></EuiText>}
+          {val || (
+            <EuiText size="xs" color="subdued">
+              <em>inherited</em>
+            </EuiText>
+          )}
         </span>
       ),
     },
     {
-      field: 'matchers', name: 'Matchers',
-      render: (m: string[]) => m.length > 0
-        ? m.map((s, i) => <EuiBadge key={i} color="hollow">{s}</EuiBadge>)
-        : <EuiBadge color="default">catch-all</EuiBadge>,
+      field: 'matchers',
+      name: 'Matchers',
+      render: (m: string[]) =>
+        m.length > 0 ? (
+          m.map((s, i) => (
+            <EuiBadge key={i} color="hollow">
+              {s}
+            </EuiBadge>
+          ))
+        ) : (
+          <EuiBadge color="default">catch-all</EuiBadge>
+        ),
     },
     {
-      field: 'groupBy', name: 'Group By',
-      render: (g: string[]) => g.length > 0
-        ? g.map((s, i) => <EuiBadge key={i} color="primary">{s}</EuiBadge>)
-        : <EuiText size="xs" color="subdued">—</EuiText>,
+      field: 'groupBy',
+      name: 'Group By',
+      render: (g: string[]) =>
+        g.length > 0 ? (
+          g.map((s, i) => (
+            <EuiBadge key={i} color="primary">
+              {s}
+            </EuiBadge>
+          ))
+        ) : (
+          <EuiText size="xs" color="subdued">
+            —
+          </EuiText>
+        ),
     },
     { field: 'groupWait', name: 'Wait', width: '70px', render: (v: string) => v || '—' },
     { field: 'groupInterval', name: 'Interval', width: '80px', render: (v: string) => v || '—' },
     { field: 'repeatInterval', name: 'Repeat', width: '80px', render: (v: string) => v || '—' },
     {
-      field: 'continueMatching', name: 'Continue', width: '70px',
-      render: (v: boolean) => v ? <EuiBadge color="warning">yes</EuiBadge> : <EuiText size="xs" color="subdued">no</EuiText>,
+      field: 'continueMatching',
+      name: 'Continue',
+      width: '70px',
+      render: (v: boolean) =>
+        v ? (
+          <EuiBadge color="warning">yes</EuiBadge>
+        ) : (
+          <EuiText size="xs" color="subdued">
+            no
+          </EuiText>
+        ),
     },
   ];
 
@@ -245,7 +292,8 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
   const receiverColumns = [
     { field: 'name', name: 'Receiver', sortable: true },
     {
-      field: 'integrations', name: 'Integrations',
+      field: 'integrations',
+      name: 'Integrations',
       render: (intgs: Array<{ type: string; summary: string }>) =>
         intgs.map((intg, i) => (
           <EuiToolTip key={i} content={intg.summary}>
@@ -265,25 +313,52 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
     {
       name: 'Source Matchers',
       render: (rule: InhibitRule) => {
-        const matchers = rule.source_matchers || Object.entries(rule.source_match || {}).map(([k, v]) => `${k}="${v}"`);
-        return matchers.map((m, i) => <EuiBadge key={i} color="danger">{m}</EuiBadge>);
+        const matchers =
+          rule.source_matchers ||
+          Object.entries(rule.source_match || {}).map(([k, v]) => `${k}="${v}"`);
+        return matchers.map((m, i) => (
+          <EuiBadge key={i} color="danger">
+            {m}
+          </EuiBadge>
+        ));
       },
     },
     {
       name: 'Target Matchers',
       render: (rule: InhibitRule) => {
-        const matchers = rule.target_matchers || Object.entries(rule.target_match || {}).map(([k, v]) => `${k}="${v}"`);
-        return matchers.map((m, i) => <EuiBadge key={i} color="warning">{m}</EuiBadge>);
+        const matchers =
+          rule.target_matchers ||
+          Object.entries(rule.target_match || {}).map(([k, v]) => `${k}="${v}"`);
+        return matchers.map((m, i) => (
+          <EuiBadge key={i} color="warning">
+            {m}
+          </EuiBadge>
+        ));
       },
     },
     {
-      field: 'equal', name: 'Equal Labels',
-      render: (labels: string[]) => (labels || []).map((l, i) => <EuiBadge key={i} color="hollow">{l}</EuiBadge>),
+      field: 'equal',
+      name: 'Equal Labels',
+      render: (labels: string[]) =>
+        (labels || []).map((l, i) => (
+          <EuiBadge key={i} color="hollow">
+            {l}
+          </EuiBadge>
+        )),
     },
   ];
 
   return (
     <div>
+      {/* Read-only explanation banner (UX audit M6 + S-m8) */}
+      <EuiCallOut title="Read-only view" color="primary" iconType="iInCircle" size="s">
+        <p>
+          Routing configuration is managed via the Alertmanager configuration file or API. This view
+          shows the current routing tree for all Prometheus datasources.
+        </p>
+      </EuiCallOut>
+      <EuiSpacer size="m" />
+
       {/* Cluster status bar */}
       <EuiPanel paddingSize="s" hasBorder>
         <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
@@ -293,13 +368,19 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
             </EuiHealth>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiText size="xs"><strong>Alertmanager</strong> v{version}</EuiText>
+            <EuiText size="xs">
+              <strong>Alertmanager</strong> v{version}
+            </EuiText>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">Uptime: {formatUptime(config.uptime)}</EuiText>
+            <EuiText size="xs" color="subdued">
+              Uptime: {formatUptime(config.uptime)}
+            </EuiText>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">Peers: {cluster?.peerCount ?? 0}</EuiText>
+            <EuiText size="xs" color="subdued">
+              Peers: {cluster?.peerCount ?? 0}
+            </EuiText>
           </EuiFlexItem>
           <EuiFlexItem grow />
           <EuiFlexItem grow={false}>
@@ -313,32 +394,47 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
       <EuiSpacer size="l" />
 
       {/* Route tree */}
-      <EuiTitle size="xs"><h3>Route Tree</h3></EuiTitle>
+      <EuiTitle size="xs">
+        <h3>Route Tree</h3>
+      </EuiTitle>
       <EuiSpacer size="s" />
-      {routes.length > 0
-        ? <EuiBasicTable items={routes} columns={routeColumns} />
-        : <EuiText size="s" color="subdued">No routes configured</EuiText>
-      }
+      {routes.length > 0 ? (
+        <EuiBasicTable items={routes} columns={routeColumns} />
+      ) : (
+        <EuiText size="s" color="subdued">
+          No routes configured
+        </EuiText>
+      )}
 
       <EuiSpacer size="l" />
 
       {/* Receivers */}
-      <EuiTitle size="xs"><h3>Receivers ({receivers.length})</h3></EuiTitle>
+      <EuiTitle size="xs">
+        <h3>Receivers ({receivers.length})</h3>
+      </EuiTitle>
       <EuiSpacer size="s" />
-      {receivers.length > 0
-        ? <EuiBasicTable items={receivers} columns={receiverColumns} />
-        : <EuiText size="s" color="subdued">No receivers configured</EuiText>
-      }
+      {receivers.length > 0 ? (
+        <EuiBasicTable items={receivers} columns={receiverColumns} />
+      ) : (
+        <EuiText size="s" color="subdued">
+          No receivers configured
+        </EuiText>
+      )}
 
       <EuiSpacer size="l" />
 
       {/* Inhibit rules */}
-      <EuiTitle size="xs"><h3>Inhibit Rules ({inhibitRules.length})</h3></EuiTitle>
+      <EuiTitle size="xs">
+        <h3>Inhibit Rules ({inhibitRules.length})</h3>
+      </EuiTitle>
       <EuiSpacer size="s" />
-      {inhibitRules.length > 0
-        ? <EuiBasicTable items={inhibitRules} columns={inhibitColumns} />
-        : <EuiText size="s" color="subdued">No inhibit rules configured</EuiText>
-      }
+      {inhibitRules.length > 0 ? (
+        <EuiBasicTable items={inhibitRules} columns={inhibitColumns} />
+      ) : (
+        <EuiText size="s" color="subdued">
+          No inhibit rules configured
+        </EuiText>
+      )}
     </div>
   );
 };

@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Alert service — orchestrates OpenSearch and Prometheus backends,
  * and provides a unified view for the UI.
@@ -14,23 +19,36 @@ import {
   OSAlert,
   OSMonitor,
   PromAlert,
+  PromAlertingRule,
   PromRuleGroup,
   ProgressiveResponse,
   PaginatedResponse,
-  UnifiedAlert,
+  UnifiedAlertSummary,
   UnifiedAlertSeverity,
   UnifiedAlertState,
   UnifiedFetchOptions,
+  UnifiedAlert,
   UnifiedRule,
-  MonitorType,
-  MonitorStatus,
-  MonitorHealthStatus,
+  UnifiedRuleSummary,
   AlertHistoryEntry,
   NotificationRouting,
-  SuppressionRule,
+  MonitorType,
+  MonitorStatus,
 } from './types';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_RESULTS = 5_000;
+
+/** Typed timeout error for reliable detection without string matching. */
+class TimeoutError extends Error {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number
+  ) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
 
 export class MultiBackendAlertService {
   private osBackend?: OpenSearchBackend;
@@ -70,7 +88,11 @@ export class MultiBackendAlertService {
     return this.osBackend!.createMonitor(ds, monitor);
   }
 
-  async updateOSMonitor(dsId: string, monitorId: string, input: Partial<OSMonitor>): Promise<OSMonitor | null> {
+  async updateOSMonitor(
+    dsId: string,
+    monitorId: string,
+    input: Partial<OSMonitor>
+  ): Promise<OSMonitor | null> {
     const ds = await this.requireDatasource(dsId, 'opensearch');
     return this.osBackend!.updateMonitor(ds, monitorId, input);
   }
@@ -85,7 +107,7 @@ export class MultiBackendAlertService {
     return this.osBackend!.getAlerts(ds);
   }
 
-  async acknowledgeOSAlerts(dsId: string, monitorId: string, alertIds: string[]): Promise<any> {
+  async acknowledgeOSAlerts(dsId: string, monitorId: string, alertIds: string[]): Promise<unknown> {
     const ds = await this.requireDatasource(dsId, 'opensearch');
     return this.osBackend!.acknowledgeAlerts(ds, monitorId, alertIds);
   }
@@ -108,17 +130,20 @@ export class MultiBackendAlertService {
   // Unified views (for the UI) — parallel with per-datasource timeout
   // =========================================================================
 
-  async getUnifiedAlerts(options?: UnifiedFetchOptions): Promise<ProgressiveResponse<UnifiedAlert>> {
+  async getUnifiedAlerts(
+    options?: UnifiedFetchOptions
+  ): Promise<ProgressiveResponse<UnifiedAlertSummary>> {
     const datasources = await this.resolveDatasources(options?.dsIds);
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxResults = options?.maxResults ?? DEFAULT_MAX_RESULTS;
     const fetchedAt = new Date().toISOString();
 
     const dsResults = await Promise.allSettled(
-      datasources.map(ds => this.fetchAlertsFromDatasource(ds, timeoutMs, options?.onProgress))
+      datasources.map((ds) => this.fetchAlertsFromDatasource(ds, timeoutMs, options?.onProgress))
     );
 
-    const allResults: UnifiedAlert[] = [];
-    const statusList: DatasourceFetchResult<UnifiedAlert>[] = [];
+    const allResults: UnifiedAlertSummary[] = [];
+    const statusList: DatasourceFetchResult<UnifiedAlertSummary>[] = [];
 
     for (let i = 0; i < datasources.length; i++) {
       const settled = dsResults[i];
@@ -126,7 +151,7 @@ export class MultiBackendAlertService {
         allResults.push(...settled.value.data);
         statusList.push(settled.value);
       } else {
-        const errResult: DatasourceFetchResult<UnifiedAlert> = {
+        const errResult: DatasourceFetchResult<UnifiedAlertSummary> = {
           datasourceId: datasources[i].id,
           datasourceName: datasources[i].name,
           datasourceType: datasources[i].type,
@@ -140,25 +165,28 @@ export class MultiBackendAlertService {
     }
 
     return {
-      results: allResults,
+      results: allResults.slice(0, maxResults),
       datasourceStatus: statusList,
       totalDatasources: datasources.length,
-      completedDatasources: statusList.filter(s => s.status === 'success').length,
+      completedDatasources: statusList.filter((s) => s.status === 'success').length,
       fetchedAt,
     };
   }
 
-  async getUnifiedRules(options?: UnifiedFetchOptions): Promise<ProgressiveResponse<UnifiedRule>> {
+  async getUnifiedRules(
+    options?: UnifiedFetchOptions
+  ): Promise<ProgressiveResponse<UnifiedRuleSummary>> {
     const datasources = await this.resolveDatasources(options?.dsIds);
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxResults = options?.maxResults ?? DEFAULT_MAX_RESULTS;
     const fetchedAt = new Date().toISOString();
 
     const dsResults = await Promise.allSettled(
-      datasources.map(ds => this.fetchRulesFromDatasource(ds, timeoutMs, options?.onProgress))
+      datasources.map((ds) => this.fetchRulesFromDatasource(ds, timeoutMs, options?.onProgress))
     );
 
-    const allResults: UnifiedRule[] = [];
-    const statusList: DatasourceFetchResult<UnifiedRule>[] = [];
+    const allResults: UnifiedRuleSummary[] = [];
+    const statusList: DatasourceFetchResult<UnifiedRuleSummary>[] = [];
 
     for (let i = 0; i < datasources.length; i++) {
       const settled = dsResults[i];
@@ -166,7 +194,7 @@ export class MultiBackendAlertService {
         allResults.push(...settled.value.data);
         statusList.push(settled.value);
       } else {
-        const errResult: DatasourceFetchResult<UnifiedRule> = {
+        const errResult: DatasourceFetchResult<UnifiedRuleSummary> = {
           datasourceId: datasources[i].id,
           datasourceName: datasources[i].name,
           datasourceType: datasources[i].type,
@@ -180,10 +208,10 @@ export class MultiBackendAlertService {
     }
 
     return {
-      results: allResults,
+      results: allResults.slice(0, maxResults),
       datasourceStatus: statusList,
       totalDatasources: datasources.length,
-      completedDatasources: statusList.filter(s => s.status === 'success').length,
+      completedDatasources: statusList.filter((s) => s.status === 'success').length,
       fetchedAt,
     };
   }
@@ -192,26 +220,40 @@ export class MultiBackendAlertService {
   // Paginated unified views — for single-datasource selection with pagination
   // =========================================================================
 
-  async getPaginatedRules(options?: UnifiedFetchOptions): Promise<PaginatedResponse<UnifiedRule>> {
+  async getPaginatedRules(
+    options?: UnifiedFetchOptions
+  ): Promise<PaginatedResponse<UnifiedRuleSummary>> {
     const page = options?.page ?? 1;
-    const pageSize = options?.pageSize ?? 20;
+    const pageSize = Math.min(options?.pageSize ?? 20, 100);
     const datasources = await this.resolveDatasources(options?.dsIds);
 
-    const allRules: UnifiedRule[] = [];
+    const allRules: UnifiedRuleSummary[] = [];
     const warnings: DatasourceWarning[] = [];
 
-    for (const ds of datasources) {
-      try {
-        const rules = await this.fetchRulesRaw(ds);
-        allRules.push(...rules);
-      } catch (err) {
-        this.logger.error(`Failed to fetch rules from ${ds.name} (${ds.id}): ${err}`);
-        warnings.push({ datasourceId: ds.id, datasourceName: ds.name, datasourceType: ds.type, error: String(err) });
+    // Fetch from all datasources in parallel
+    const dsResults = await Promise.allSettled(datasources.map((ds) => this.fetchRulesRaw(ds)));
+
+    for (let i = 0; i < datasources.length; i++) {
+      const settled = dsResults[i];
+      if (settled.status === 'fulfilled') {
+        allRules.push(...settled.value);
+      } else {
+        this.logger.error(
+          `Failed to fetch rules from ${datasources[i].name} (${datasources[i].id}): ${settled.reason}`
+        );
+        warnings.push({
+          datasourceId: datasources[i].id,
+          datasourceName: datasources[i].name,
+          datasourceType: datasources[i].type,
+          error: String(settled.reason),
+        });
       }
     }
 
     if (allRules.length === 0 && warnings.length === datasources.length && datasources.length > 0) {
-      throw new Error(`All datasources failed: ${warnings.map(w => `${w.datasourceName}: ${w.error}`).join('; ')}`);
+      throw new Error(
+        `All datasources failed: ${warnings.map((w) => `${w.datasourceName}: ${w.error}`).join('; ')}`
+      );
     }
 
     const total = allRules.length;
@@ -228,26 +270,44 @@ export class MultiBackendAlertService {
     };
   }
 
-  async getPaginatedAlerts(options?: UnifiedFetchOptions): Promise<PaginatedResponse<UnifiedAlert>> {
+  async getPaginatedAlerts(
+    options?: UnifiedFetchOptions
+  ): Promise<PaginatedResponse<UnifiedAlertSummary>> {
     const page = options?.page ?? 1;
-    const pageSize = options?.pageSize ?? 20;
+    const pageSize = Math.min(options?.pageSize ?? 20, 100);
     const datasources = await this.resolveDatasources(options?.dsIds);
 
-    const allAlerts: UnifiedAlert[] = [];
+    const allAlerts: UnifiedAlertSummary[] = [];
     const warnings: DatasourceWarning[] = [];
 
-    for (const ds of datasources) {
-      try {
-        const alerts = await this.fetchAlertsRaw(ds);
-        allAlerts.push(...alerts);
-      } catch (err) {
-        this.logger.error(`Failed to fetch alerts from ${ds.name} (${ds.id}): ${err}`);
-        warnings.push({ datasourceId: ds.id, datasourceName: ds.name, datasourceType: ds.type, error: String(err) });
+    // Fetch from all datasources in parallel
+    const dsResults = await Promise.allSettled(datasources.map((ds) => this.fetchAlertsRaw(ds)));
+
+    for (let i = 0; i < datasources.length; i++) {
+      const settled = dsResults[i];
+      if (settled.status === 'fulfilled') {
+        allAlerts.push(...settled.value);
+      } else {
+        this.logger.error(
+          `Failed to fetch alerts from ${datasources[i].name} (${datasources[i].id}): ${settled.reason}`
+        );
+        warnings.push({
+          datasourceId: datasources[i].id,
+          datasourceName: datasources[i].name,
+          datasourceType: datasources[i].type,
+          error: String(settled.reason),
+        });
       }
     }
 
-    if (allAlerts.length === 0 && warnings.length === datasources.length && datasources.length > 0) {
-      throw new Error(`All datasources failed: ${warnings.map(w => `${w.datasourceName}: ${w.error}`).join('; ')}`);
+    if (
+      allAlerts.length === 0 &&
+      warnings.length === datasources.length &&
+      datasources.length > 0
+    ) {
+      throw new Error(
+        `All datasources failed: ${warnings.map((w) => `${w.datasourceName}: ${w.error}`).join('; ')}`
+      );
     }
 
     const total = allAlerts.length;
@@ -265,14 +325,226 @@ export class MultiBackendAlertService {
   }
 
   // =========================================================================
+  // Detail views — loaded on demand when user opens a flyout
+  // =========================================================================
+
+  /**
+   * Get full detail for a single rule/monitor. Fetches real metadata from
+   * the backend (alert history, destinations, annotations). Fields that
+   * cannot be fetched from the API are marked as mock placeholders.
+   */
+  async getRuleDetail(dsId: string, ruleId: string): Promise<UnifiedRule | null> {
+    // Handle workspace-scoped datasource IDs (e.g., "ds-2::default" → parent "ds-2")
+    let ds = await this.datasourceService.get(dsId);
+    if (!ds && dsId.includes('::')) {
+      const parentId = dsId.split('::')[0];
+      const parentDs = await this.datasourceService.get(parentId);
+      if (parentDs) {
+        ds = {
+          ...parentDs,
+          id: dsId,
+          workspaceId: dsId.split('::')[1],
+          parentDatasourceId: parentId,
+        };
+      }
+    }
+    if (!ds) return null;
+
+    if (ds.type === 'opensearch' && this.osBackend) {
+      return this.getOSRuleDetail(ds, ruleId);
+    } else if (ds.type === 'prometheus' && this.promBackend) {
+      return this.getPromRuleDetail(ds, ruleId);
+    }
+    return null;
+  }
+
+  private async getOSRuleDetail(ds: Datasource, monitorId: string): Promise<UnifiedRule | null> {
+    const monitor = await this.osBackend!.getMonitor(ds, monitorId);
+    if (!monitor) return null;
+
+    const summary = osMonitorToUnifiedRuleSummary(monitor, ds.id);
+
+    // Fetch real alert history for this monitor
+    let alertHistory: AlertHistoryEntry[] = [];
+    try {
+      const { alerts } = await this.osBackend!.getAlerts(ds);
+      const monitorAlerts = alerts.filter((a) => a.monitor_id === monitorId).slice(0, 20);
+      alertHistory = monitorAlerts.map((a) => ({
+        timestamp: new Date(a.start_time).toISOString(),
+        state: osStateToUnified(a.state),
+        value: a.severity,
+        message: a.error_message || (a.state === 'ACTIVE' ? 'Threshold exceeded' : 'Resolved'),
+      }));
+    } catch {
+      // Alert history fetch is best-effort
+    }
+
+    // Build notification routing from trigger actions + destinations
+    let notificationRouting: NotificationRouting[] = [];
+    try {
+      const destinations = await this.osBackend!.getDestinations(ds);
+      const destMap = new Map(destinations.map((d) => [d.id, d]));
+      for (const trigger of monitor.triggers) {
+        for (const action of trigger.actions) {
+          const dest = destMap.get(action.destination_id);
+          notificationRouting.push({
+            channel: dest?.type || 'unknown',
+            destination: dest?.name || action.name || action.destination_id,
+            throttle: action.throttle
+              ? `${action.throttle.value} ${action.throttle.unit}`
+              : undefined,
+          });
+        }
+      }
+    } catch {
+      // Destination fetch is best-effort
+    }
+
+    // Build description from trigger message template or input type
+    const trigger = monitor.triggers[0];
+    const kind = detectMonitorKind(monitor);
+    const input = monitor.inputs[0];
+    let descriptionFallback: string;
+    if (kind === 'cluster_metrics' && input && 'uri' in input) {
+      descriptionFallback = `Cluster metrics monitor: ${input.uri.api_type} (${input.uri.path})`;
+    } else if (kind === 'doc' && input && 'doc_level_input' in input) {
+      const docIndices = input.doc_level_input.indices?.join(', ') || 'unknown indices';
+      const queryCount = input.doc_level_input.queries?.length ?? 0;
+      descriptionFallback = `Document-level monitor targeting ${docIndices} with ${queryCount} queries`;
+    } else if (kind === 'bucket' && input && 'search' in input) {
+      const bucketIndices = input.search.indices?.join(', ') || 'unknown indices';
+      descriptionFallback = `Bucket aggregation monitor targeting ${bucketIndices}`;
+    } else {
+      const queryIndices = input && 'search' in input ? input.search.indices?.join(', ') : null;
+      descriptionFallback = `${summary.monitorType} monitor targeting ${queryIndices || 'unknown indices'}`;
+    }
+    const description = trigger?.actions?.[0]?.message_template?.source || descriptionFallback;
+
+    // Fetch condition preview via monitor dry run
+    let conditionPreviewData: Array<{ timestamp: number; value: number }> = [];
+    try {
+      const execResult = await this.osBackend!.runMonitor(ds, monitorId, true);
+      conditionPreviewData = this.extractOSPreviewData(execResult);
+    } catch {
+      // Dry run is best-effort — some monitors may not support it
+    }
+
+    return {
+      ...summary,
+      description,
+      // MOCK: AI summary not available from OS alerting API
+      aiSummary: '[Not available] AI summaries require integration with an LLM service.',
+      firingPeriod: undefined,
+      lookbackPeriod: undefined,
+      alertHistory,
+      conditionPreviewData,
+      notificationRouting,
+      // Suppression rules from the in-memory service (not from OS API)
+      suppressionRules: [],
+      raw: monitor,
+    };
+  }
+
+  private async getPromRuleDetail(ds: Datasource, ruleId: string): Promise<UnifiedRule | null> {
+    const groups = await this.promBackend!.getRuleGroups(ds);
+
+    // ruleId format: "{dsId}-{groupName}-{ruleName}"
+    for (const group of groups) {
+      for (const rule of group.rules) {
+        if (rule.type !== 'alerting') continue;
+        const alertingRule = rule as PromAlertingRule;
+        const id = `${ds.id}-${group.name}-${alertingRule.name}`;
+        if (id !== ruleId) continue;
+
+        const summary = promRuleToUnified(alertingRule, group.name, ds.id);
+
+        // Real alert history from the rule's embedded alerts
+        const alertHistory: AlertHistoryEntry[] = (alertingRule.alerts || []).map((a) => ({
+          timestamp: a.activeAt,
+          state: promStateToUnified(a.state),
+          value: a.value,
+          message: a.annotations.summary || a.annotations.description || a.state,
+        }));
+
+        // Description from annotations
+        const description =
+          alertingRule.annotations.description ||
+          alertingRule.annotations.summary ||
+          `PromQL rule: ${alertingRule.query}`;
+
+        return {
+          ...summary,
+          description,
+          // MOCK: AI summary not available from Prometheus API
+          aiSummary: '[Not available] AI summaries require integration with an LLM service.',
+          firingPeriod: undefined,
+          lookbackPeriod: undefined,
+          alertHistory,
+          conditionPreviewData: await this.fetchPromPreviewData(
+            ds,
+            alertingRule.query,
+            alertingRule
+          ),
+          notificationRouting: [],
+          suppressionRules: [],
+          raw: alertingRule,
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get full detail for a single alert including raw backend data.
+   */
+  async getAlertDetail(dsId: string, alertId: string): Promise<UnifiedAlert | null> {
+    // Handle workspace-scoped datasource IDs (e.g., "ds-2::default" → parent "ds-2")
+    let ds = await this.datasourceService.get(dsId);
+    if (!ds && dsId.includes('::')) {
+      const parentId = dsId.split('::')[0];
+      const parentDs = await this.datasourceService.get(parentId);
+      if (parentDs) {
+        ds = {
+          ...parentDs,
+          id: dsId,
+          workspaceId: dsId.split('::')[1],
+          parentDatasourceId: parentId,
+        };
+      }
+    }
+    if (!ds) return null;
+
+    if (ds.type === 'opensearch' && this.osBackend) {
+      const { alerts } = await this.osBackend.getAlerts(ds);
+      const alert = alerts.find((a) => a.id === alertId);
+      if (!alert) return null;
+      const summary = osAlertToUnified(alert, ds.id);
+      return { ...summary, raw: alert };
+    } else if (ds.type === 'prometheus' && this.promBackend) {
+      const promAlerts = await this.promBackend.getAlerts(ds);
+      const alert = promAlerts.find(
+        (a) => `${ds.id}-${a.labels.alertname}-${a.labels.instance || ''}` === alertId
+      );
+      if (!alert) return null;
+      const summary = promAlertToUnified(alert, ds.id);
+      return { ...summary, raw: alert };
+    }
+    return null;
+  }
+
+  // =========================================================================
 
   private async fetchAlertsFromDatasource(
     ds: Datasource,
     timeoutMs: number,
-    onProgress?: (result: DatasourceFetchResult<UnifiedAlert>) => void,
-  ): Promise<DatasourceFetchResult<UnifiedAlert>> {
+    onProgress?: (result: DatasourceFetchResult<UnifiedAlertSummary>) => void
+  ): Promise<DatasourceFetchResult<UnifiedAlertSummary>> {
     const start = Date.now();
-    const makeResult = (status: DatasourceFetchStatus, data: UnifiedAlert[], error?: string): DatasourceFetchResult<UnifiedAlert> => ({
+    const makeResult = (
+      status: DatasourceFetchStatus,
+      data: UnifiedAlertSummary[],
+      error?: string
+    ): DatasourceFetchResult<UnifiedAlertSummary> => ({
       datasourceId: ds.id,
       datasourceName: ds.name,
       datasourceType: ds.type,
@@ -286,13 +558,13 @@ export class MultiBackendAlertService {
       const data = await this.withTimeout(
         this.fetchAlertsRaw(ds),
         timeoutMs,
-        `Datasource ${ds.name} timed out after ${timeoutMs}ms`,
+        `Datasource ${ds.name} timed out after ${timeoutMs}ms`
       );
       const result = makeResult('success', data);
       if (onProgress) onProgress(result);
       return result;
     } catch (err) {
-      const isTimeout = String(err).includes('timed out');
+      const isTimeout = err instanceof TimeoutError;
       const result = makeResult(isTimeout ? 'timeout' : 'error', [], String(err));
       this.logger.error(`Failed to fetch alerts from ${ds.name}: ${err}`);
       if (onProgress) onProgress(result);
@@ -303,10 +575,14 @@ export class MultiBackendAlertService {
   private async fetchRulesFromDatasource(
     ds: Datasource,
     timeoutMs: number,
-    onProgress?: (result: DatasourceFetchResult<UnifiedRule>) => void,
-  ): Promise<DatasourceFetchResult<UnifiedRule>> {
+    onProgress?: (result: DatasourceFetchResult<UnifiedRuleSummary>) => void
+  ): Promise<DatasourceFetchResult<UnifiedRuleSummary>> {
     const start = Date.now();
-    const makeResult = (status: DatasourceFetchStatus, data: UnifiedRule[], error?: string): DatasourceFetchResult<UnifiedRule> => ({
+    const makeResult = (
+      status: DatasourceFetchStatus,
+      data: UnifiedRuleSummary[],
+      error?: string
+    ): DatasourceFetchResult<UnifiedRuleSummary> => ({
       datasourceId: ds.id,
       datasourceName: ds.name,
       datasourceType: ds.type,
@@ -320,13 +596,13 @@ export class MultiBackendAlertService {
       const data = await this.withTimeout(
         this.fetchRulesRaw(ds),
         timeoutMs,
-        `Datasource ${ds.name} timed out after ${timeoutMs}ms`,
+        `Datasource ${ds.name} timed out after ${timeoutMs}ms`
       );
       const result = makeResult('success', data);
       if (onProgress) onProgress(result);
       return result;
     } catch (err) {
-      const isTimeout = String(err).includes('timed out');
+      const isTimeout = err instanceof TimeoutError;
       const result = makeResult(isTimeout ? 'timeout' : 'error', [], String(err));
       this.logger.error(`Failed to fetch rules from ${ds.name}: ${err}`);
       if (onProgress) onProgress(result);
@@ -334,8 +610,8 @@ export class MultiBackendAlertService {
     }
   }
 
-  private async fetchAlertsRaw(ds: Datasource): Promise<UnifiedAlert[]> {
-    const results: UnifiedAlert[] = [];
+  private async fetchAlertsRaw(ds: Datasource): Promise<UnifiedAlertSummary[]> {
+    const results: UnifiedAlertSummary[] = [];
     if (ds.type === 'opensearch' && this.osBackend) {
       const { alerts } = await this.osBackend.getAlerts(ds);
       for (const a of alerts) results.push(osAlertToUnified(a, ds.id));
@@ -346,11 +622,11 @@ export class MultiBackendAlertService {
     return results;
   }
 
-  private async fetchRulesRaw(ds: Datasource): Promise<UnifiedRule[]> {
-    const results: UnifiedRule[] = [];
+  private async fetchRulesRaw(ds: Datasource): Promise<UnifiedRuleSummary[]> {
+    const results: UnifiedRuleSummary[] = [];
     if (ds.type === 'opensearch' && this.osBackend) {
       const monitors = await this.osBackend.getMonitors(ds);
-      for (const m of monitors) results.push(osMonitorToUnifiedRule(m, ds.id));
+      for (const m of monitors) results.push(osMonitorToUnifiedRuleSummary(m, ds.id));
     } else if (ds.type === 'prometheus' && this.promBackend) {
       const groups = await this.promBackend.getRuleGroups(ds);
       for (const g of groups) {
@@ -368,7 +644,7 @@ export class MultiBackendAlertService {
 
   private async resolveDatasources(dsIds?: string[]): Promise<Datasource[]> {
     const all = await this.datasourceService.list();
-    const enabled = all.filter(ds => ds.enabled);
+    const enabled = all.filter((ds) => ds.enabled);
     if (!dsIds || dsIds.length === 0) return enabled;
 
     const resolved: Datasource[] = [];
@@ -378,7 +654,7 @@ export class MultiBackendAlertService {
         const parts = id.split('::');
         const parentId = parts[0];
         const wsId = parts[1];
-        const parent = enabled.filter(ds => ds.id === parentId)[0];
+        const parent = enabled.filter((ds) => ds.id === parentId)[0];
         if (parent) {
           // Create a workspace-scoped datasource view
           resolved.push({
@@ -389,7 +665,7 @@ export class MultiBackendAlertService {
           });
         }
       } else {
-        const match = enabled.filter(ds => ds.id === id);
+        const match = enabled.filter((ds) => ds.id === id);
         if (match.length > 0) resolved.push(match[0]);
       }
     }
@@ -398,159 +674,182 @@ export class MultiBackendAlertService {
 
   private withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(message)), ms);
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          reject(new TimeoutError(message, ms));
+        }
+      }, ms);
       promise.then(
-        (val) => { clearTimeout(timer); resolve(val); },
-        (err) => { clearTimeout(timer); reject(err); },
+        (val) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(val);
+          }
+        },
+        (err) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            reject(err);
+          }
+        }
       );
     });
+  }
+
+  /**
+   * Extract preview data from OS monitor dry-run result.
+   * The _execute API returns input_results with the query response.
+   */
+  private extractOSPreviewData(execResult: unknown): Array<{ timestamp: number; value: number }> {
+    const points: Array<{ timestamp: number; value: number }> = [];
+    if (!execResult || typeof execResult !== 'object') return points;
+
+    const result = execResult as Record<string, unknown>;
+    const inputResults = result.input_results as Record<string, unknown> | undefined;
+    const triggerResults = result.trigger_results as Record<string, unknown> | undefined;
+
+    // Try to extract a meaningful numeric value from trigger results
+    if (triggerResults) {
+      const now = Date.now();
+      for (const [, triggerData] of Object.entries(triggerResults)) {
+        const td = triggerData as Record<string, unknown>;
+        // Trigger results contain the evaluated condition value
+        if (typeof td.triggered === 'boolean') {
+          // Use the period_start/period_end from the execution
+          const periodStart = (result.period_start as number) || now - 300_000;
+          const periodEnd = (result.period_end as number) || now;
+          points.push({
+            timestamp: periodEnd,
+            value: td.triggered ? 1 : 0,
+          });
+          // Also add start point for a basic range
+          points.push({
+            timestamp: periodStart,
+            value: td.triggered ? 1 : 0,
+          });
+        }
+      }
+    }
+
+    // Try to extract hit counts from input results (common for query-level monitors)
+    if (inputResults) {
+      const results = inputResults.results as Array<Record<string, unknown>> | undefined;
+      if (results && results.length > 0) {
+        const firstResult = results[0];
+        const hits = firstResult?.hits as Record<string, unknown> | undefined;
+        const total = hits?.total as { value?: number } | number | undefined;
+        const totalValue = typeof total === 'number' ? total : total?.value;
+        if (typeof totalValue === 'number') {
+          points.push({ timestamp: Date.now(), value: totalValue });
+        }
+      }
+    }
+
+    return points.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  /**
+   * Fetch condition preview data for Prometheus rules.
+   *
+   * Uses the DirectQuery query execution API (POST /_plugins/_directquery/_query)
+   * which supports both instant and range PromQL queries via PrometheusQueryHandler.
+   * This is separate from the resource proxy (/_plugins/_directquery/_resources)
+   * which only supports metadata lookups.
+   *
+   * Falls back to extracting evaluation data from rule.alerts[].value if
+   * queryRange is not available or fails.
+   */
+  private async fetchPromPreviewData(
+    ds: Datasource,
+    query: string,
+    rule: PromAlertingRule
+  ): Promise<Array<{ timestamp: number; value: number }>> {
+    // Try queryRange first (works with direct Prometheus, not via DirectQuery)
+    if (this.promBackend?.queryRange) {
+      try {
+        const metricQuery = query.replace(/\s*(>|<|>=|<=|==|!=)\s*[\d.]+\s*$/, '').trim();
+        const now = Math.floor(Date.now() / 1000);
+        const oneHourAgo = now - 3600;
+        const step = 60;
+        const points = await this.promBackend.queryRange(ds, metricQuery, oneHourAgo, now, step);
+        if (points.length > 0) return points;
+      } catch {
+        // queryRange not supported (e.g., DirectQuery) — fall through to extraction
+      }
+    }
+
+    // Fallback: extract data from the rule's embedded alerts and evaluation metadata
+    const points: Array<{ timestamp: number; value: number }> = [];
+
+    // Add data points from currently active alerts (they contain the current value)
+    for (const alert of rule.alerts || []) {
+      const value = parseFloat(alert.value);
+      if (!isNaN(value)) {
+        points.push({
+          timestamp: new Date(alert.activeAt).getTime(),
+          value,
+        });
+      }
+    }
+
+    // Add the last evaluation timestamp with the alert count as a proxy metric
+    if (rule.lastEvaluation) {
+      points.push({
+        timestamp: new Date(rule.lastEvaluation).getTime(),
+        value: (rule.alerts || []).length,
+      });
+    }
+
+    return points.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   private async requireDatasource(dsId: string, expectedType: string): Promise<Datasource> {
     const ds = await this.datasourceService.get(dsId);
     if (!ds) throw new Error(`Datasource not found: ${dsId}`);
-    if (ds.type !== expectedType) throw new Error(`Datasource ${dsId} is ${ds.type}, expected ${expectedType}`);
-    if (expectedType === 'opensearch' && !this.osBackend) throw new Error('No OpenSearch backend registered');
-    if (expectedType === 'prometheus' && !this.promBackend) throw new Error('No Prometheus backend registered');
+    if (ds.type !== expectedType)
+      throw new Error(`Datasource ${dsId} is ${ds.type}, expected ${expectedType}`);
+    if (expectedType === 'opensearch' && !this.osBackend)
+      throw new Error('No OpenSearch backend registered');
+    if (expectedType === 'prometheus' && !this.promBackend)
+      throw new Error('No Prometheus backend registered');
     return ds;
   }
 }
-
-// ============================================================================
-// Mock detail data generators
-// ============================================================================
-
-function generateMockPreviewData(severity: UnifiedAlertSeverity): Array<{ timestamp: number; value: number }> {
-  const now = Date.now();
-  const points: Array<{ timestamp: number; value: number }> = [];
-  const baseValue = severity === 'critical' ? 85 : severity === 'high' ? 60 : 30;
-  for (let i = 29; i >= 0; i--) {
-    const noise = (Math.random() - 0.5) * 20;
-    const spike = i < 5 ? 15 + Math.random() * 10 : 0;
-    points.push({ timestamp: now - i * 60000, value: Math.max(0, baseValue + noise + spike) });
-  }
-  return points;
-}
-
-function generateMockAlertHistory(status: MonitorStatus, severity: UnifiedAlertSeverity): AlertHistoryEntry[] {
-  const now = Date.now();
-  const history: AlertHistoryEntry[] = [];
-  const states: UnifiedAlertState[] = ['active', 'resolved', 'active', 'acknowledged', 'resolved'];
-  for (let i = 0; i < 5; i++) {
-    history.push({
-      timestamp: new Date(now - (i + 1) * 3600000 * (1 + Math.random() * 12)).toISOString(),
-      state: states[i % states.length],
-      value: `${(Math.random() * 100).toFixed(1)}`,
-      message: states[i % states.length] === 'active' ? 'Threshold exceeded' : 'Recovered to normal',
-    });
-  }
-  return history;
-}
-
-function generateMockNotificationRouting(destNames: string[]): NotificationRouting[] {
-  const routes: NotificationRouting[] = [];
-  for (const name of destNames) {
-    if (name.toLowerCase().includes('slack')) {
-      routes.push({ channel: 'Slack', destination: '#ops-alerts', severity: ['critical', 'high'], throttle: '10 minutes' });
-    } else if (name.toLowerCase().includes('email')) {
-      routes.push({ channel: 'Email', destination: 'oncall@example.com', severity: ['critical'], throttle: '30 minutes' });
-    } else {
-      routes.push({ channel: 'Webhook', destination: name, throttle: '5 minutes' });
-    }
-  }
-  if (routes.length === 0) {
-    routes.push({ channel: 'None', destination: 'No routing configured' });
-  }
-  return routes;
-}
-
-function generateMockSuppressionRules(labels: Record<string, string>): SuppressionRule[] {
-  const rules: SuppressionRule[] = [];
-  if (labels.environment === 'staging') {
-    rules.push({
-      id: 'sup-1', name: 'Staging quiet hours', reason: 'Reduce noise from staging environment',
-      schedule: 'Daily 22:00-06:00 UTC', active: true,
-    });
-  }
-  if (labels.team === 'infra') {
-    rules.push({
-      id: 'sup-2', name: 'Maintenance window', reason: 'Weekly infrastructure maintenance',
-      schedule: 'Sat 02:00-06:00 UTC', active: true,
-    });
-  }
-  if (labels.service === 'node-exporter') {
-    rules.push({
-      id: 'sup-3', name: 'Auto-scaling cooldown', reason: 'Suppress during scale-out events',
-      matchLabels: { event: 'autoscale' }, active: false,
-    });
-  }
-  return rules;
-}
-
-const AI_SUMMARIES: Record<string, string> = {
-  'High Error Rate': 'This monitor tracks HTTP 5xx errors across the logs-* index pattern. It has fired 3 times in the past 7 days, primarily during peak traffic hours (14:00-18:00 UTC). The most common trigger is backend timeout errors from the checkout service. Consider increasing the threshold or adding a rate-of-change condition to reduce noise.',
-  'Slow Response Time': 'Monitors average API latency from APM data. Currently stable but has shown a gradual upward trend over the past 2 weeks (+12% p50 latency). The last firing correlated with a deployment of the order-service. No action needed now, but worth investigating the latency trend.',
-  'Disk Usage by Host': 'Bucket-level monitor checking disk usage per host. Currently disabled. When last active, it generated frequent alerts for host i-0ghi789 which has a known small root volume. Consider adding a label-based exclusion for that host before re-enabling.',
-  'Authentication Failures': 'Tracks authentication failure spikes in security logs. Has been firing intermittently due to a bot scanning campaign from IP range 203.0.113.0/24. The security team is aware and has added WAF rules. Alert frequency should decrease within 24 hours.',
-  'Payment Processing Errors': 'Critical monitor for payment failures. Currently healthy. Last triggered 3 days ago during a brief payment gateway outage (resolved in 8 minutes). This monitor has a 100% true-positive rate over the past 30 days — no tuning needed.',
-  'Log Anomaly Detection': 'ML-based anomaly detection on log patterns. Fires when anomaly score exceeds 0.8. Has a ~15% false-positive rate, mostly triggered by deployment-related log pattern changes. Consider adding a suppression rule during deployment windows.',
-  'HighCpuUsage': 'Prometheus alert tracking CPU utilization across node-exporter targets. Currently firing on i-0abc123 at 92.3%. This host has been consistently hot for 2 days — likely needs vertical scaling or workload redistribution. The alert has fired 8 times this week.',
-  'HighMemoryUsage': 'Critical memory pressure alert. Currently firing on i-0def456 at 94.7% memory usage. This correlates with a memory leak in the Java application running on this host (heap growing ~2% per hour). Recommend restarting the application and filing a bug for the leak.',
-  'DiskSpaceLow': 'Disk space warning in staging environment. Currently pending (not yet past the 15-minute duration threshold). The staging environment accumulates test data that is cleaned weekly. This is expected behavior and will auto-resolve after the next cleanup job.',
-  'HighErrorRate': 'HTTP 5xx error rate exceeding 5% threshold. Currently firing at 8.2% error rate. Root cause appears to be connection pool exhaustion on the api-gateway service. The error rate spiked 5 minutes ago and is still climbing. Immediate investigation recommended.',
-  'HighLatencyP99': 'P99 latency monitor for HTTP requests. Currently inactive and healthy. Last fired 3 days ago during a database migration. The latency spike was transient and resolved within 20 minutes.',
-  'PodCrashLooping': 'Kubernetes pod restart monitor. The order-service pod is crash looping with OOMKilled status. Memory limit is set to 512Mi but the service is requesting ~600Mi under load. Recommend increasing the memory limit to 768Mi.',
-  'DatabaseConnectionPoolExhausted': 'Database connection pool monitor for PostgreSQL. Currently healthy with 45 of 50 connections available. Has not fired in the past 30 days. The connection pool was sized correctly after the last capacity review.',
-  'CertificateExpiringSoon': 'TLS certificate expiry monitor. The certificate for api.example.com expires in 22 days. Auto-renewal is configured but has failed twice. Check the cert-manager logs and ensure the DNS-01 challenge is working correctly.',
-  'NetworkPacketDrops': 'Network packet drop monitor across node-exporter targets. Currently inactive. Last fired during a network maintenance window 2 weeks ago. No action needed.',
-};
-
-function getAiSummary(name: string): string {
-  return AI_SUMMARIES[name] || `This monitor tracks ${name.toLowerCase()} conditions. It is currently operating within normal parameters. No recent anomalies detected in the evaluation history.`;
-}
-
-function getDescription(name: string, monitorType: string, query: string): string {
-  const descriptions: Record<string, string> = {
-    'High Error Rate': 'Monitors HTTP 5xx error count in the logs-* index. Triggers when error count exceeds 100 in a 5-minute window. Critical for detecting service degradation.',
-    'Slow Response Time': 'Tracks average transaction latency from APM data. Alerts when average response time exceeds 5 seconds over a 10-minute evaluation window.',
-    'Disk Usage by Host': 'Bucket-level monitor that checks disk usage percentage per host. Groups by host.name and alerts when any host exceeds 90% disk utilization.',
-    'Authentication Failures': 'Security monitor tracking authentication failure events. Triggers on spikes exceeding 50 failures in a 5-minute window to detect brute force attempts.',
-    'Payment Processing Errors': 'Critical business monitor for payment processing failures. Alerts when failed payment count exceeds 10 in a 1-minute window.',
-    'Log Anomaly Detection': 'ML-powered anomaly detection on log patterns. Uses doc-level monitoring to identify unusual log entries with anomaly scores above 0.8.',
-    'HighCpuUsage': 'Prometheus alerting rule monitoring CPU utilization across all node-exporter instances. Uses irate over 5-minute windows, excluding idle CPU time.',
-    'HighMemoryUsage': 'Monitors available memory as a percentage of total memory. Critical alert for memory pressure that could lead to OOM kills.',
-    'DiskSpaceLow': 'Filesystem space monitor for root mountpoint. Warns when available space drops below 15% to prevent disk-full incidents.',
-    'HighErrorRate': 'Calculates the ratio of 5xx responses to total HTTP requests. Critical indicator of service health and availability.',
-    'HighLatencyP99': 'Tracks the 99th percentile of HTTP request duration. Alerts when tail latency exceeds 2 seconds, indicating degraded user experience.',
-    'PodCrashLooping': 'Kubernetes pod stability monitor. Detects pods that are restarting frequently, indicating application crashes or resource constraints.',
-    'DatabaseConnectionPoolExhausted': 'Monitors available database connections. Critical alert when pool is nearly exhausted, which would cause application errors.',
-    'CertificateExpiringSoon': 'TLS certificate expiry monitor using blackbox-exporter probes. Warns 30 days before expiry to allow time for renewal.',
-    'NetworkPacketDrops': 'Network health monitor tracking packet drops on all interfaces. Indicates network congestion or hardware issues.',
-  };
-  return descriptions[name] || `${monitorType} monitor evaluating: ${query.substring(0, 100)}...`;
-}
-
 // ============================================================================
 // Mapping helpers
 // ============================================================================
 
 function osSeverityToUnified(sev: string): UnifiedAlertSeverity {
   switch (sev) {
-    case '1': return 'critical';
-    case '2': return 'high';
-    case '3': return 'medium';
-    case '4': return 'low';
-    default: return 'info';
+    case '1':
+      return 'critical';
+    case '2':
+      return 'high';
+    case '3':
+      return 'medium';
+    case '4':
+      return 'low';
+    default:
+      return 'info';
   }
 }
 
 function osStateToUnified(state: string): UnifiedAlertState {
   switch (state) {
-    case 'ACTIVE': return 'active';
-    case 'ACKNOWLEDGED': return 'acknowledged';
-    case 'COMPLETED': return 'resolved';
-    case 'ERROR': return 'error';
-    default: return 'active';
+    case 'ACTIVE':
+      return 'active';
+    case 'ACKNOWLEDGED':
+      return 'acknowledged';
+    case 'COMPLETED':
+      return 'resolved';
+    case 'ERROR':
+      return 'error';
+    default:
+      return 'active';
   }
 }
 
@@ -568,7 +867,7 @@ function promStateToUnified(state: string): UnifiedAlertState {
   return 'resolved';
 }
 
-function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlert {
+function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlertSummary {
   return {
     id: a.id,
     datasourceId: dsId,
@@ -576,16 +875,18 @@ function osAlertToUnified(a: OSAlert, dsId: string): UnifiedAlert {
     name: `${a.monitor_name} — ${a.trigger_name}`,
     state: osStateToUnified(a.state),
     severity: osSeverityToUnified(a.severity),
-    message: a.error_message || undefined,
+    message: a.error_message || a.trigger_name || undefined,
     startTime: new Date(a.start_time).toISOString(),
     lastUpdated: new Date(a.last_notification_time).toISOString(),
-    labels: { monitor_id: a.monitor_id, trigger_id: a.trigger_id },
+    labels: {
+      monitor_name: a.monitor_name,
+      trigger_name: a.trigger_name,
+    },
     annotations: {},
-    raw: a,
   };
 }
 
-function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlert {
+function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlertSummary {
   return {
     id: `${dsId}-${a.labels.alertname}-${a.labels.instance || ''}`,
     datasourceId: dsId,
@@ -598,26 +899,48 @@ function promAlertToUnified(a: PromAlert, dsId: string): UnifiedAlert {
     lastUpdated: a.activeAt,
     labels: a.labels,
     annotations: a.annotations,
-    raw: a,
   };
 }
 
-function osMonitorToUnifiedRule(m: OSMonitor, dsId: string): UnifiedRule {
+/**
+ * Detect the actual monitor kind from the OS monitor's inputs,
+ * since cluster metrics monitors share monitor_type 'query_level_monitor'.
+ */
+function detectMonitorKind(m: OSMonitor): 'query' | 'bucket' | 'doc' | 'cluster_metrics' {
+  if (m.monitor_type === 'bucket_level_monitor') return 'bucket';
+  if (m.monitor_type === 'doc_level_monitor') return 'doc';
+  if (m.inputs[0] && 'uri' in m.inputs[0]) return 'cluster_metrics';
+  return 'query';
+}
+
+function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleSummary {
   const trigger = m.triggers[0];
   const isEnabled = m.enabled;
-  const hasError = false;
-  // Derive labels from monitor metadata
+  const kind = detectMonitorKind(m);
+  const input = m.inputs[0];
+
+  // Derive labels from actual monitor metadata per input type
   const labels: Record<string, string> = {};
-  const indices = m.inputs[0]?.search?.indices ?? [];
-  if (indices.some(i => i.startsWith('logs-'))) { labels.service = 'log-analytics'; labels.application = 'observability'; }
-  else if (indices.some(i => i.startsWith('apm-'))) { labels.service = 'apm'; labels.application = 'checkout'; }
-  else if (indices.some(i => i.startsWith('metrics-'))) { labels.service = 'metrics'; labels.application = 'platform'; }
-  else if (indices.some(i => i.startsWith('security-'))) { labels.service = 'security'; labels.application = 'auth'; }
-  else if (indices.some(i => i.startsWith('payments-'))) { labels.service = 'payments'; labels.application = 'checkout'; }
-  // Common labels
-  labels.environment = dsId === 'ds-1' ? 'production' : 'staging';
-  labels.team = indices.some(i => i.startsWith('security-')) ? 'security' : indices.some(i => i.startsWith('payments-')) ? 'payments' : 'platform';
-  labels.region = dsId === 'ds-1' ? 'us-east-1' : 'us-west-2';
+  if (input && 'search' in input) {
+    const indices = input.search.indices ?? [];
+    if (indices.length > 0) {
+      labels.indices = indices.join(',');
+    }
+  } else if (input && 'uri' in input) {
+    labels.api_type = input.uri.api_type;
+    if (input.uri.clusters?.length > 0) {
+      labels.clusters = input.uri.clusters.join(',');
+    }
+  } else if (input && 'doc_level_input' in input) {
+    const indices = input.doc_level_input.indices ?? [];
+    if (indices.length > 0) {
+      labels.indices = indices.join(',');
+    }
+    labels.doc_queries = String(input.doc_level_input.queries?.length ?? 0);
+  }
+  labels.monitor_type = m.monitor_type;
+  labels.monitor_kind = kind;
+  labels.datasource_id = dsId;
 
   const annotations: Record<string, string> = {};
   if (trigger?.actions?.[0]?.message_template?.source) {
@@ -626,12 +949,41 @@ function osMonitorToUnifiedRule(m: OSMonitor, dsId: string): UnifiedRule {
 
   const severity = trigger ? osSeverityToUnified(trigger.severity) : 'info';
   const status: MonitorStatus = !isEnabled ? 'disabled' : 'active';
-  const monitorType: MonitorType = m.monitor_type === 'bucket_level_monitor' ? 'infrastructure'
-    : m.monitor_type === 'doc_level_monitor' ? 'log'
-    : indices.some(i => i.startsWith('apm-')) ? 'apm'
-    : indices.some(i => i.startsWith('metrics-')) ? 'metric'
-    : 'log';
-  const destNames = trigger?.actions?.map(a => a.name) ?? [];
+
+  // Extract query string based on input type
+  let query: string;
+  if (input && 'uri' in input) {
+    query = `${input.uri.api_type}: ${input.uri.path}`;
+  } else if (input && 'doc_level_input' in input) {
+    const docQueries = input.doc_level_input.queries ?? [];
+    query = docQueries.map((q) => `${q.name}: ${q.query}`).join('; ') || '(no queries)';
+  } else if (input && 'search' in input) {
+    query = JSON.stringify(input.search.query ?? {});
+  } else {
+    query = '{}';
+  }
+
+  // Derive monitor type from kind and index patterns
+  let monitorType: MonitorType;
+  if (kind === 'cluster_metrics') {
+    monitorType = 'cluster_metrics';
+  } else if (kind === 'doc') {
+    monitorType = 'log';
+  } else if (kind === 'bucket') {
+    monitorType = 'infrastructure';
+  } else {
+    // query-level: derive from index patterns
+    const indices = input && 'search' in input ? (input.search.indices ?? []) : [];
+    if (indices.some((i) => i.startsWith('logs-') || i.startsWith('ss4o_logs'))) {
+      monitorType = 'log';
+    } else if (indices.some((i) => i.startsWith('otel-v1-apm') || i.startsWith('ss4o_traces'))) {
+      monitorType = 'apm';
+    } else {
+      monitorType = 'metric';
+    }
+  }
+
+  const destNames = trigger?.actions?.map((a) => a.name) ?? [];
   const intervalUnit = m.schedule.period.unit;
   const intervalVal = m.schedule.period.interval;
   const evalInterval = `${intervalVal} ${intervalUnit.toLowerCase()}`;
@@ -643,30 +995,27 @@ function osMonitorToUnifiedRule(m: OSMonitor, dsId: string): UnifiedRule {
     name: m.name,
     enabled: isEnabled,
     severity,
-    query: JSON.stringify(m.inputs[0]?.search?.query ?? {}),
+    query,
     condition: trigger?.condition?.script?.source ?? '',
     labels,
     annotations,
     monitorType,
     status,
-    healthStatus: hasError ? 'failing' : 'healthy',
-    createdBy: dsId === 'ds-1' ? 'admin' : 'devops-bot',
+    healthStatus: !isEnabled ? 'no_data' : 'healthy',
+    createdBy: '',
     createdAt: new Date(m.last_update_time - 86400000).toISOString(),
     lastModified: new Date(m.last_update_time).toISOString(),
     lastTriggered: undefined,
     notificationDestinations: destNames,
-    description: getDescription(m.name, monitorType, JSON.stringify(m.inputs[0]?.search?.query ?? {})),
-    aiSummary: getAiSummary(m.name),
     evaluationInterval: evalInterval,
     pendingPeriod: '5 minutes',
-    firingPeriod: monitorType === 'log' ? '10 minutes' : undefined,
-    lookbackPeriod: monitorType === 'log' ? '15 minutes' : undefined,
-    threshold: trigger ? { operator: '>', value: parseThresholdValue(trigger.condition.script.source), unit: monitorType === 'metric' ? '%' : 'count' } : undefined,
-    alertHistory: generateMockAlertHistory(status, severity),
-    conditionPreviewData: generateMockPreviewData(severity),
-    notificationRouting: generateMockNotificationRouting(destNames),
-    suppressionRules: generateMockSuppressionRules(labels),
-    raw: m,
+    threshold: trigger
+      ? {
+          operator: '>',
+          value: parseThresholdValue(trigger.condition.script.source),
+          unit: monitorType === 'metric' ? '%' : 'count',
+        }
+      : undefined,
   };
 }
 
@@ -675,10 +1024,15 @@ function parseThresholdValue(conditionSource: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-function promRuleToUnified(r: any, groupName: string, dsId: string): UnifiedRule {
-  const state = r.state as string;
+function promRuleToUnified(
+  r: PromAlertingRule,
+  groupName: string,
+  dsId: string
+): UnifiedRuleSummary {
+  const state = r.state;
   const severity = promSeverityFromLabels(r.labels);
-  const status: MonitorStatus = state === 'firing' ? 'active' : state === 'pending' ? 'pending' : 'muted';
+  const status: MonitorStatus =
+    state === 'firing' ? 'active' : state === 'pending' ? 'pending' : 'muted';
   const destNames: string[] = [];
 
   return {
@@ -701,17 +1055,8 @@ function promRuleToUnified(r: any, groupName: string, dsId: string): UnifiedRule
     lastModified: r.lastEvaluation || new Date().toISOString(),
     lastTriggered: r.alerts?.length > 0 ? r.alerts[0].activeAt : undefined,
     notificationDestinations: destNames,
-    description: getDescription(r.name, 'metric', r.query),
-    aiSummary: getAiSummary(r.name),
     evaluationInterval: `${r.duration}s`,
     pendingPeriod: `${r.duration}s`,
-    firingPeriod: undefined,
-    lookbackPeriod: undefined,
     threshold: { operator: '>', value: parseThresholdValue(r.query), unit: '%' },
-    alertHistory: generateMockAlertHistory(status, severity),
-    conditionPreviewData: generateMockPreviewData(severity),
-    notificationRouting: generateMockNotificationRouting(destNames),
-    suppressionRules: generateMockSuppressionRules(r.labels),
-    raw: r,
   };
 }

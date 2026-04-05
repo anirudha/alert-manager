@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Enhanced Monitors Table — search, filter, sort, column customization,
  * saved searches, bulk delete, and JSON export.
@@ -8,6 +13,7 @@ import {
   EuiHealth,
   EuiBadge,
   EuiFieldSearch,
+  EuiFieldText,
   EuiFlexGroup,
   EuiFlexItem,
   EuiSpacer,
@@ -29,6 +35,8 @@ import {
   EuiListGroupItem,
   EuiButtonIcon,
   EuiResizableContainer,
+  EuiContextMenuPanel,
+  EuiContextMenuItem,
 } from '@opensearch-project/oui';
 import {
   UnifiedRule,
@@ -40,23 +48,33 @@ import {
 } from '../../core';
 import { serializeMonitors } from '../../core/serializer';
 import { MonitorDetailFlyout } from './monitor_detail_flyout';
+import {
+  SEVERITY_COLORS,
+  STATUS_COLORS,
+  HEALTH_COLORS,
+  TYPE_LABELS,
+  PAGINATION_BUTTON_STYLE,
+  PAGINATION_BUTTON_HOVER_CLASS,
+  PAGINATION_CSS,
+} from './shared_constants';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger', high: 'warning', medium: 'primary', low: 'subdued', info: 'default',
-};
-const STATUS_COLORS: Record<string, string> = {
-  active: 'danger', pending: 'warning', muted: 'default', disabled: 'subdued',
-};
-const HEALTH_COLORS: Record<string, string> = {
-  healthy: 'success', failing: 'danger', no_data: 'subdued',
-};
-const TYPE_LABELS: Record<string, string> = {
-  metric: 'Metric', log: 'Log', apm: 'APM', composite: 'Composite',
-  infrastructure: 'Infrastructure', synthetics: 'Synthetics',
+const INTERNAL_LABEL_KEYS = new Set([
+  'monitor_type',
+  'monitor_kind',
+  'datasource_id',
+  '_workspace',
+  'monitor_id',
+  'trigger_id',
+  'trigger_name',
+]);
+
+const BACKEND_DISPLAY: Record<string, string> = {
+  opensearch: 'OpenSearch',
+  prometheus: 'Prometheus',
 };
 
 // ============================================================================
@@ -82,8 +100,14 @@ interface FilterState {
 }
 
 const emptyFilters = (): FilterState => ({
-  status: [], severity: [], monitorType: [], healthStatus: [],
-  labels: {}, createdBy: [], destinations: [], backend: [],
+  status: [],
+  severity: [],
+  monitorType: [],
+  healthStatus: [],
+  labels: {},
+  createdBy: [],
+  destinations: [],
+  backend: [],
 });
 
 interface MonitorsTableProps {
@@ -127,7 +151,7 @@ function matchesSearch(rule: UnifiedRule, query: string): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   const terms = q.split(/\s+/).filter(Boolean);
-  return terms.every(term => {
+  return terms.every((term) => {
     // Support label:value syntax
     if (term.includes(':')) {
       const [key, val] = term.split(':', 2);
@@ -150,12 +174,14 @@ function matchesSearch(rule: UnifiedRule, query: string): boolean {
 function matchesFilters(rule: UnifiedRule, filters: FilterState): boolean {
   if (filters.status.length > 0 && !filters.status.includes(rule.status)) return false;
   if (filters.severity.length > 0 && !filters.severity.includes(rule.severity)) return false;
-  if (filters.monitorType.length > 0 && !filters.monitorType.includes(rule.monitorType)) return false;
-  if (filters.healthStatus.length > 0 && !filters.healthStatus.includes(rule.healthStatus)) return false;
+  if (filters.monitorType.length > 0 && !filters.monitorType.includes(rule.monitorType))
+    return false;
+  if (filters.healthStatus.length > 0 && !filters.healthStatus.includes(rule.healthStatus))
+    return false;
   if (filters.createdBy.length > 0 && !filters.createdBy.includes(rule.createdBy)) return false;
   if (filters.backend.length > 0 && !filters.backend.includes(rule.datasourceType)) return false;
   if (filters.destinations.length > 0) {
-    const hasMatch = rule.notificationDestinations.some(d => filters.destinations.includes(d));
+    const hasMatch = rule.notificationDestinations.some((d) => filters.destinations.includes(d));
     if (!hasMatch) return false;
   }
   for (const [key, values] of Object.entries(filters.labels)) {
@@ -179,11 +205,14 @@ function collectLabelKeys(rules: UnifiedRule[]): string[] {
   return Array.from(keys).sort();
 }
 
-function collectUniqueValues(rules: UnifiedRule[], field: (r: UnifiedRule) => string | string[]): string[] {
+function collectUniqueValues(
+  rules: UnifiedRule[],
+  field: (r: UnifiedRule) => string | string[]
+): string[] {
   const set = new Set<string>();
   for (const r of rules) {
     const val = field(r);
-    if (Array.isArray(val)) val.forEach(v => set.add(v));
+    if (Array.isArray(val)) val.forEach((v) => set.add(v));
     else if (val) set.add(val);
   }
   return Array.from(set).sort();
@@ -199,33 +228,8 @@ function collectLabelValues(rules: UnifiedRule[], key: string): string[] {
 }
 
 // ============================================================================
-// Filter Popover Component
+// Filter Dropdown Component
 // ============================================================================
-
-const FilterPopover: React.FC<{
-  label: string;
-  options: string[];
-  selected: string[];
-  onChange: (selected: string[]) => void;
-  displayMap?: Record<string, string>;
-}> = ({ label, options, selected, onChange, displayMap }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const numActive = selected.length;
-  return (
-    <EuiFilterButton
-      iconType="arrowDown"
-      onClick={() => setIsOpen(!isOpen)}
-      isSelected={isOpen}
-      numFilters={options.length}
-      hasActiveFilters={numActive > 0}
-      numActiveFilters={numActive}
-    >
-      {label}
-    </EuiFilterButton>
-  );
-};
-
-// We need a proper popover-based filter. Let me use a simpler approach with EuiPopover:
 const FilterDropdown: React.FC<{
   label: string;
   options: string[];
@@ -236,11 +240,11 @@ const FilterDropdown: React.FC<{
   const [isOpen, setIsOpen] = useState(false);
 
   const toggle = (opt: string) => {
-    if (selected.includes(opt)) onChange(selected.filter(s => s !== opt));
+    if (selected.includes(opt)) onChange(selected.filter((s) => s !== opt));
     else onChange([...selected, opt]);
   };
 
-  const checkboxes = options.map(opt => ({
+  const checkboxes = options.map((opt) => ({
     id: opt,
     label: displayMap?.[opt] || opt,
   }));
@@ -280,9 +284,22 @@ const FilterDropdown: React.FC<{
 // Column Definitions
 // ============================================================================
 
-type ColumnId = 'name' | 'status' | 'severity' | 'monitorType' | 'healthStatus' |
-  'backend' | 'datasource' | 'query' | 'group' | 'createdBy' | 'createdAt' |
-  'lastModified' | 'lastTriggered' | 'destinations' | string; // string for label columns
+type ColumnId =
+  | 'name'
+  | 'status'
+  | 'severity'
+  | 'monitorType'
+  | 'healthStatus'
+  | 'backend'
+  | 'datasource'
+  | 'query'
+  | 'group'
+  | 'createdBy'
+  | 'createdAt'
+  | 'lastModified'
+  | 'lastTriggered'
+  | 'destinations'
+  | string; // string for label columns
 
 interface ColumnDef {
   id: ColumnId;
@@ -309,7 +326,13 @@ const BASE_COLUMNS: ColumnDef[] = [
 ];
 
 const DEFAULT_VISIBLE: ColumnId[] = [
-  'name', 'status', 'severity', 'monitorType', 'healthStatus', 'backend', 'datasource',
+  'name',
+  'status',
+  'severity',
+  'monitorType',
+  'healthStatus',
+  'backend',
+  'datasource',
 ];
 
 // ============================================================================
@@ -318,9 +341,21 @@ const DEFAULT_VISIBLE: ColumnId[] = [
 
 // Default widths per column
 const DEFAULT_WIDTHS: Record<string, number> = {
-  name: 220, status: 100, severity: 100, monitorType: 110, healthStatus: 90,
-  labels: 260, backend: 110, datasource: 150, createdBy: 110, createdAt: 130,
-  lastModified: 160, lastTriggered: 160, destinations: 160, query: 200, group: 100,
+  name: 220,
+  status: 100,
+  severity: 100,
+  monitorType: 110,
+  healthStatus: 90,
+  labels: 260,
+  backend: 110,
+  datasource: 150,
+  createdBy: 110,
+  createdAt: 130,
+  lastModified: 160,
+  lastTriggered: 160,
+  destinations: 160,
+  query: 200,
+  group: 100,
 };
 
 /**
@@ -331,7 +366,7 @@ function useResizableColumns(
   tableRef: React.RefObject<HTMLDivElement>,
   columnWidths: Record<string, number>,
   setColumnWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>,
-  visibleColumns: Set<ColumnId>,
+  visibleColumns: Set<ColumnId>
 ) {
   useEffect(() => {
     const wrapper = tableRef.current;
@@ -365,8 +400,12 @@ function useResizableColumns(
       `;
       handle.appendChild(grip);
 
-      handle.addEventListener('mouseenter', () => { grip.style.backgroundColor = '#69707D'; });
-      handle.addEventListener('mouseleave', () => { grip.style.backgroundColor = '#D3DAE6'; });
+      handle.addEventListener('mouseenter', () => {
+        grip.style.backgroundColor = '#69707D';
+      });
+      handle.addEventListener('mouseleave', () => {
+        grip.style.backgroundColor = '#D3DAE6';
+      });
 
       handle.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -382,7 +421,7 @@ function useResizableColumns(
           const newWidth = Math.max(60, startWidth + delta);
           th.style.width = `${newWidth}px`;
           // Also update state so it persists across re-renders
-          setColumnWidths(prev => ({ ...prev, [colId]: newWidth }));
+          setColumnWidths((prev) => ({ ...prev, [colId]: newWidth }));
         };
         const onMouseUp = () => {
           document.removeEventListener('mousemove', onMouseMove);
@@ -400,16 +439,134 @@ function useResizableColumns(
     });
 
     return () => {
-      handles.forEach(h => h.remove());
+      handles.forEach((h) => h.remove());
     };
-  }); // runs every render to re-attach after OUI re-renders the table
+  }, [visibleColumns]); // Only re-attach when visible columns change
 }
+
+// ============================================================================
+// Custom Pagination — replaces OUI's broken <a href="#"> pagination buttons
+// ============================================================================
+
+const TablePagination: React.FC<{
+  pageIndex: number;
+  pageSize: number;
+  totalItemCount: number;
+  pageSizeOptions: number[];
+  onChangePage: (page: number) => void;
+  onChangePageSize: (size: number) => void;
+}> = ({ pageIndex, pageSize, totalItemCount, pageSizeOptions, onChangePage, onChangePageSize }) => {
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const pageCount = Math.max(1, Math.ceil(totalItemCount / pageSize));
+
+  const maxVisible = 5;
+  const half = Math.floor(maxVisible / 2);
+  let startPage = Math.max(0, Math.min(pageIndex - half, pageCount - maxVisible));
+  let endPage = Math.min(pageCount, startPage + maxVisible);
+  if (endPage - startPage < maxVisible) startPage = Math.max(0, endPage - maxVisible);
+  const pages: number[] = [];
+  for (let i = startPage; i < endPage; i++) pages.push(i);
+
+  return (
+    <>
+      <style>{PAGINATION_CSS}</style>
+      <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiPopover
+            button={
+              <EuiButtonEmpty
+                size="xs"
+                color="text"
+                iconType="arrowDown"
+                iconSide="right"
+                onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+              >
+                Rows per page: {pageSize}
+              </EuiButtonEmpty>
+            }
+            isOpen={isPopoverOpen}
+            closePopover={() => setIsPopoverOpen(false)}
+            panelPaddingSize="none"
+            anchorPosition="upCenter"
+          >
+            <EuiContextMenuPanel
+              items={pageSizeOptions.map((size) => (
+                <EuiContextMenuItem
+                  key={size}
+                  icon={size === pageSize ? 'check' : 'empty'}
+                  onClick={() => {
+                    onChangePageSize(size);
+                    onChangePage(0);
+                    setIsPopoverOpen(false);
+                  }}
+                >
+                  {size} rows
+                </EuiContextMenuItem>
+              ))}
+            />
+          </EuiPopover>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+            <EuiFlexItem grow={false}>
+              <EuiButtonIcon
+                iconType="arrowLeft"
+                aria-label="Previous page"
+                onClick={() => onChangePage(pageIndex - 1)}
+                isDisabled={pageIndex === 0}
+                size="s"
+                color="text"
+              />
+            </EuiFlexItem>
+            {pages.map((p) => (
+              <EuiFlexItem grow={false} key={p}>
+                <button
+                  onClick={() => onChangePage(p)}
+                  disabled={p === pageIndex}
+                  aria-label={`Page ${p + 1} of ${pageCount}`}
+                  aria-current={p === pageIndex ? 'page' : undefined}
+                  className={PAGINATION_BUTTON_HOVER_CLASS}
+                  style={PAGINATION_BUTTON_STYLE(p === pageIndex)}
+                >
+                  {p + 1}
+                </button>
+              </EuiFlexItem>
+            ))}
+            <EuiFlexItem grow={false}>
+              <EuiButtonIcon
+                iconType="arrowRight"
+                aria-label="Next page"
+                onClick={() => onChangePage(pageIndex + 1)}
+                isDisabled={pageIndex >= pageCount - 1}
+                size="s"
+                color="text"
+              />
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    </>
+  );
+};
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources, loading, onDelete, onClone, onSilence, onImport, onCreateMonitor, workspaceOptions, loadingWorkspaces, selectedDsIds, onDatasourceChange }) => {
+export const MonitorsTable: React.FC<MonitorsTableProps> = ({
+  rules,
+  datasources,
+  loading,
+  onDelete,
+  onClone,
+  onSilence,
+  onImport,
+  onCreateMonitor,
+  workspaceOptions,
+  loadingWorkspaces,
+  selectedDsIds,
+  onDatasourceChange,
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [sortField, setSortField] = useState<string>('name');
@@ -425,11 +582,15 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
+  const [showSaveSearchInput, setShowSaveSearchInput] = useState(false);
+  const [saveSearchName, setSaveSearchName] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
 
-  const dsNameMap = useMemo(() => new Map(datasources.map(d => [d.id, d.name])), [datasources]);
+  const dsNameMap = useMemo(() => new Map(datasources.map((d) => [d.id, d.name])), [datasources]);
 
   // Build selectable datasource entries for the filter facet
   const datasourceEntries = useMemo(() => {
@@ -440,7 +601,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
       }
     }
     for (const ws of workspaceOptions) {
-      const parent = datasources.find(d => d.id === ws.parentDatasourceId);
+      const parent = datasources.find((d) => d.id === ws.parentDatasourceId);
       const label = parent ? `${parent.name} / ${ws.workspaceName || ws.name}` : ws.name;
       entries.push({ id: ws.id, label });
     }
@@ -468,9 +629,12 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
 
   // Update suggestions as user types
   useEffect(() => {
-    if (!searchQuery) { setSuggestions([]); return; }
+    if (!searchQuery) {
+      setSuggestions([]);
+      return;
+    }
     const q = searchQuery.toLowerCase();
-    const matches = allSuggestions.filter(s => s.toLowerCase().includes(q)).slice(0, 10);
+    const matches = allSuggestions.filter((s) => s.toLowerCase().includes(q)).slice(0, 10);
     setSuggestions(matches);
   }, [searchQuery, allSuggestions]);
 
@@ -487,7 +651,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
 
   // Filter and sort
   const filtered = useMemo(() => {
-    let result = rules.filter(r => matchesSearch(r, searchQuery) && matchesFilters(r, filters));
+    let result = rules.filter((r) => matchesSearch(r, searchQuery) && matchesFilters(r, filters));
     result.sort((a, b) => {
       let aVal: any = (a as any)[sortField] ?? '';
       let bVal: any = (b as any)[sortField] ?? '';
@@ -514,6 +678,17 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     return result;
   }, [rules, searchQuery, filters, sortField, sortDirection, dsNameMap]);
 
+  // Reset to first page when filtered results change (avoids showing empty page)
+  useEffect(() => {
+    setPageIndex(0);
+  }, [filtered.length]);
+
+  // EuiBasicTable does NOT slice items internally — we must pass the correct page slice.
+  const paginatedRules = useMemo(() => {
+    const start = pageIndex * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, pageIndex, pageSize]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     count += filters.status.length;
@@ -530,21 +705,18 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   // Selection
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id); else next.add(id);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     setSelectedIds(next);
   };
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filtered.map(r => r.id)));
+    if (selectedIds.size === paginatedRules.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(paginatedRules.map((r) => r.id)));
   };
 
   // Saved searches
   const saveCurrentSearch = () => {
-    const name = prompt('Name this search:');
-    if (!name) return;
-    setSavedSearches(prev => [...prev, {
-      id: `ss-${Date.now()}`, name, query: searchQuery, filters: { ...filters },
-    }]);
+    setShowSaveSearchInput(true);
   };
   const loadSavedSearch = (ss: SavedSearch) => {
     setSearchQuery(ss.query);
@@ -552,7 +724,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     setShowSavedSearches(false);
   };
   const deleteSavedSearch = (id: string) => {
-    setSavedSearches(prev => prev.filter(s => s.id !== id));
+    setSavedSearches((prev) => prev.filter((s) => s.id !== id));
   };
 
   // Export
@@ -561,7 +733,9 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     const blob = new Blob([JSON.stringify(configs, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'monitors-export.json'; a.click();
+    a.href = url;
+    a.download = 'monitors-export.json';
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -605,7 +779,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
         name: (
           <input
             type="checkbox"
-            checked={filtered.length > 0 && selectedIds.size === filtered.length}
+            checked={paginatedRules.length > 0 && selectedIds.size === paginatedRules.length}
             onChange={toggleSelectAll}
             aria-label="Select all monitors"
           />
@@ -625,14 +799,20 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     for (const colId of Array.from(visibleColumns)) {
       if (colId === 'name') {
         cols.push({
-          field: 'name', name: 'Name', sortable: true, truncateText: true, width: w('name'),
+          field: 'name',
+          name: 'Name',
+          sortable: true,
+          truncateText: true,
+          width: w('name'),
           render: (name: string, item: UnifiedRule) => (
             <span
               role="button"
               tabIndex={0}
               style={{ fontWeight: 500, color: '#006BB4', cursor: 'pointer' }}
               onClick={() => setSelectedMonitor(item)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') setSelectedMonitor(item); }}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter') setSelectedMonitor(item);
+              }}
               aria-label={`View details for ${name}`}
             >
               {name}
@@ -641,27 +821,47 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
         });
       } else if (colId === 'status') {
         cols.push({
-          field: 'status', name: 'Status', sortable: true, width: w('status'),
-          render: (s: MonitorStatus) => <EuiHealth color={STATUS_COLORS[s] || 'subdued'}>{s}</EuiHealth>,
+          field: 'status',
+          name: 'Status',
+          sortable: true,
+          width: w('status'),
+          render: (s: MonitorStatus) => (
+            <EuiHealth color={STATUS_COLORS[s] || 'subdued'}>{s}</EuiHealth>
+          ),
         });
       } else if (colId === 'severity') {
         cols.push({
-          field: 'severity', name: 'Severity', sortable: true, width: w('severity'),
-          render: (s: UnifiedAlertSeverity) => <EuiBadge color={SEVERITY_COLORS[s] || 'default'}>{s}</EuiBadge>,
+          field: 'severity',
+          name: 'Severity',
+          sortable: true,
+          width: w('severity'),
+          render: (s: UnifiedAlertSeverity) => (
+            <EuiBadge color={SEVERITY_COLORS[s] || 'default'}>{s}</EuiBadge>
+          ),
         });
       } else if (colId === 'monitorType') {
         cols.push({
-          field: 'monitorType', name: 'Type', sortable: true, width: w('monitorType'),
+          field: 'monitorType',
+          name: 'Type',
+          sortable: true,
+          width: w('monitorType'),
           render: (t: MonitorType) => <EuiBadge color="hollow">{TYPE_LABELS[t] || t}</EuiBadge>,
         });
       } else if (colId === 'healthStatus') {
         cols.push({
-          field: 'healthStatus', name: 'Health', sortable: true, width: w('healthStatus'),
-          render: (h: MonitorHealthStatus) => <EuiHealth color={HEALTH_COLORS[h] || 'subdued'}>{h}</EuiHealth>,
+          field: 'healthStatus',
+          name: 'Health',
+          sortable: true,
+          width: w('healthStatus'),
+          render: (h: MonitorHealthStatus) => (
+            <EuiHealth color={HEALTH_COLORS[h] || 'subdued'}>{h}</EuiHealth>
+          ),
         });
       } else if (colId === 'labels') {
         cols.push({
-          field: 'labels', name: 'Labels', width: w('labels'),
+          field: 'labels',
+          name: 'Labels',
+          width: w('labels'),
           render: (labels: Record<string, string>) => {
             const entries = Object.entries(labels);
             if (entries.length === 0) return <span style={{ color: '#999' }}>—</span>;
@@ -669,7 +869,9 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
               <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
                 {entries.map(([k, v]) => (
                   <EuiFlexItem grow={false} key={k}>
-                    <EuiBadge color="hollow" title={`${k}: ${v}`}>{k}:{v}</EuiBadge>
+                    <EuiBadge color="hollow" title={`${k}: ${v}`}>
+                      {k}:{v}
+                    </EuiBadge>
                   </EuiFlexItem>
                 ))}
               </EuiFlexGroup>
@@ -678,52 +880,92 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
         });
       } else if (colId === 'backend') {
         cols.push({
-          field: 'datasourceType', name: 'Backend', sortable: true, width: w('backend'),
-          render: (t: string) => <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>,
+          field: 'datasourceType',
+          name: 'Backend',
+          sortable: true,
+          width: w('backend'),
+          render: (t: string) => (
+            <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>
+          ),
         });
       } else if (colId === 'datasource') {
         cols.push({
-          field: 'datasourceId', name: 'Datasource', sortable: true, width: w('datasource'),
+          field: 'datasourceId',
+          name: 'Datasource',
+          sortable: true,
+          width: w('datasource'),
           render: (id: string) => dsNameMap.get(id) || id,
         });
       } else if (colId === 'createdBy') {
-        cols.push({ field: 'createdBy', name: 'Created By', sortable: true, width: w('createdBy') });
+        cols.push({
+          field: 'createdBy',
+          name: 'Created By',
+          sortable: true,
+          width: w('createdBy'),
+        });
       } else if (colId === 'createdAt') {
         cols.push({
-          field: 'createdAt', name: 'Created', sortable: true, width: w('createdAt'),
-          render: (ts: string) => ts ? new Date(ts).toLocaleDateString() : '-',
+          field: 'createdAt',
+          name: 'Created',
+          sortable: true,
+          width: w('createdAt'),
+          render: (ts: string) => (ts ? new Date(ts).toLocaleDateString() : '-'),
         });
       } else if (colId === 'lastModified') {
         cols.push({
-          field: 'lastModified', name: 'Last Modified', sortable: true, width: w('lastModified'),
-          render: (ts: string) => ts ? new Date(ts).toLocaleString() : '-',
+          field: 'lastModified',
+          name: 'Last Modified',
+          sortable: true,
+          width: w('lastModified'),
+          render: (ts: string) => (ts ? new Date(ts).toLocaleString() : '-'),
         });
       } else if (colId === 'lastTriggered') {
         cols.push({
-          field: 'lastTriggered', name: 'Last Triggered', sortable: true, width: w('lastTriggered'),
-          render: (ts: string) => ts ? new Date(ts).toLocaleString() : 'Never',
+          field: 'lastTriggered',
+          name: 'Last Triggered',
+          sortable: true,
+          width: w('lastTriggered'),
+          render: (ts: string) => (ts ? new Date(ts).toLocaleString() : 'Never'),
         });
       } else if (colId === 'destinations') {
         cols.push({
-          field: 'notificationDestinations', name: 'Destinations', width: w('destinations'),
-          render: (dests: string[]) => dests.length > 0
-            ? dests.map((d, i) => <EuiBadge key={i} color="hollow">{d}</EuiBadge>)
-            : <span style={{ color: '#999' }}>None</span>,
+          field: 'notificationDestinations',
+          name: 'Destinations',
+          width: w('destinations'),
+          render: (dests: string[]) =>
+            dests.length > 0 ? (
+              dests.map((d, i) => (
+                <EuiBadge key={i} color="hollow">
+                  {d}
+                </EuiBadge>
+              ))
+            ) : (
+              <span style={{ color: '#999' }}>None</span>
+            ),
         });
       } else if (colId === 'query') {
         cols.push({ field: 'query', name: 'Query', truncateText: true, width: w('query') });
       } else if (colId === 'group') {
         cols.push({
-          field: 'group', name: 'Group', width: w('group'),
+          field: 'group',
+          name: 'Group',
+          width: w('group'),
           render: (g: string) => g || '-',
         });
       } else if (colId.startsWith('label:')) {
         const key = colId.replace('label:', '');
         cols.push({
-          field: 'labels', name: key, sortable: false, width: w(colId),
+          field: 'labels',
+          name: key,
+          sortable: false,
+          width: w(colId),
           render: (labels: Record<string, string>) => {
             const val = labels[key];
-            return val ? <EuiBadge color="hollow">{val}</EuiBadge> : <span style={{ color: '#999' }}>—</span>;
+            return val ? (
+              <EuiBadge color="hollow">{val}</EuiBadge>
+            ) : (
+              <span style={{ color: '#999' }}>—</span>
+            );
           },
         });
       }
@@ -742,20 +984,26 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   };
 
   // Unique values for filter dropdowns
-  const uniqueStatuses = useMemo(() => collectUniqueValues(rules, r => r.status), [rules]);
-  const uniqueSeverities = useMemo(() => collectUniqueValues(rules, r => r.severity), [rules]);
-  const uniqueTypes = useMemo(() => collectUniqueValues(rules, r => r.monitorType), [rules]);
-  const uniqueHealth = useMemo(() => collectUniqueValues(rules, r => r.healthStatus), [rules]);
-  const uniqueCreators = useMemo(() => collectUniqueValues(rules, r => r.createdBy), [rules]);
-  const uniqueBackends = useMemo(() => collectUniqueValues(rules, r => r.datasourceType), [rules]);
-  const uniqueDestinations = useMemo(() => collectUniqueValues(rules, r => r.notificationDestinations), [rules]);
+  const uniqueStatuses = useMemo(() => collectUniqueValues(rules, (r) => r.status), [rules]);
+  const uniqueSeverities = useMemo(() => collectUniqueValues(rules, (r) => r.severity), [rules]);
+  const uniqueTypes = useMemo(() => collectUniqueValues(rules, (r) => r.monitorType), [rules]);
+  const uniqueHealth = useMemo(() => collectUniqueValues(rules, (r) => r.healthStatus), [rules]);
+  const uniqueCreators = useMemo(() => collectUniqueValues(rules, (r) => r.createdBy), [rules]);
+  const uniqueBackends = useMemo(
+    () => collectUniqueValues(rules, (r) => r.datasourceType),
+    [rules]
+  );
+  const uniqueDestinations = useMemo(
+    () => collectUniqueValues(rules, (r) => r.notificationDestinations),
+    [rules]
+  );
 
   const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const updateLabelFilter = (key: string, values: string[]) => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
       labels: { ...prev.labels, [key]: values },
     }));
@@ -769,10 +1017,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveSuggestion(prev => Math.min(prev + 1, suggestions.length - 1));
+      setActiveSuggestion((prev) => Math.min(prev + 1, suggestions.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveSuggestion(prev => Math.max(prev - 1, -1));
+      setActiveSuggestion((prev) => Math.max(prev - 1, -1));
     } else if (e.key === 'Enter' && activeSuggestion >= 0 && suggestions[activeSuggestion]) {
       e.preventDefault();
       setSearchQuery(suggestions[activeSuggestion]);
@@ -786,9 +1034,14 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   // Facet helper: count items per value for a given field
   const facetCounts = useMemo(() => {
     // Count against the search-matched (but not filter-matched) rules so counts update with search
-    const searchMatched = rules.filter(r => matchesSearch(r, searchQuery));
+    const searchMatched = rules.filter((r) => matchesSearch(r, searchQuery));
     const counts: Record<string, Record<string, number>> = {
-      status: {}, severity: {}, monitorType: {}, healthStatus: {}, backend: {}, createdBy: {},
+      status: {},
+      severity: {},
+      monitorType: {},
+      healthStatus: {},
+      backend: {},
+      createdBy: {},
     };
     for (const r of searchMatched) {
       counts.status[r.status] = (counts.status[r.status] || 0) + 1;
@@ -813,9 +1066,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
   // Collapsible facet sections state
   const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
   const toggleFacetCollapse = (id: string) => {
-    setCollapsedFacets(prev => {
+    setCollapsedFacets((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -829,14 +1083,16 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
     onChange: (v: string[]) => void,
     counts: Record<string, number>,
     displayMap?: Record<string, string>,
-    colorMap?: Record<string, string>,
+    colorMap?: Record<string, string>
   ) => {
     const isCollapsed = collapsedFacets.has(id);
     const activeCount = selected.length;
     return (
       <div key={id} style={{ marginBottom: 12 }}>
         <EuiFlexGroup
-          gutterSize="xs" alignItems="center" responsive={false}
+          gutterSize="xs"
+          alignItems="center"
+          responsive={false}
           style={{ cursor: 'pointer', marginBottom: 4 }}
           onClick={() => toggleFacetCollapse(id)}
         >
@@ -844,7 +1100,9 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
             <EuiIcon type={isCollapsed ? 'arrowRight' : 'arrowDown'} size="s" />
           </EuiFlexItem>
           <EuiFlexItem>
-            <EuiText size="xs"><strong>{label}</strong></EuiText>
+            <EuiText size="xs">
+              <strong>{label}</strong>
+            </EuiText>
           </EuiFlexItem>
           {activeCount > 0 && (
             <EuiFlexItem grow={false}>
@@ -854,19 +1112,31 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
         </EuiFlexGroup>
         {!isCollapsed && (
           <div style={{ paddingLeft: 4 }}>
-            {options.map(opt => {
+            {options.map((opt) => {
               const isActive = selected.includes(opt);
               const count = counts[opt] || 0;
               const displayLabel = displayMap?.[opt] || opt;
               const checkboxId = `${id}-${opt}`;
-              
+
               const labelContent = (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', justifyContent: 'space-between' }}>
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    width: '100%',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
-                    {colorMap && <EuiHealth color={colorMap[opt] || 'subdued'} style={{ marginRight: 0 }} />}
+                    {colorMap && (
+                      <EuiHealth color={colorMap[opt] || 'subdued'} style={{ marginRight: 0 }} />
+                    )}
                     <span style={{ fontSize: '12px', lineHeight: '18px' }}>{displayLabel}</span>
                   </span>
-                  <span style={{ fontSize: '12px', lineHeight: '18px', color: '#69707D' }}>({count})</span>
+                  <span style={{ fontSize: '12px', lineHeight: '18px', color: '#69707D' }}>
+                    ({count})
+                  </span>
                 </span>
               );
 
@@ -877,7 +1147,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                     label={labelContent}
                     checked={isActive}
                     onChange={() => {
-                      if (isActive) onChange(selected.filter(s => s !== opt));
+                      if (isActive) onChange(selected.filter((s) => s !== opt));
                       else onChange([...selected, opt]);
                     }}
                     compressed
@@ -903,13 +1173,24 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
               mode={['collapsible', { position: 'top' }]}
               onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
               paddingSize="none"
-              style={{ overflow: 'hidden', paddingRight: '4px' }}
+              style={{ overflow: 'auto', paddingRight: '4px' }}
             >
-              <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <EuiPanel
+                paddingSize="s"
+                hasBorder
+                style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              >
                 <div style={{ flex: 1, overflow: 'auto' }}>
-                  <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} justifyContent="spaceBetween">
+                  <EuiFlexGroup
+                    gutterSize="xs"
+                    alignItems="center"
+                    responsive={false}
+                    justifyContent="spaceBetween"
+                  >
                     <EuiFlexItem>
-                      <EuiText size="xs"><strong>Filters</strong></EuiText>
+                      <EuiText size="xs">
+                        <strong>Filters</strong>
+                      </EuiText>
                     </EuiFlexItem>
                     {activeFilterCount > 0 && (
                       <EuiFlexItem grow={false}>
@@ -921,71 +1202,229 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
                   </EuiFlexGroup>
                   <EuiSpacer size="s" />
 
-          {/* Datasource filter */}
-          {renderFacetGroup('datasource', 'Datasource', datasourceEntries.map(e => e.label), selectedDsIds.map(id => datasourceEntries.find(e => e.id === id)?.label || '').filter(Boolean),
-            (labels) => {
-              const ids = labels.map(l => datasourceEntries.find(e => e.label === l)?.id).filter(Boolean) as string[];
-              onDatasourceChange(ids);
-            }, Object.fromEntries(datasourceEntries.map(e => [e.label, selectedDsIds.includes(e.id) || selectedDsIds.length === 0 ? 1 : 0])))}
+                  {/* Datasource filter */}
+                  {renderFacetGroup(
+                    'datasource',
+                    'Datasource',
+                    datasourceEntries.map((e) => e.label),
+                    selectedDsIds
+                      .map((id) => datasourceEntries.find((e) => e.id === id)?.label || '')
+                      .filter(Boolean),
+                    (labels) => {
+                      const ids = labels
+                        .map((l) => datasourceEntries.find((e) => e.label === l)?.id)
+                        .filter(Boolean) as string[];
+                      onDatasourceChange(ids);
+                    },
+                    Object.fromEntries(
+                      datasourceEntries.map((e) => [
+                        e.label,
+                        selectedDsIds.includes(e.id) || selectedDsIds.length === 0 ? 1 : 0,
+                      ])
+                    )
+                  )}
 
-          {renderFacetGroup('status', 'Status', uniqueStatuses, filters.status,
-            (v) => updateFilter('status', v as MonitorStatus[]), facetCounts.counts.status, undefined, STATUS_COLORS)}
-          {renderFacetGroup('severity', 'Severity', uniqueSeverities, filters.severity,
-            (v) => updateFilter('severity', v as UnifiedAlertSeverity[]), facetCounts.counts.severity, undefined, SEVERITY_COLORS)}
-          {renderFacetGroup('monitorType', 'Type', uniqueTypes, filters.monitorType,
-            (v) => updateFilter('monitorType', v as MonitorType[]), facetCounts.counts.monitorType, TYPE_LABELS)}
-          {renderFacetGroup('healthStatus', 'Health', uniqueHealth, filters.healthStatus,
-            (v) => updateFilter('healthStatus', v as MonitorHealthStatus[]), facetCounts.counts.healthStatus, undefined, HEALTH_COLORS)}
-          {renderFacetGroup('backend', 'Backend', uniqueBackends, filters.backend,
-            (v) => updateFilter('backend', v), facetCounts.counts.backend)}
-          {renderFacetGroup('createdBy', 'Created By', uniqueCreators, filters.createdBy,
-            (v) => updateFilter('createdBy', v), facetCounts.counts.createdBy)}
+                  {renderFacetGroup(
+                    'status',
+                    'Status',
+                    uniqueStatuses,
+                    filters.status,
+                    (v) => updateFilter('status', v as MonitorStatus[]),
+                    facetCounts.counts.status,
+                    undefined,
+                    STATUS_COLORS
+                  )}
+                  {renderFacetGroup(
+                    'severity',
+                    'Severity',
+                    uniqueSeverities,
+                    filters.severity,
+                    (v) => updateFilter('severity', v as UnifiedAlertSeverity[]),
+                    facetCounts.counts.severity,
+                    undefined,
+                    SEVERITY_COLORS
+                  )}
+                  {renderFacetGroup(
+                    'monitorType',
+                    'Type',
+                    uniqueTypes,
+                    filters.monitorType,
+                    (v) => updateFilter('monitorType', v as MonitorType[]),
+                    facetCounts.counts.monitorType,
+                    TYPE_LABELS
+                  )}
+                  {renderFacetGroup(
+                    'healthStatus',
+                    'Health',
+                    uniqueHealth,
+                    filters.healthStatus,
+                    (v) => updateFilter('healthStatus', v as MonitorHealthStatus[]),
+                    facetCounts.counts.healthStatus,
+                    undefined,
+                    HEALTH_COLORS
+                  )}
+                  {renderFacetGroup(
+                    'backend',
+                    'Backend',
+                    uniqueBackends,
+                    filters.backend,
+                    (v) => updateFilter('backend', v),
+                    facetCounts.counts.backend,
+                    BACKEND_DISPLAY
+                  )}
+                  {renderFacetGroup(
+                    'createdBy',
+                    'Created By',
+                    uniqueCreators,
+                    filters.createdBy,
+                    (v) => updateFilter('createdBy', v),
+                    facetCounts.counts.createdBy
+                  )}
 
-          {/* Label facets */}
-          {labelKeys.length > 0 && (
-            <>
-              <EuiSpacer size="xs" />
-              <EuiText size="xs" color="subdued" style={{ marginBottom: 6 }}><strong>Labels</strong></EuiText>
-              {labelKeys.map(key => renderFacetGroup(
-                `label:${key}`, key, collectLabelValues(rules, key),
-                filters.labels[key] || [],
-                (v) => updateLabelFilter(key, v),
-                facetCounts.labelCounts[key] || {},
-              ))}
-            </>
-          )}
+                  {/* Label facets */}
+                  {labelKeys.length > 0 && (
+                    <>
+                      <EuiSpacer size="xs" />
+                      <EuiText size="xs" color="subdued" style={{ marginBottom: 6 }}>
+                        <strong>Labels</strong>
+                      </EuiText>
+                      {labelKeys
+                        .filter((k) => !INTERNAL_LABEL_KEYS.has(k))
+                        .map((key) =>
+                          renderFacetGroup(
+                            `label:${key}`,
+                            key,
+                            collectLabelValues(rules, key),
+                            filters.labels[key] || [],
+                            (v) => updateLabelFilter(key, v),
+                            facetCounts.labelCounts[key] || {}
+                          )
+                        )}
+                    </>
+                  )}
 
-          {/* Saved searches */}
-          <EuiSpacer size="s" />
-          <EuiText size="xs"><strong>Saved Searches</strong></EuiText>
-          <EuiSpacer size="xs" />
-          {savedSearches.length === 0 ? (
-            <EuiText size="xs" color="subdued">None yet</EuiText>
-          ) : (
-            savedSearches.map(ss => (
-              <EuiFlexGroup key={ss.id} gutterSize="xs" alignItems="center" responsive={false} style={{ marginBottom: 2 }}>
-                <EuiFlexItem>
+                  {/* Saved searches */}
+                  <EuiSpacer size="s" />
                   <EuiText size="xs">
-                    <span
-                      role="button" tabIndex={0} style={{ cursor: 'pointer', color: '#006BB4' }}
-                      onClick={() => loadSavedSearch(ss)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') loadSavedSearch(ss); }}
-                    >
-                      {ss.name}
-                    </span>
+                    <strong>Saved Searches</strong>
                   </EuiText>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiButtonIcon iconType="cross" size="s" aria-label={`Delete ${ss.name}`}
-                    onClick={() => deleteSavedSearch(ss.id)} color="text" />
-                </EuiFlexItem>
-              </EuiFlexGroup>
-            ))
-          )}
-          <EuiButtonEmpty size="xs" iconType="plusInCircle" onClick={saveCurrentSearch}
-            disabled={!searchQuery && activeFilterCount === 0} flush="left">
-            Save current
-          </EuiButtonEmpty>
+                  <EuiSpacer size="xs" />
+                  {savedSearches.length === 0 ? (
+                    <EuiText size="xs" color="subdued">
+                      None yet
+                    </EuiText>
+                  ) : (
+                    savedSearches.map((ss) => (
+                      <EuiFlexGroup
+                        key={ss.id}
+                        gutterSize="xs"
+                        alignItems="center"
+                        responsive={false}
+                        style={{ marginBottom: 2 }}
+                      >
+                        <EuiFlexItem>
+                          <EuiText size="xs">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              style={{ cursor: 'pointer', color: '#006BB4' }}
+                              onClick={() => loadSavedSearch(ss)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') loadSavedSearch(ss);
+                              }}
+                            >
+                              {ss.name}
+                            </span>
+                          </EuiText>
+                        </EuiFlexItem>
+                        <EuiFlexItem grow={false}>
+                          <EuiButtonIcon
+                            iconType="cross"
+                            size="s"
+                            aria-label={`Delete ${ss.name}`}
+                            onClick={() => deleteSavedSearch(ss.id)}
+                            color="text"
+                          />
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    ))
+                  )}
+                  {showSaveSearchInput ? (
+                    <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                      <EuiFlexItem>
+                        <EuiFieldText
+                          placeholder="Search name"
+                          value={saveSearchName}
+                          onChange={(e) => setSaveSearchName(e.target.value)}
+                          compressed
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && saveSearchName.trim()) {
+                              setSavedSearches((prev) => [
+                                ...prev,
+                                {
+                                  id: `ss-${Date.now()}`,
+                                  name: saveSearchName.trim(),
+                                  query: searchQuery,
+                                  filters: { ...filters },
+                                },
+                              ]);
+                              setSaveSearchName('');
+                              setShowSaveSearchInput(false);
+                            }
+                            if (e.key === 'Escape') {
+                              setShowSaveSearchInput(false);
+                              setSaveSearchName('');
+                            }
+                          }}
+                          autoFocus
+                        />
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>
+                        <EuiButtonEmpty
+                          size="xs"
+                          onClick={() => {
+                            if (saveSearchName.trim()) {
+                              setSavedSearches((prev) => [
+                                ...prev,
+                                {
+                                  id: `ss-${Date.now()}`,
+                                  name: saveSearchName.trim(),
+                                  query: searchQuery,
+                                  filters: { ...filters },
+                                },
+                              ]);
+                              setSaveSearchName('');
+                              setShowSaveSearchInput(false);
+                            }
+                          }}
+                        >
+                          Save
+                        </EuiButtonEmpty>
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>
+                        <EuiButtonIcon
+                          iconType="cross"
+                          size="s"
+                          aria-label="Cancel"
+                          onClick={() => {
+                            setShowSaveSearchInput(false);
+                            setSaveSearchName('');
+                          }}
+                          color="text"
+                        />
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                  ) : (
+                    <EuiButtonEmpty
+                      size="xs"
+                      iconType="plusInCircle"
+                      onClick={saveCurrentSearch}
+                      disabled={!searchQuery && activeFilterCount === 0}
+                      flush="left"
+                    >
+                      Save current
+                    </EuiButtonEmpty>
+                  )}
                 </div>
               </EuiPanel>
             </EuiResizablePanel>
@@ -999,209 +1438,283 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({ rules, datasources
               paddingSize="none"
               style={{ paddingLeft: '4px', overflow: 'auto' }}
             >
-              <EuiPanel paddingSize="s" hasBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          {/* Create Monitor Button + Search bar */}
-          <div style={{ flexShrink: 0 }}>
-          {onCreateMonitor && (
-            <EuiFlexGroup justifyContent="flexEnd" responsive={false} gutterSize="s" style={{ marginBottom: 8 }}>
-              <EuiFlexItem grow={false}>
-                <EuiButton fill iconType="plusInCircle" size="s" onClick={onCreateMonitor}>
-                  Create Monitor
-                </EuiButton>
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          )}
-
-          {/* Search bar with suggestions */}
-          <div ref={searchRef} style={{ position: 'relative' }}>
-            <EuiFieldSearch
-              placeholder="Search monitors by name, labels (team:infra), annotations..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); setActiveSuggestion(-1); }}
-              onFocus={() => searchQuery && setShowSuggestions(true)}
-              onKeyDown={handleSearchKeyDown}
-              isClearable
-              fullWidth
-              aria-label="Search monitors"
-            />
-            {showSuggestions && suggestions.length > 0 && (
               <EuiPanel
-                paddingSize="none"
-                style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0,
-                  zIndex: 1000, maxHeight: 250, overflow: 'auto',
-                  border: '1px solid #D3DAE6', borderTop: 'none',
-                }}
+                paddingSize="s"
+                hasBorder
+                style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
               >
-                {suggestions.map((s, i) => (
-                  <div
-                    key={s}
-                    style={{
-                      padding: '6px 12px', cursor: 'pointer',
-                      background: i === activeSuggestion ? '#E6F0FF' : 'white',
-                    }}
-                    onMouseDown={() => { setSearchQuery(s); setShowSuggestions(false); }}
-                    onMouseEnter={() => setActiveSuggestion(i)}
-                  >
-                    <EuiText size="s">{s}</EuiText>
-                  </div>
-                ))}
-              </EuiPanel>
-            )}
-          </div>
-          </div>
-
-          <EuiSpacer size="s" />
-
-          {/* Action bar */}
-          <div style={{ flexShrink: 0 }}>
-            <EuiFlexGroup gutterSize="s" alignItems="center" justifyContent="spaceBetween">
-              <EuiFlexItem grow={false}>
-                <EuiFlexGroup gutterSize="s" alignItems="center">
-                  <EuiFlexItem grow={false}>
-                    <EuiText size="s">
-                      <strong>{filtered.length}</strong> monitors
-                      {selectedIds.size > 0 && <span> · <strong>{selectedIds.size}</strong> selected</span>}
-                      {activeFilterCount > 0 && <span> · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>}
-                    </EuiText>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-              </EuiFlexItem>
-              <EuiFlexItem grow={false}>
-                <EuiFlexGroup gutterSize="s">
-                  {selectedIds.size > 0 && (
-                    <EuiFlexItem grow={false}>
-                      <EuiButton color="danger" size="s" iconType="trash" onClick={() => setShowDeleteConfirm(true)}>
-                        Delete ({selectedIds.size})
-                      </EuiButton>
-                    </EuiFlexItem>
-                  )}
-                  <EuiFlexItem grow={false}>
-                    <EuiButton size="s" iconType="exportAction" onClick={exportJson} isDisabled={filtered.length === 0}>
-                      Export
-                    </EuiButton>
-                  </EuiFlexItem>
-                  {onImport && (
-                    <EuiFlexItem grow={false}>
-                      <EuiButton size="s" iconType="importAction" onClick={handleImportFile}>
-                        Import
-                      </EuiButton>
-                    </EuiFlexItem>
-                  )}
-                  <EuiFlexItem grow={false}>
-                    <EuiPopover
-                      button={
-                        <EuiButton size="s" iconType="listAdd" onClick={() => setShowColumnPicker(!showColumnPicker)}>
-                          Columns
-                        </EuiButton>
-                      }
-                      isOpen={showColumnPicker}
-                      closePopover={() => setShowColumnPicker(false)}
-                      panelPaddingSize="s"
+                {/* Create Monitor Button + Search bar */}
+                <div style={{ flexShrink: 0 }}>
+                  {onCreateMonitor && (
+                    <EuiFlexGroup
+                      justifyContent="flexEnd"
+                      responsive={false}
+                      gutterSize="s"
+                      style={{ marginBottom: 8 }}
                     >
-                      <div style={{ width: 250, maxHeight: 400, overflow: 'auto' }}>
-                        <EuiText size="xs"><strong>Toggle columns</strong></EuiText>
-                        <EuiSpacer size="xs" />
-                        <EuiCheckboxGroup
-                          options={allColumns.map(c => ({ id: c.id, label: c.label }))}
-                          idToSelectedMap={Object.fromEntries(allColumns.map(c => [c.id, visibleColumns.has(c.id)]))}
-                          onChange={(id) => {
-                            const next = new Set(visibleColumns);
-                            if (next.has(id)) next.delete(id); else next.add(id);
-                            setVisibleColumns(next);
-                          }}
-                        />
-                      </div>
-                    </EuiPopover>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          </div>
+                      <EuiFlexItem grow={false}>
+                        <EuiButton fill iconType="plusInCircle" size="s" onClick={onCreateMonitor}>
+                          Create Monitor
+                        </EuiButton>
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                  )}
 
-          <EuiSpacer size="s" />
+                  {/* Search bar with suggestions */}
+                  <div ref={searchRef} style={{ position: 'relative' }}>
+                    <EuiFieldSearch
+                      placeholder="Search monitors by name, labels (team:infra), annotations..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowSuggestions(true);
+                        setActiveSuggestion(-1);
+                      }}
+                      onFocus={() => searchQuery && setShowSuggestions(true)}
+                      onKeyDown={handleSearchKeyDown}
+                      isClearable
+                      fullWidth
+                      aria-label="Search monitors"
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <EuiPanel
+                        paddingSize="none"
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          zIndex: 1000,
+                          maxHeight: 250,
+                          overflow: 'auto',
+                          border: '1px solid #D3DAE6',
+                          borderTop: 'none',
+                        }}
+                      >
+                        {suggestions.map((s, i) => (
+                          <div
+                            key={s}
+                            style={{
+                              padding: '6px 12px',
+                              cursor: 'pointer',
+                              background: i === activeSuggestion ? '#E6F0FF' : 'white',
+                            }}
+                            onMouseDown={() => {
+                              setSearchQuery(s);
+                              setShowSuggestions(false);
+                            }}
+                            onMouseEnter={() => setActiveSuggestion(i)}
+                          >
+                            <EuiText size="s">{s}</EuiText>
+                          </div>
+                        ))}
+                      </EuiPanel>
+                    )}
+                  </div>
+                </div>
 
-          {/* Table */}
-          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} className="monitors-table-wrapper" ref={tableWrapperRef}>
-            <style>{`
+                <EuiSpacer size="s" />
+
+                {/* Action bar */}
+                <div style={{ flexShrink: 0 }}>
+                  <EuiFlexGroup gutterSize="s" alignItems="center" justifyContent="spaceBetween">
+                    <EuiFlexItem grow={false}>
+                      <EuiFlexGroup gutterSize="s" alignItems="center">
+                        <EuiFlexItem grow={false}>
+                          <EuiText size="s">
+                            <strong>{filtered.length}</strong> monitors
+                            {selectedIds.size > 0 && (
+                              <span>
+                                {' '}
+                                · <strong>{selectedIds.size}</strong> selected
+                              </span>
+                            )}
+                            {activeFilterCount > 0 && (
+                              <span>
+                                {' '}
+                                · {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </EuiText>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      <EuiFlexGroup gutterSize="s">
+                        {selectedIds.size > 0 && (
+                          <EuiFlexItem grow={false}>
+                            <EuiButton
+                              color="danger"
+                              size="s"
+                              iconType="trash"
+                              onClick={() => setShowDeleteConfirm(true)}
+                            >
+                              Delete ({selectedIds.size})
+                            </EuiButton>
+                          </EuiFlexItem>
+                        )}
+                        <EuiFlexItem grow={false}>
+                          <EuiButton
+                            size="s"
+                            iconType="exportAction"
+                            onClick={exportJson}
+                            isDisabled={filtered.length === 0}
+                          >
+                            Export
+                          </EuiButton>
+                        </EuiFlexItem>
+                        {onImport && (
+                          <EuiFlexItem grow={false}>
+                            <EuiButton size="s" iconType="importAction" onClick={handleImportFile}>
+                              Import
+                            </EuiButton>
+                          </EuiFlexItem>
+                        )}
+                        <EuiFlexItem grow={false}>
+                          <EuiPopover
+                            button={
+                              <EuiButton
+                                size="s"
+                                iconType="listAdd"
+                                onClick={() => setShowColumnPicker(!showColumnPicker)}
+                              >
+                                Columns
+                              </EuiButton>
+                            }
+                            isOpen={showColumnPicker}
+                            closePopover={() => setShowColumnPicker(false)}
+                            panelPaddingSize="s"
+                          >
+                            <div style={{ width: 250, maxHeight: 400, overflow: 'auto' }}>
+                              <EuiText size="xs">
+                                <strong>Toggle columns</strong>
+                              </EuiText>
+                              <EuiSpacer size="xs" />
+                              <EuiCheckboxGroup
+                                options={allColumns.map((c) => ({ id: c.id, label: c.label }))}
+                                idToSelectedMap={Object.fromEntries(
+                                  allColumns.map((c) => [c.id, visibleColumns.has(c.id)])
+                                )}
+                                onChange={(id) => {
+                                  const next = new Set(visibleColumns);
+                                  if (next.has(id)) next.delete(id);
+                                  else next.add(id);
+                                  setVisibleColumns(next);
+                                }}
+                              />
+                            </div>
+                          </EuiPopover>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                </div>
+
+                <EuiSpacer size="s" />
+
+                {/* Table */}
+                <div
+                  style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}
+                  className="monitors-table-wrapper"
+                  ref={tableWrapperRef}
+                >
+                  <style>{`
               .monitors-table-wrapper .euiTable { table-layout: auto; min-width: 100%; }
               .monitors-table-wrapper .euiTableHeaderCell { position: relative; }
               .monitors-table-wrapper .euiTableHeaderCell:last-child { border-right: none; }
             `}</style>
-            {!loading && filtered.length === 0 ? (
-              <EuiEmptyPrompt
-                title={<h2>No Monitors Found</h2>}
-                body={
+                  {!loading && filtered.length === 0 ? (
+                    <EuiEmptyPrompt
+                      title={<h2>No Monitors Found</h2>}
+                      body={
+                        <p>
+                          {rules.length === 0
+                            ? 'No monitors configured yet.'
+                            : 'No monitors match your current search and filters.'}
+                        </p>
+                      }
+                      actions={
+                        activeFilterCount > 0 || searchQuery ? (
+                          <EuiButton onClick={clearAllFilters}>Clear filters</EuiButton>
+                        ) : undefined
+                      }
+                    />
+                  ) : (
+                    <>
+                      <EuiBasicTable
+                        items={paginatedRules}
+                        columns={tableColumns}
+                        loading={loading}
+                        sorting={{
+                          sort: { field: sortField as any, direction: sortDirection },
+                        }}
+                        onChange={(criteria: any) => {
+                          onTableChange(criteria);
+                        }}
+                        rowProps={(item: UnifiedRule) => ({
+                          style: selectedIds.has(item.id)
+                            ? { backgroundColor: '#F0F5FF' }
+                            : undefined,
+                        })}
+                      />
+                      {filtered.length > 0 && (
+                        <>
+                          <EuiSpacer size="m" />
+                          <TablePagination
+                            pageIndex={pageIndex}
+                            pageSize={pageSize}
+                            totalItemCount={filtered.length}
+                            pageSizeOptions={[10, 20, 50]}
+                            onChangePage={setPageIndex}
+                            onChangePageSize={setPageSize}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </EuiPanel>
+
+              {/* Delete confirmation modal */}
+              {showDeleteConfirm && (
+                <EuiConfirmModal
+                  title={`Delete ${selectedIds.size} monitor${selectedIds.size > 1 ? 's' : ''}?`}
+                  onCancel={() => setShowDeleteConfirm(false)}
+                  onConfirm={handleBulkDelete}
+                  cancelButtonText="Cancel"
+                  confirmButtonText="Delete"
+                  buttonColor="danger"
+                >
                   <p>
-                    {rules.length === 0
-                      ? 'No monitors configured yet.'
-                      : 'No monitors match your current search and filters.'}
+                    This will remove the selected monitor{selectedIds.size > 1 ? 's' : ''} from the
+                    current view. This action cannot be undone within this session.
                   </p>
-                }
-                actions={
-                  activeFilterCount > 0 || searchQuery ? (
-                    <EuiButton onClick={clearAllFilters}>Clear filters</EuiButton>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <EuiBasicTable
-                items={filtered}
-                columns={tableColumns}
-                loading={loading}
-                sorting={{
-                  sort: { field: sortField as any, direction: sortDirection },
-                }}
-                onChange={onTableChange}
-                rowProps={(item: UnifiedRule) => ({
-                  style: selectedIds.has(item.id) ? { backgroundColor: '#F0F5FF' } : undefined,
-                })}
-              />
-            )}
-          </div>
-        </EuiPanel>
+                </EuiConfirmModal>
+              )}
 
-        {/* Delete confirmation modal */}
-        {showDeleteConfirm && (
-          <EuiConfirmModal
-            title={`Delete ${selectedIds.size} monitor${selectedIds.size > 1 ? 's' : ''}?`}
-            onCancel={() => setShowDeleteConfirm(false)}
-            onConfirm={handleBulkDelete}
-            cancelButtonText="Cancel"
-            confirmButtonText="Delete"
-            buttonColor="danger"
-          >
-            <p>
-              This will remove the selected monitor{selectedIds.size > 1 ? 's' : ''} from the current view.
-              This action cannot be undone within this session.
-            </p>
-          </EuiConfirmModal>
-        )}
-
-        {/* Monitor detail flyout */}
-        {selectedMonitor && (
-          <MonitorDetailFlyout
-            monitor={selectedMonitor}
-            onClose={() => setSelectedMonitor(null)}
-            onSilence={(id) => {
-              if (onSilence) onSilence(id);
-              setSelectedMonitor(null);
-            }}
-            onDelete={(id) => {
-              onDelete([id]);
-              setSelectedMonitor(null);
-            }}
-            onClone={(monitor) => {
-              if (onClone) onClone(monitor);
-              setSelectedMonitor(null);
-            }}
-          />
-        )}
-      </EuiResizablePanel>
-    </>
-  );
-}}
-</EuiResizableContainer>
+              {/* Monitor detail flyout */}
+              {selectedMonitor && (
+                <MonitorDetailFlyout
+                  monitor={selectedMonitor}
+                  onClose={() => setSelectedMonitor(null)}
+                  onSilence={(id) => {
+                    if (onSilence) onSilence(id);
+                    setSelectedMonitor(null);
+                  }}
+                  onDelete={(id) => {
+                    onDelete([id]);
+                    setSelectedMonitor(null);
+                  }}
+                  onClone={(monitor) => {
+                    if (onClone) onClone(monitor);
+                    setSelectedMonitor(null);
+                  }}
+                />
+              )}
+            </EuiResizablePanel>
+          </>
+        );
+      }}
+    </EuiResizableContainer>
   );
 };
-

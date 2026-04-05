@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Standalone Express server for the Alert Manager.
  * Supports OpenSearch Alerting and Prometheus/AMP backends with mock mode.
@@ -8,8 +13,6 @@ import yaml from 'js-yaml';
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
-  MockOpenSearchBackend,
-  MockPrometheusBackend,
   HttpOpenSearchBackend,
   DirectQueryPrometheusBackend,
   SuppressionRuleService,
@@ -17,6 +20,7 @@ import {
   OpenSearchBackend,
   PrometheusBackend,
 } from '../core';
+import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
 import {
   handleListDatasources,
   handleGetDatasource,
@@ -35,6 +39,8 @@ import {
   handleGetPromAlerts,
   handleGetUnifiedAlerts,
   handleGetUnifiedRules,
+  handleGetRuleDetail,
+  handleGetAlertDetail,
 } from '../server/routes/handlers';
 import {
   handleCreateMonitor,
@@ -87,9 +93,24 @@ async function initBackends(): Promise<void> {
     promBackend = mockProm;
 
     datasourceService.seed([
-      { name: 'OpenSearch Production', type: 'opensearch', url: 'https://opensearch.example.com:9200', enabled: true },
-      { name: 'Prometheus US-East (AMP)', type: 'prometheus', url: 'https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxx', enabled: true },
-      { name: 'OpenSearch Staging', type: 'opensearch', url: 'https://opensearch-staging.example.com:9200', enabled: true },
+      {
+        name: 'OpenSearch Production',
+        type: 'opensearch',
+        url: 'https://opensearch.example.com:9200',
+        enabled: true,
+      },
+      {
+        name: 'Prometheus US-East (AMP)',
+        type: 'prometheus',
+        url: 'https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxx',
+        enabled: true,
+      },
+      {
+        name: 'OpenSearch Staging',
+        type: 'opensearch',
+        url: 'https://opensearch-staging.example.com:9200',
+        enabled: true,
+      },
     ]);
 
     mockOs.seed('ds-1');
@@ -115,7 +136,10 @@ async function initBackends(): Promise<void> {
         type: 'opensearch',
         url: OPENSEARCH_URL,
         enabled: true,
-        auth: { type: 'basic', credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD } },
+        auth: {
+          type: 'basic',
+          credentials: { username: OPENSEARCH_USERNAME, password: OPENSEARCH_PASSWORD },
+        },
       },
     ]);
 
@@ -135,7 +159,7 @@ async function initBackends(): Promise<void> {
     } else {
       logger.warn(
         'No Prometheus datasources found in OpenSearch SQL plugin. ' +
-        'Register one via POST /_plugins/_query/_datasources with connector=PROMETHEUS.',
+          'Register one via POST /_plugins/_query/_datasources with connector=PROMETHEUS.'
       );
     }
   }
@@ -206,7 +230,12 @@ app.post('/api/datasources/:dsId/monitors', async (req, res) => {
   res.status(r.status).json(r.body);
 });
 app.put('/api/datasources/:dsId/monitors/:monitorId', async (req, res) => {
-  const r = await handleUpdateOSMonitor(alertService, req.params.dsId, req.params.monitorId, req.body);
+  const r = await handleUpdateOSMonitor(
+    alertService,
+    req.params.dsId,
+    req.params.monitorId,
+    req.body
+  );
   res.status(r.status).json(r.body);
 });
 app.delete('/api/datasources/:dsId/monitors/:monitorId', async (req, res) => {
@@ -218,7 +247,12 @@ app.get('/api/datasources/:dsId/alerts', async (req, res) => {
   res.status(r.status).json(r.body);
 });
 app.post('/api/datasources/:dsId/monitors/:monitorId/acknowledge', async (req, res) => {
-  const r = await handleAcknowledgeOSAlerts(alertService, req.params.dsId, req.params.monitorId, req.body);
+  const r = await handleAcknowledgeOSAlerts(
+    alertService,
+    req.params.dsId,
+    req.params.monitorId,
+    req.body
+  );
   res.status(r.status).json(r.body);
 });
 
@@ -375,9 +409,18 @@ app.get('/api/alertmanager/config', async (_req, res) => {
 function extractReceiverIntegrations(receiver: any): Array<{ type: string; summary: string }> {
   const integrations: Array<{ type: string; summary: string }> = [];
   const configKeys = [
-    'webhook_configs', 'slack_configs', 'email_configs', 'pagerduty_configs',
-    'opsgenie_configs', 'victorops_configs', 'pushover_configs', 'wechat_configs',
-    'sns_configs', 'telegram_configs', 'msteams_configs', 'webex_configs',
+    'webhook_configs',
+    'slack_configs',
+    'email_configs',
+    'pagerduty_configs',
+    'opsgenie_configs',
+    'victorops_configs',
+    'pushover_configs',
+    'wechat_configs',
+    'sns_configs',
+    'telegram_configs',
+    'msteams_configs',
+    'webex_configs',
   ];
   for (const key of configKeys) {
     if (receiver[key] && Array.isArray(receiver[key])) {
@@ -509,6 +552,20 @@ app.post('/api/alerts/:id/acknowledge', async (req, res) => {
 });
 app.post('/api/alerts/:id/silence', async (req, res) => {
   const r = await handleSilenceAlert(suppressionService, req.params.id, req.body);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Detail View Endpoints (on-demand, loaded when user opens flyout)
+// ============================================================================
+
+app.get('/api/rules/:dsId/:ruleId', async (req, res) => {
+  const r = await handleGetRuleDetail(alertService, req.params.dsId, req.params.ruleId);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/alerts/:dsId/:alertId', async (req, res) => {
+  const r = await handleGetAlertDetail(alertService, req.params.dsId, req.params.alertId);
   res.status(r.status).json(r.body);
 });
 

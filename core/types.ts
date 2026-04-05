@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Core types for the Alert Manager plugin.
  *
@@ -31,6 +36,9 @@ export interface Datasource {
   auth?: {
     type: 'basic' | 'apikey' | 'sigv4';
     credentials?: Record<string, string>;
+  };
+  tls?: {
+    rejectUnauthorized?: boolean;
   };
 }
 
@@ -99,12 +107,18 @@ export interface OSTrigger {
   actions: OSAction[];
 }
 
-export interface OSMonitorInput {
-  search: {
-    indices: string[];
-    query: Record<string, any>;
-  };
-}
+export type OSMonitorInput =
+  | { search: { indices: string[]; query: Record<string, unknown> } }
+  | {
+      uri: { api_type: string; path: string; path_params: string; url: string; clusters: string[] };
+    }
+  | {
+      doc_level_input: {
+        description: string;
+        indices: string[];
+        queries: Array<{ id: string; name: string; query: string; tags: string[] }>;
+      };
+    };
 
 export interface OSMonitor {
   id: string;
@@ -150,8 +164,111 @@ export interface OSDestination {
   last_update_time: number;
   schema_version?: number;
   slack?: { url: string };
-  custom_webhook?: Record<string, any>;
-  email?: Record<string, any>;
+  custom_webhook?: Record<string, unknown>;
+  email?: Record<string, unknown>;
+}
+
+// ============================================================================
+// OpenSearch Alerting API response shapes (for backend parsing)
+// ============================================================================
+
+export interface OSMonitorSource {
+  type?: string;
+  monitor_type?: string;
+  name?: string;
+  enabled?: boolean;
+  schedule?: OSSchedule;
+  inputs?: OSMonitorInput[];
+  triggers?: OSRawTrigger[];
+  last_update_time?: number;
+  schema_version?: number;
+}
+
+export interface OSRawTrigger {
+  id?: string;
+  name?: string;
+  severity?: string | number;
+  condition?: { script: { source: string; lang?: string } };
+  actions?: OSRawAction[];
+  query_level_trigger?: Record<string, unknown>;
+  bucket_level_trigger?: Record<string, unknown>;
+  doc_level_trigger?: Record<string, unknown>;
+}
+
+export interface OSRawAction {
+  id?: string;
+  name?: string;
+  destination_id?: string;
+  message_template?: { source: string; lang?: string };
+  subject_template?: { source: string; lang?: string };
+  throttle_enabled?: boolean;
+  throttle?: { value: number; unit: string };
+}
+
+export interface OSMonitorHit {
+  _id: string;
+  _source: OSMonitorSource;
+  sort?: unknown[];
+}
+
+export interface OSSearchResponse {
+  hits: {
+    total?: { value: number };
+    hits: OSMonitorHit[];
+  };
+}
+
+export interface OSGetMonitorResponse {
+  _id: string;
+  _version?: number;
+  _seq_no?: number;
+  _primary_term?: number;
+  monitor: OSMonitorSource;
+}
+
+export interface OSCreateMonitorResponse {
+  _id: string;
+  _version?: number;
+  monitor: OSMonitorSource;
+}
+
+export interface OSAlertRaw {
+  id?: string;
+  alert_id?: string;
+  version?: number;
+  monitor_id?: string;
+  monitor_name?: string;
+  monitor_version?: number;
+  trigger_id?: string;
+  trigger_name?: string;
+  state?: string;
+  severity?: string | number;
+  error_message?: string | null;
+  start_time?: number;
+  last_notification_time?: number;
+  end_time?: number | null;
+  acknowledged_time?: number | null;
+  action_execution_results?: unknown[];
+}
+
+export interface OSAlertsApiResponse {
+  totalAlerts?: number;
+  alerts?: OSAlertRaw[];
+}
+
+export interface OSDestinationRaw {
+  id?: string;
+  type?: string;
+  name?: string;
+  last_update_time?: number;
+  schema_version?: number;
+  slack?: { url: string };
+  custom_webhook?: Record<string, unknown>;
+  email?: Record<string, unknown>;
+}
+
+export interface OSDestinationsApiResponse {
+  destinations?: OSDestinationRaw[];
 }
 
 // ============================================================================
@@ -215,13 +332,17 @@ export interface OpenSearchBackend {
   getMonitors(ds: Datasource): Promise<OSMonitor[]>;
   getMonitor(ds: Datasource, monitorId: string): Promise<OSMonitor | null>;
   createMonitor(ds: Datasource, monitor: Omit<OSMonitor, 'id'>): Promise<OSMonitor>;
-  updateMonitor(ds: Datasource, monitorId: string, monitor: Partial<OSMonitor>): Promise<OSMonitor | null>;
+  updateMonitor(
+    ds: Datasource,
+    monitorId: string,
+    monitor: Partial<OSMonitor>
+  ): Promise<OSMonitor | null>;
   deleteMonitor(ds: Datasource, monitorId: string): Promise<boolean>;
-  runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<any>;
+  runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<unknown>;
 
   // Alerts
   getAlerts(ds: Datasource): Promise<{ alerts: OSAlert[]; totalAlerts: number }>;
-  acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<any>;
+  acknowledgeAlerts(ds: Datasource, monitorId: string, alertIds: string[]): Promise<unknown>;
 
   // Destinations
   getDestinations(ds: Datasource): Promise<OSDestination[]>;
@@ -256,7 +377,11 @@ export interface AlertmanagerAlert {
   endsAt: string;
   generatorURL: string;
   fingerprint: string;
-  status: { state: 'active' | 'suppressed' | 'unprocessed'; silencedBy: string[]; inhibitedBy: string[] };
+  status: {
+    state: 'active' | 'suppressed' | 'unprocessed';
+    silencedBy: string[];
+    inhibitedBy: string[];
+  };
   receivers: Array<{ name: string }>;
 }
 
@@ -271,6 +396,63 @@ export interface AlertmanagerReceiver {
   name: string;
 }
 
+// ============================================================================
+// Prometheus API response shapes (for backend parsing)
+// ============================================================================
+
+export interface PromRulesApiResponse {
+  data?: { groups: PromRawRuleGroup[] };
+  groups?: PromRawRuleGroup[];
+  status?: string;
+}
+
+export interface PromRawRuleGroup {
+  name: string;
+  file: string;
+  interval?: string | number;
+  rules: PromRawRule[];
+}
+
+export interface PromRawRule {
+  type: 'recording' | 'alerting';
+  name?: string;
+  record?: string;
+  alert?: string;
+  expr?: string;
+  query?: string;
+  for?: string;
+  duration?: string | number;
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+  alerts?: PromRawAlert[];
+  health?: string;
+  state?: string;
+  lastEvaluation?: string;
+  evaluationTime?: number;
+}
+
+export interface PromRawAlert {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  state: string;
+  activeAt: string;
+  value?: string | number;
+}
+
+export interface PromAlertsApiResponse {
+  data?: PromRawAlert[] | { alerts: PromRawAlert[] };
+  alerts?: PromRawAlert[];
+  status?: string;
+}
+
+export interface DatasourceDefinition {
+  name: string;
+  connector?: string;
+  status?: string;
+  properties?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface AlertmanagerAlertGroup {
   labels: Record<string, string>;
   receiver: { name: string };
@@ -278,6 +460,12 @@ export interface AlertmanagerAlertGroup {
 }
 
 /** Prometheus / AMP backend */
+/** Time-series data point from Prometheus range query. */
+export interface PromTimeSeriesPoint {
+  timestamp: number;
+  value: number;
+}
+
 export interface PrometheusBackend {
   readonly type: 'prometheus';
 
@@ -289,6 +477,18 @@ export interface PrometheusBackend {
 
   // Workspace discovery
   listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]>;
+
+  /** Execute a PromQL range query and return time-series data points. */
+  queryRange?(
+    ds: Datasource,
+    query: string,
+    start: number,
+    end: number,
+    step: number
+  ): Promise<PromTimeSeriesPoint[]>;
+
+  /** Execute a PromQL instant query and return point-in-time values. */
+  queryInstant?(ds: Datasource, query: string, time?: number): Promise<PromTimeSeriesPoint[]>;
 
   // ---- Alertmanager operations (optional — only available when alertmanagerUrl is set) ----
 
@@ -330,9 +530,16 @@ export interface DatasourceService {
 // ============================================================================
 
 export type UnifiedAlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
-export type UnifiedAlertState = 'active' | 'pending' | 'acknowledged' | 'resolved' | 'error';
+export type UnifiedAlertState =
+  | 'active'
+  | 'pending'
+  | 'acknowledged'
+  | 'silenced'
+  | 'resolved'
+  | 'error';
 
-export interface UnifiedAlert {
+/** Lightweight alert representation for list views and tables. */
+export interface UnifiedAlertSummary {
   id: string;
   datasourceId: string;
   datasourceType: DatasourceType;
@@ -344,11 +551,21 @@ export interface UnifiedAlert {
   lastUpdated: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
-  // Original backend-specific data
+}
+
+/** Full alert with backend-specific raw data. Use for detail views only. */
+export interface UnifiedAlert extends UnifiedAlertSummary {
   raw: OSAlert | PromAlert;
 }
 
-export type MonitorType = 'metric' | 'log' | 'apm' | 'composite' | 'infrastructure' | 'synthetics';
+export type MonitorType =
+  | 'metric'
+  | 'log'
+  | 'apm'
+  | 'composite'
+  | 'infrastructure'
+  | 'synthetics'
+  | 'cluster_metrics';
 export type MonitorStatus = 'active' | 'pending' | 'muted' | 'disabled';
 export type MonitorHealthStatus = 'healthy' | 'failing' | 'no_data';
 
@@ -375,7 +592,8 @@ export interface NotificationRouting {
   throttle?: string; // e.g. "10 minutes"
 }
 
-export interface UnifiedRule {
+/** Lightweight rule representation for list views and tables. */
+export interface UnifiedRuleSummary {
   id: string;
   datasourceId: string;
   datasourceType: DatasourceType;
@@ -387,7 +605,6 @@ export interface UnifiedRule {
   group?: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
-  // Extended fields for monitor management
   monitorType: MonitorType;
   status: MonitorStatus;
   healthStatus: MonitorHealthStatus;
@@ -396,19 +613,21 @@ export interface UnifiedRule {
   lastModified: string;
   lastTriggered?: string;
   notificationDestinations: string[];
-  // Detail view fields
-  description: string;
-  aiSummary: string;
   evaluationInterval: string;
   pendingPeriod: string;
+  threshold?: { operator: string; value: number; unit?: string };
+}
+
+/** Full rule with detail-view fields. Use for single-item detail views only. */
+export interface UnifiedRule extends UnifiedRuleSummary {
+  description: string;
+  aiSummary: string;
   firingPeriod?: string;
   lookbackPeriod?: string;
-  threshold?: { operator: string; value: number; unit?: string };
   alertHistory: AlertHistoryEntry[];
   conditionPreviewData: Array<{ timestamp: number; value: number }>;
   notificationRouting: NotificationRouting[];
   suppressionRules: SuppressionRule[];
-  // Original backend-specific data
   raw: OSMonitor | PromAlertingRule;
 }
 
@@ -442,10 +661,12 @@ export interface UnifiedFetchOptions {
   /** Per-datasource timeout in ms. Defaults to 10000. */
   timeoutMs?: number;
   /** Called as each datasource completes, for progressive UI updates. */
-  onProgress?: (result: DatasourceFetchResult<any>) => void;
+  onProgress?: (result: DatasourceFetchResult<unknown>) => void;
   /** Pagination params for server-side pagination. */
   page?: number;
   pageSize?: number;
+  /** Maximum total results to return. Defaults to 5000. Prevents unbounded responses. */
+  maxResults?: number;
 }
 
 // ============================================================================

@@ -4,3 +4,10 @@ node_modules/
 dist/
 .DS_Store
 *.vsix
+standalone/dist/
+standalone/node_modules/
+.claude/
+.playwright-mcp/
+.playwright/
+.pytest_cache/
+coverage/

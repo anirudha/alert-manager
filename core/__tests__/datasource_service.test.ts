@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { InMemoryDatasourceService } from '../datasource_service';
 import { Logger } from '../types';
 
@@ -28,8 +33,18 @@ describe('InMemoryDatasourceService', () => {
     });
 
     it('increments ids', async () => {
-      const ds1 = await service.create({ name: 'DS1', type: 'opensearch', url: 'http://a', enabled: true });
-      const ds2 = await service.create({ name: 'DS2', type: 'prometheus', url: 'http://b', enabled: true });
+      const ds1 = await service.create({
+        name: 'DS1',
+        type: 'opensearch',
+        url: 'http://a',
+        enabled: true,
+      });
+      const ds2 = await service.create({
+        name: 'DS2',
+        type: 'prometheus',
+        url: 'http://b',
+        enabled: true,
+      });
       expect(ds1.id).toBe('ds-1');
       expect(ds2.id).toBe('ds-2');
     });
@@ -42,7 +57,12 @@ describe('InMemoryDatasourceService', () => {
     });
 
     it('gets a datasource by id', async () => {
-      const created = await service.create({ name: 'Test', type: 'opensearch', url: 'http://a', enabled: true });
+      const created = await service.create({
+        name: 'Test',
+        type: 'opensearch',
+        url: 'http://a',
+        enabled: true,
+      });
       const fetched = await service.get(created.id);
       expect(fetched).toEqual(created);
     });
@@ -52,7 +72,12 @@ describe('InMemoryDatasourceService', () => {
     });
 
     it('updates a datasource', async () => {
-      const ds = await service.create({ name: 'Old', type: 'opensearch', url: 'http://a', enabled: true });
+      const ds = await service.create({
+        name: 'Old',
+        type: 'opensearch',
+        url: 'http://a',
+        enabled: true,
+      });
       const updated = await service.update(ds.id, { name: 'New' });
       expect(updated!.name).toBe('New');
       expect(updated!.id).toBe(ds.id);
@@ -63,7 +88,12 @@ describe('InMemoryDatasourceService', () => {
     });
 
     it('deletes a datasource', async () => {
-      const ds = await service.create({ name: 'ToDelete', type: 'opensearch', url: 'http://a', enabled: true });
+      const ds = await service.create({
+        name: 'ToDelete',
+        type: 'opensearch',
+        url: 'http://a',
+        enabled: true,
+      });
       expect(await service.delete(ds.id)).toBe(true);
       expect(await service.get(ds.id)).toBeNull();
     });
@@ -94,7 +124,12 @@ describe('InMemoryDatasourceService', () => {
     });
 
     it('returns unknown type message for unsupported type', async () => {
-      const ds = await service.create({ name: 'X', type: 'unknown' as any, url: 'http://a', enabled: true });
+      const ds = await service.create({
+        name: 'X',
+        type: 'unknown' as any,
+        url: 'http://a',
+        enabled: true,
+      });
       const result = await service.testConnection(ds.id);
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/unknown datasource type/i);

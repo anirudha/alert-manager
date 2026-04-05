@@ -1,7 +1,7 @@
 {
-  "prefix": "alarms",
+  "prefix": "alertManager",
   "paths": {
-    "alarms": "."
+    "alertManager": "."
   },
   "translations": ["translations/ja-JP.json"]
 }

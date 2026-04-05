@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Prometheus backend that routes all API calls through OpenSearch Direct Query
  * resource APIs instead of connecting to Prometheus directly.
@@ -31,6 +36,13 @@ import {
   AlertmanagerReceiver,
   AlertmanagerSilence,
   AlertmanagerStatus,
+  PromRulesApiResponse,
+  PromRawRuleGroup,
+  PromRawRule,
+  PromRawAlert,
+  PromAlertsApiResponse,
+  DatasourceDefinition,
+  PromTimeSeriesPoint,
 } from './types';
 
 export interface DirectQueryConfig {
@@ -38,6 +50,8 @@ export interface DirectQueryConfig {
   opensearchUrl: string;
   /** OpenSearch basic auth credentials */
   auth?: { username: string; password: string };
+  /** Whether to reject unauthorized TLS certificates for discovery and helper calls. Defaults to true. */
+  rejectUnauthorized?: boolean;
 }
 
 export class DirectQueryPrometheusBackend implements PrometheusBackend {
@@ -45,15 +59,18 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   private readonly http: HttpClient;
   private readonly baseUrl: string;
   private readonly defaultAuth?: { username: string; password: string };
+  private readonly defaultRejectUnauthorized: boolean;
 
-  constructor(private readonly logger: Logger, private readonly config: DirectQueryConfig) {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: DirectQueryConfig
+  ) {
     this.http = new HttpClient(logger);
     this.baseUrl = config.opensearchUrl.replace(/\/+$/, '');
     this.defaultAuth = config.auth;
+    this.defaultRejectUnauthorized = config.rejectUnauthorized ?? false;
 
-    this.logger.info(
-      `DirectQuery Prometheus backend configured: OpenSearch=${this.baseUrl}`
-    );
+    this.logger.info(`DirectQuery Prometheus backend configured: OpenSearch=${this.baseUrl}`);
   }
 
   // =========================================================================
@@ -68,34 +85,41 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
    */
   async discoverDatasources(): Promise<Array<Omit<Datasource, 'id'>>> {
     try {
-      const resp = await this.http.request<any>({
+      const resp = await this.http.request<DatasourceDefinition[]>({
         method: 'GET',
         url: `${this.baseUrl}/_plugins/_query/_datasources`,
         auth: this.defaultAuth,
-        rejectUnauthorized: false,
+        rejectUnauthorized: this.defaultRejectUnauthorized,
         timeoutMs: 10_000,
       });
 
-      const all: any[] = Array.isArray(resp.body) ? resp.body : [];
+      const all: DatasourceDefinition[] = Array.isArray(resp.body) ? resp.body : [];
       const promSources = all.filter(
-        (d) => d.connector?.toUpperCase() === 'PROMETHEUS' && d.status !== 'DISABLED',
+        (d: DatasourceDefinition) =>
+          d.connector?.toUpperCase() === 'PROMETHEUS' && d.status !== 'DISABLED'
       );
 
       this.logger.info(
         `Discovered ${promSources.length} Prometheus datasource(s) in OpenSearch SQL plugin` +
-        (promSources.length > 0
-          ? `: ${promSources.map((d: any) => d.name).join(', ')}`
-          : ''),
+          (promSources.length > 0
+            ? `: ${promSources.map((d: DatasourceDefinition) => d.name).join(', ')}`
+            : '')
       );
 
-      return promSources.map((d: any) => ({
+      return promSources.map((d: DatasourceDefinition) => ({
         name: d.name,
         type: 'prometheus' as const,
         url: this.baseUrl,
         enabled: true,
         directQueryName: d.name,
         auth: this.defaultAuth
-          ? { type: 'basic' as const, credentials: { username: this.defaultAuth.username, password: this.defaultAuth.password } }
+          ? {
+              type: 'basic' as const,
+              credentials: {
+                username: this.defaultAuth.username,
+                password: this.defaultAuth.password,
+              },
+            }
           : undefined,
       }));
     } catch (err) {
@@ -113,7 +137,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     if (!name) {
       throw new Error(
         `Datasource "${ds.name}" (${ds.id}) has no directQueryName. ` +
-        'It must be auto-discovered from the OpenSearch SQL plugin.',
+          'It must be auto-discovered from the OpenSearch SQL plugin.'
       );
     }
     return name;
@@ -129,44 +153,53 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     return buildAuthFromDatasource(ds) || this.defaultAuth;
   }
 
-  private async get<T = any>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
+  private resolveTls(ds: Datasource): boolean {
+    return ds.tls?.rejectUnauthorized ?? this.defaultRejectUnauthorized;
+  }
+
+  private async get<T = unknown>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery GET ${url}`);
-    const resp = await this.http.request<any>({
+    const resp = await this.http.request<{ data?: T } & Record<string, unknown>>({
       method: 'GET',
       url,
       auth: this.resolveAuth(ds),
-      rejectUnauthorized: false,
+      rejectUnauthorized: this.resolveTls(ds),
       timeoutMs,
     });
-    return resp.body?.data !== undefined ? resp.body.data : resp.body;
+    return resp.body?.data !== undefined ? (resp.body.data as T) : (resp.body as unknown as T);
   }
 
-  private async post<T = any>(ds: Datasource, path: string, body: any, timeoutMs = 15_000): Promise<T> {
+  private async post<T = unknown>(
+    ds: Datasource,
+    path: string,
+    body: unknown,
+    timeoutMs = 15_000
+  ): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery POST ${url}`);
-    const resp = await this.http.request<any>({
+    const resp = await this.http.request<{ data?: T } & Record<string, unknown>>({
       method: 'POST',
       url,
       body,
       auth: this.resolveAuth(ds),
-      rejectUnauthorized: false,
+      rejectUnauthorized: this.resolveTls(ds),
       timeoutMs,
     });
-    return resp.body?.data !== undefined ? resp.body.data : resp.body;
+    return resp.body?.data !== undefined ? (resp.body.data as T) : (resp.body as unknown as T);
   }
 
-  private async del<T = any>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
+  private async del<T = unknown>(ds: Datasource, path: string, timeoutMs = 15_000): Promise<T> {
     const url = this.resourceUrl(ds, path);
     this.logger.debug(`DirectQuery DELETE ${url}`);
-    const resp = await this.http.request<any>({
+    const resp = await this.http.request<{ data?: T } & Record<string, unknown>>({
       method: 'DELETE',
       url,
       auth: this.resolveAuth(ds),
-      rejectUnauthorized: false,
+      rejectUnauthorized: this.resolveTls(ds),
       timeoutMs,
     });
-    return resp.body?.data !== undefined ? resp.body.data : resp.body;
+    return resp.body?.data !== undefined ? (resp.body.data as T) : (resp.body as unknown as T);
   }
 
   // =========================================================================
@@ -174,11 +207,11 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   // =========================================================================
 
   async getRuleGroups(ds: Datasource): Promise<PromRuleGroup[]> {
-    const data = await this.get<any>(ds, '/api/v1/rules');
+    const data = await this.get<PromRulesApiResponse>(ds, '/api/v1/rules');
 
-    let rawGroups: any[];
+    let rawGroups: PromRawRuleGroup[];
     if (Array.isArray(data)) {
-      rawGroups = data;
+      rawGroups = data as unknown as PromRawRuleGroup[];
     } else if (data?.groups) {
       rawGroups = data.groups;
     } else if (data?.data?.groups) {
@@ -188,20 +221,21 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
       rawGroups = [];
     }
 
-    const groups: PromRuleGroup[] = rawGroups.map((g: any) => ({
+    const groups: PromRuleGroup[] = rawGroups.map((g: PromRawRuleGroup) => ({
       name: g.name || '',
       file: g.file || '',
-      interval: typeof g.interval === 'number'
-        ? g.interval
-        : this.parseDurationToSeconds(g.interval || '60s'),
-      rules: (g.rules || []).map((r: any) => this.mapRule(r)),
+      interval:
+        typeof g.interval === 'number'
+          ? g.interval
+          : this.parseDurationToSeconds(String(g.interval || '60s')),
+      rules: (g.rules || []).map((r: PromRawRule) => this.mapRule(r)),
     }));
 
     if (ds.workspaceId && ds.workspaceId !== 'default') {
       return groups.filter(
         (g) =>
           g.file.includes(ds.workspaceId!) ||
-          g.rules.some((r) => r.type === 'alerting' && r.labels._workspace === ds.workspaceId),
+          g.rules.some((r) => r.type === 'alerting' && r.labels._workspace === ds.workspaceId)
       );
     }
 
@@ -214,20 +248,27 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlerts(ds: Datasource): Promise<PromAlert[]> {
     try {
-      const data = await this.get<any>(ds, '/api/v1/alerts');
-      let rawAlerts: any[];
+      const data = await this.get<PromAlertsApiResponse>(ds, '/api/v1/alerts');
+      let rawAlerts: PromRawAlert[];
       if (Array.isArray(data)) {
-        rawAlerts = data;
+        rawAlerts = data as unknown as PromRawAlert[];
       } else if (data?.alerts) {
-        rawAlerts = data.alerts;
-      } else if (data?.data?.alerts) {
-        rawAlerts = data.data.alerts;
+        rawAlerts = data.alerts as PromRawAlert[];
+      } else if (data?.data) {
+        const inner = data.data;
+        if (Array.isArray(inner)) {
+          rawAlerts = inner;
+        } else if (inner && typeof inner === 'object' && 'alerts' in inner) {
+          rawAlerts = (inner as { alerts: PromRawAlert[] }).alerts;
+        } else {
+          rawAlerts = [];
+        }
       } else {
         rawAlerts = [];
       }
 
       if (rawAlerts.length > 0) {
-        const alerts = rawAlerts.map((a: any) => this.mapAlert(a));
+        const alerts = rawAlerts.map((a: PromRawAlert) => this.mapAlert(a));
         if (ds.workspaceId && ds.workspaceId !== 'default') {
           return alerts.filter((a) => a.labels._workspace === ds.workspaceId);
         }
@@ -258,7 +299,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async listWorkspaces(ds: Datasource): Promise<PrometheusWorkspace[]> {
     const ampMatch = ds.url.match(
-      /aps-workspaces\.([^.]+)\.amazonaws\.com\/workspaces\/(ws-[a-zA-Z0-9]+)/,
+      /aps-workspaces\.([^.]+)\.amazonaws\.com\/workspaces\/(ws-[a-zA-Z0-9]+)/
     );
     if (ampMatch) {
       return [
@@ -299,7 +340,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerAlerts(): Promise<AlertmanagerAlert[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/alerts');
+      const data = await this.get<AlertmanagerAlert[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/alerts'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager alerts via direct query: ${err}`);
@@ -309,7 +353,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerAlertGroups(): Promise<AlertmanagerAlertGroup[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/alerts/groups');
+      const data = await this.get<AlertmanagerAlertGroup[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/alerts/groups'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager alert groups via direct query: ${err}`);
@@ -319,7 +366,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getAlertmanagerReceivers(): Promise<AlertmanagerReceiver[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/receivers');
+      const data = await this.get<AlertmanagerReceiver[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/receivers'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager receivers via direct query: ${err}`);
@@ -329,7 +379,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   async getSilences(): Promise<AlertmanagerSilence[]> {
     try {
-      const data = await this.get<any>(this.requireDefaultDs(), '/alertmanager/api/v2/silences');
+      const data = await this.get<AlertmanagerSilence[]>(
+        this.requireDefaultDs(),
+        '/alertmanager/api/v2/silences'
+      );
       return Array.isArray(data) ? data : [];
     } catch (err) {
       this.logger.warn(`Failed to get alertmanager silences via direct query: ${err}`);
@@ -338,14 +391,21 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   }
 
   async createSilence(silence: AlertmanagerSilence): Promise<string> {
-    const data = await this.post<any>(this.requireDefaultDs(), '/alertmanager/api/v2/silences', silence);
+    const data = await this.post<string | { silenceID?: string; silenceId?: string }>(
+      this.requireDefaultDs(),
+      '/alertmanager/api/v2/silences',
+      silence
+    );
     if (typeof data === 'string') return data;
     return data?.silenceID || data?.silenceId || '';
   }
 
   async deleteSilence(silenceId: string): Promise<boolean> {
     try {
-      await this.del(this.requireDefaultDs(), `/alertmanager/api/v2/silence/${encodeURIComponent(silenceId)}`);
+      await this.del<unknown>(
+        this.requireDefaultDs(),
+        `/alertmanager/api/v2/silence/${encodeURIComponent(silenceId)}`
+      );
       return true;
     } catch {
       return false;
@@ -360,7 +420,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   // Helpers
   // =========================================================================
 
-  private mapRule(r: any): PromRule {
+  private mapRule(r: PromRawRule): PromRule {
     if (r.type === 'recording' || r.record) {
       return {
         type: 'recording',
@@ -375,9 +435,10 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
     const name = r.name || r.alert || '';
     const query = r.query || r.expr || '';
-    const duration = typeof r.duration === 'number'
-      ? r.duration
-      : this.parseDurationToSeconds(r.for || r.duration || '0s');
+    const duration =
+      typeof r.duration === 'number'
+        ? r.duration
+        : this.parseDurationToSeconds(r.for || String(r.duration || '0s'));
 
     return {
       type: 'alerting',
@@ -386,12 +447,208 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
       duration,
       labels: r.labels || {},
       annotations: r.annotations || {},
-      alerts: (r.alerts || []).map((a: any) => this.mapAlert(a)),
+      alerts: (r.alerts || []).map((a: PromRawAlert) => this.mapAlert(a)),
       health: r.health || 'unknown',
       state: r.state || 'inactive',
       lastEvaluation: r.lastEvaluation,
       evaluationTime: r.evaluationTime,
     } as PromAlertingRule;
+  }
+
+  /**
+   * Execute a PromQL range query via the DirectQuery query execution API.
+   *
+   * Uses: POST /_plugins/_directquery/_query/{dataSources}
+   * This is the query EXECUTION endpoint (separate from the resource proxy).
+   * The SQL plugin's PrometheusQueryHandler routes to PrometheusClient.queryRange()
+   * which calls Prometheus /api/v1/query_range.
+   *
+   * Request body: { datasource, query, language: "PROMQL", options: { queryType: "range", start, end, step } }
+   * Response: Prometheus matrix result with time-series values.
+   */
+  async queryRange(
+    ds: Datasource,
+    query: string,
+    start: number,
+    end: number,
+    step: number
+  ): Promise<PromTimeSeriesPoint[]> {
+    try {
+      const dqName = this.resolveDqName(ds);
+      const osUrl = ds.url?.replace(/\/+$/, '') || this.baseUrl;
+      const url = `${osUrl}/_plugins/_directquery/_query/${encodeURIComponent(dqName)}`;
+
+      this.logger.debug(`DirectQuery range query: ${query.substring(0, 80)}...`);
+
+      // First try via DirectQuery query execution API
+      const resp = await this.http.request<Record<string, unknown>>({
+        method: 'POST',
+        url,
+        body: {
+          datasource: dqName,
+          query,
+          language: 'PROMQL',
+          options: {
+            queryType: 'range',
+            start: start.toString(),
+            end: end.toString(),
+            step: step.toString(),
+          },
+        },
+        auth: this.resolveAuth(ds),
+        rejectUnauthorized: this.resolveTls(ds),
+        timeoutMs: 15_000,
+      });
+
+      return this.parseRangeQueryResponse(resp.body);
+    } catch (err) {
+      this.logger.warn(`Failed to execute DirectQuery range query: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Execute a PromQL instant query via the DirectQuery query execution API.
+   *
+   * Uses: POST /_plugins/_directquery/_query/{dataSources}
+   * Request body: { datasource, query, language: "PROMQL", options: { queryType: "instant", time } }
+   * Response: Prometheus vector result with point-in-time values.
+   */
+  async queryInstant(ds: Datasource, query: string, time?: number): Promise<PromTimeSeriesPoint[]> {
+    try {
+      const dqName = this.resolveDqName(ds);
+      const osUrl = ds.url?.replace(/\/+$/, '') || this.baseUrl;
+      const url = `${osUrl}/_plugins/_directquery/_query/${encodeURIComponent(dqName)}`;
+
+      this.logger.debug(`DirectQuery instant query: ${query.substring(0, 80)}...`);
+
+      const options: Record<string, string> = { queryType: 'instant' };
+      if (time !== undefined) {
+        options.time = time.toString();
+      }
+
+      const resp = await this.http.request<Record<string, unknown>>({
+        method: 'POST',
+        url,
+        body: {
+          datasource: dqName,
+          query,
+          language: 'PROMQL',
+          options,
+        },
+        auth: this.resolveAuth(ds),
+        rejectUnauthorized: this.resolveTls(ds),
+        timeoutMs: 15_000,
+      });
+
+      return this.parseInstantQueryResponse(resp.body);
+    } catch (err) {
+      this.logger.warn(`Failed to execute DirectQuery instant query: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Parse a DirectQuery query execution response.
+   *
+   * Response envelope from the SQL plugin:
+   * {
+   *   "queryId": "...",
+   *   "results": {
+   *     "{datasourceName}": {
+   *       "resultType": "matrix" | "vector",
+   *       "result": [{ metric: {...}, values: [[ts, val], ...] }]  // range
+   *                  [{ metric: {...}, value: [ts, val] }]         // instant
+   *     }
+   *   },
+   *   "sessionId": "..."
+   * }
+   *
+   * See: sql/direct-query/.../datasource/PrometheusResult.java
+   */
+  private parseRangeQueryResponse(body: Record<string, unknown>): PromTimeSeriesPoint[] {
+    const promResult = this.extractPrometheusResult(body);
+    if (!promResult) return [];
+
+    const points: PromTimeSeriesPoint[] = [];
+    const result = (promResult.result ?? []) as Array<{
+      metric?: Record<string, string>;
+      values?: Array<Array<unknown>>;
+    }>;
+
+    if (result.length > 0) {
+      const values = result[0].values || [];
+      for (const pair of values) {
+        if (Array.isArray(pair) && pair.length >= 2) {
+          const ts = Number(pair[0]);
+          const numVal = parseFloat(String(pair[1]));
+          if (!isNaN(ts) && !isNaN(numVal)) {
+            points.push({ timestamp: ts * 1000, value: numVal });
+          }
+        }
+      }
+    }
+
+    return points;
+  }
+
+  private parseInstantQueryResponse(body: Record<string, unknown>): PromTimeSeriesPoint[] {
+    const promResult = this.extractPrometheusResult(body);
+    if (!promResult) return [];
+
+    const points: PromTimeSeriesPoint[] = [];
+    const result = (promResult.result ?? []) as Array<{
+      metric?: Record<string, string>;
+      value?: Array<unknown>;
+    }>;
+
+    for (const entry of result) {
+      if (Array.isArray(entry.value) && entry.value.length >= 2) {
+        const ts = Number(entry.value[0]);
+        const numVal = parseFloat(String(entry.value[1]));
+        if (!isNaN(ts) && !isNaN(numVal)) {
+          points.push({ timestamp: ts * 1000, value: numVal });
+        }
+      }
+    }
+
+    return points;
+  }
+
+  /**
+   * Extract the PrometheusResult from the DirectQuery response envelope.
+   * Handles both direct data and the nested results.{datasourceName} wrapper.
+   */
+  private extractPrometheusResult(
+    body: Record<string, unknown>
+  ): { resultType?: string; result?: unknown[] } | null {
+    // Direct Prometheus response: { resultType, result }
+    if (body?.resultType || body?.result) {
+      return body as { resultType?: string; result?: unknown[] };
+    }
+
+    // Wrapped in data field: { data: { resultType, result } }
+    if (body?.data && typeof body.data === 'object') {
+      const data = body.data as Record<string, unknown>;
+      if (data.resultType || data.result) {
+        return data as { resultType?: string; result?: unknown[] };
+      }
+    }
+
+    // DirectQuery envelope: { results: { "DatasourceName": { resultType, result } } }
+    if (body?.results && typeof body.results === 'object') {
+      const results = body.results as Record<string, unknown>;
+      for (const val of Object.values(results)) {
+        if (val && typeof val === 'object') {
+          const dsResult = val as Record<string, unknown>;
+          if (dsResult.resultType || dsResult.result) {
+            return dsResult as { resultType?: string; result?: unknown[] };
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   private parseDurationToSeconds(dur: string): number {
@@ -406,13 +663,13 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
     return total;
   }
 
-  private mapAlert(a: any): PromAlert {
+  private mapAlert(a: PromRawAlert): PromAlert {
     return {
       labels: a.labels || {},
       annotations: a.annotations || {},
-      state: a.state || 'inactive',
+      state: (a.state || 'inactive') as PromAlert['state'],
       activeAt: a.activeAt || '',
-      value: a.value ?? '',
+      value: a.value != null ? String(a.value) : '',
     };
   }
 }

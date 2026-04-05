@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
- * CLI entry point for @opensearch-dashboards/alarms
- * 
+ * CLI entry point for @opensearch-project/alert-manager
+ *
  * Usage:
- *   npx @opensearch-dashboards/alarms
- *   npx @opensearch-dashboards/alarms --port 8080
- *   npx @opensearch-dashboards/alarms --help
+ *   npx @opensearch-project/alert-manager
+ *   npx @opensearch-project/alert-manager --port 8080
+ *   npx @opensearch-project/alert-manager --help
  */
 
 const path = require('path');
@@ -29,25 +34,26 @@ for (let i = 0; i < args.length; i++) {
 
 if (options.help) {
   console.log(`
-@opensearch-dashboards/alarms - Standalone Alarms Service
+@opensearch-project/alert-manager - Standalone Alert Manager Service
 
 Usage:
-  npx @opensearch-dashboards/alarms [options]
+  npx @opensearch-project/alert-manager [options]
+  osd-alert-manager [options]
 
 Options:
   -p, --port <port>   Port to run the server on (default: 5603)
   -h, --help          Show this help message
 
 Examples:
-  npx @opensearch-dashboards/alarms
-  npx @opensearch-dashboards/alarms --port 8080
+  npx @opensearch-project/alert-manager
+  osd-alert-manager --port 8080
 
 API Endpoints:
-  GET    /api/alarms          List all alarms
-  GET    /api/alarms/:id      Get alarm by ID
-  POST   /api/alarms          Create alarm
-  DELETE /api/alarms/:id      Delete alarm
-  POST   /api/alarms/:id/toggle  Toggle alarm enabled state
+  GET    /api/datasources           List datasources
+  GET    /api/alerts                List unified alerts
+  GET    /api/rules                 List unified rules
+  POST   /api/monitors              Create monitor
+  DELETE /api/monitors/:id          Delete monitor
 `);
   process.exit(0);
 }
@@ -58,7 +64,7 @@ process.env.PORT = options.port.toString();
 // Start the server
 console.log(`
 ╔═══════════════════════════════════════════════════════════╗
-║         OpenSearch Dashboards - Alarms Service            ║
+║       OpenSearch Dashboards - Alert Manager Service        ║
 ╚═══════════════════════════════════════════════════════════╝
 `);
 

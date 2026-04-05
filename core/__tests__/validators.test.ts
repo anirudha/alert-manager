@@ -1,4 +1,14 @@
-import { parseDuration, formatDuration, validateMonitorForm, MonitorFormState } from '../validators';
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import {
+  parseDuration,
+  formatDuration,
+  validateMonitorForm,
+  MonitorFormState,
+} from '../validators';
 
 describe('parseDuration', () => {
   it('parses seconds', () => {

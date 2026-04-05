@@ -1,9 +1,9 @@
 {
-  "name": "@anirudhaj/alarms",
+  "name": "@opensearch-project/alert-manager",
   "version": "1.1.1",
-  "description": "Standalone Alarms service for OpenSearch Dashboards",
+  "description": "Standalone Alert Manager service for OpenSearch Dashboards",
   "bin": {
-    "osd-alarms": "./bin/cli.js"
+    "osd-alert-manager": "./bin/cli.js"
   },
   "main": "dist/standalone/server.js",
   "files": [
@@ -23,7 +23,7 @@
   "keywords": [
     "opensearch",
     "dashboards",
-    "alarms",
+    "alert-manager",
     "alerts",
     "monitoring"
   ],
@@ -31,13 +31,14 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anirudha/alert-manager.git",
-    "directory": "standalone"
+    "url": "https://github.com/opensearch-project/dashboards-observability.git",
+    "directory": "plugins/alert-manager/standalone"
   },
   "dependencies": {
     "@elastic/datemath": "^5.0.3",
     "@opensearch-project/oui": "^1.22.1",
     "@types/js-yaml": "^4.0.9",
+    "echarts": "^5.6.0",
     "express": "^4.18.2",
     "js-yaml": "^4.1.1",
     "moment": "^2.30.1",

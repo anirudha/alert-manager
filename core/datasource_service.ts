@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Datasource service — manages alert datasource configurations
  */
@@ -37,7 +42,7 @@ export class InMemoryDatasourceService implements DatasourceService {
   async update(id: string, input: Partial<Datasource>): Promise<Datasource | null> {
     const datasource = this.datasources.get(id);
     if (!datasource) return null;
-    
+
     Object.assign(datasource, input);
     this.logger.info(`Updated datasource: ${id}`);
     return datasource;
@@ -57,11 +62,11 @@ export class InMemoryDatasourceService implements DatasourceService {
 
     try {
       if (datasource.type === 'opensearch') {
-        const resp = await this.httpClient.request({
+        const resp = await this.httpClient.request<{ status?: string }>({
           method: 'GET',
           url: `${datasource.url.replace(/\/+$/, '')}/_cluster/health`,
           auth: buildAuthFromDatasource(datasource),
-          rejectUnauthorized: false,
+          rejectUnauthorized: datasource.tls?.rejectUnauthorized ?? false,
           timeoutMs: 5000,
         });
         const status = resp.body?.status; // green, yellow, red
@@ -88,7 +93,7 @@ export class InMemoryDatasourceService implements DatasourceService {
     if (!ds || ds.type !== 'prometheus' || !this.promBackend) return [];
 
     const workspaces = await this.promBackend.listWorkspaces(ds);
-    return workspaces.map(ws => ({
+    return workspaces.map((ws) => ({
       id: `${dsId}::${ws.id}`,
       name: `${ds.name} / ${ws.alias || ws.name}`,
       type: ds.type,

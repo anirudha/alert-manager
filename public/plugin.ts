@@ -1,8 +1,13 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { i18n } from '@osd/i18n';
-import { 
-  AppMountParameters, 
-  CoreSetup, 
-  CoreStart, 
+import {
+  AppMountParameters,
+  CoreSetup,
+  CoreStart,
   Plugin,
   DEFAULT_NAV_GROUPS,
 } from '../../../src/core/public';
@@ -13,7 +18,7 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
   public setup(core: CoreSetup): AlarmsPluginSetup {
     // Register an application into the side navigation menu
     core.application.register({
-      id: 'alarms',
+      id: 'alertManager',
       title: PLUGIN_NAME,
       order: 250,
       euiIconType: 'bell',
@@ -31,7 +36,7 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     if (core.chrome.navGroup.getNavGroupEnabled()) {
       core.chrome.navGroup.addNavLinksToGroup(DEFAULT_NAV_GROUPS.observability, [
         {
-          id: 'alarms',
+          id: 'alertManager',
           category: undefined,
           order: 250,
         },
@@ -41,7 +46,7 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     // Return methods that should be available to other plugins
     return {
       getGreeting() {
-        return i18n.translate('alarms.greetingText', {
+        return i18n.translate('alertManager.greetingText', {
           defaultMessage: 'Hello from {name}!',
           values: {
             name: PLUGIN_NAME,

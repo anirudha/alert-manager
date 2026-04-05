@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Suppression rule service — schedule-based suppression, conflict detection, and CRUD.
  */
@@ -51,16 +56,16 @@ export class SuppressionRuleService {
   }
 
   isAlertSuppressed(alert: { labels: Record<string, string> }): boolean {
-    return this.getActiveRules().some(rule => this.matchesLabels(rule, alert.labels));
+    return this.getActiveRules().some((rule) => this.matchesLabels(rule, alert.labels));
   }
 
   getActiveRules(): SuppressionRuleConfig[] {
     const now = new Date();
-    return this.list().filter(rule => this.isRuleActive(rule, now));
+    return this.list().filter((rule) => this.isRuleActive(rule, now));
   }
 
   detectConflicts(rule: SuppressionRuleConfig): SuppressionRuleConfig[] {
-    return this.list().filter(existing => {
+    return this.list().filter((existing) => {
       if (existing.id === rule.id) return false;
       if (!this.matchersOverlap(rule.matchers, existing.matchers)) return false;
       if (!this.schedulesOverlap(rule, existing)) return false;
@@ -81,15 +86,45 @@ export class SuppressionRuleService {
     if (rule.scheduleType === 'one_time') {
       return now >= start && now <= end;
     }
-    // Recurring: check if current day matches and time is within window
+    // Recurring: check if current day matches and time is within window.
+    // Uses the rule's configured timezone (defaults to UTC).
     if (rule.recurrence) {
-      const currentDay = now.getDay();
+      const tz = rule.recurrence.timezone || 'UTC';
+      // Get the current day and time in the rule's timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        weekday: 'short',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(now);
+      const dayMap: Record<string, number> = {
+        Sun: 0,
+        Mon: 1,
+        Tue: 2,
+        Wed: 3,
+        Thu: 4,
+        Fri: 5,
+        Sat: 6,
+      };
+      const currentDay = dayMap[parts.find((p) => p.type === 'weekday')?.value ?? ''] ?? 0;
+      const currentHour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+      const currentMinute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+
       if (!rule.recurrence.days.includes(currentDay)) return false;
-      const todayStart = new Date(now);
-      todayStart.setHours(start.getHours(), start.getMinutes(), 0, 0);
-      const todayEnd = new Date(now);
-      todayEnd.setHours(end.getHours(), end.getMinutes(), 0, 0);
-      return now >= todayStart && now <= todayEnd;
+
+      // Compare current time against start/end hours in the configured timezone
+      const startHour = start.getUTCHours();
+      const startMinute = start.getUTCMinutes();
+      const endHour = end.getUTCHours();
+      const endMinute = end.getUTCMinutes();
+
+      const currentMins = currentHour * 60 + currentMinute;
+      const startMins = startHour * 60 + startMinute;
+      const endMins = endHour * 60 + endMinute;
+
+      return currentMins >= startMins && currentMins <= endMins;
     }
     return now >= start && now <= end;
   }
@@ -98,8 +133,8 @@ export class SuppressionRuleService {
     // Overlap if one is a subset of the other
     const aKeys = Object.keys(a);
     const bKeys = Object.keys(b);
-    const aSubsetB = aKeys.every(k => b[k] === a[k]);
-    const bSubsetA = bKeys.every(k => a[k] === b[k]);
+    const aSubsetB = aKeys.every((k) => b[k] === a[k]);
+    const bSubsetA = bKeys.every((k) => a[k] === b[k]);
     return aSubsetB || bSubsetA;
   }
 

@@ -1,38 +1,56 @@
 {
-  "name": "alarms",
+  "name": "alert-manager",
   "version": "1.0.0",
   "private": true,
-  "description": "Alarms plugin with dual distribution: OSD plugin or standalone",
+  "description": "Alert Manager plugin for OpenSearch Dashboards with multi-backend alerting support",
+  "license": "Apache-2.0",
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --ext .js,.ts,.tsx --ignore-pattern standalone/dist --ignore-pattern standalone/node_modules",
+    "lint:fix": "eslint . --ext .js,.ts,.tsx --fix --ignore-pattern standalone/dist --ignore-pattern standalone/node_modules",
     "build": "yarn plugin-helpers build",
     "build:standalone": "cd standalone && npm install && npm run build",
     "start:standalone": "cd standalone && npm run start",
     "dev:standalone": "cd standalone && npm run dev",
     "plugin-helpers": "../../scripts/use_node ../../scripts/plugin_helpers",
-    "osd": "../../scripts/use_node ../../scripts/osd"
+    "osd": "../../scripts/use_node ../../scripts/osd",
+    "prepare": "husky"
   },
-  "main": ".eslintrc.js",
-  "directories": {
-    "doc": "docs"
+  "lint-staged": {
+    "*.{ts,tsx,js}": [
+      "prettier --write"
+    ]
   },
+  "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anirudha/alert-manager.git"
+    "url": "https://github.com/opensearch-project/dashboards-observability.git",
+    "directory": "plugins/alert-manager"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/anirudha/alert-manager/issues"
+    "url": "https://github.com/opensearch-project/dashboards-observability/issues"
   },
-  "homepage": "https://github.com/anirudha/alert-manager#readme",
+  "homepage": "https://github.com/opensearch-project/dashboards-observability#alert-manager",
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint-plugin-jest": "^27.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^9.1.7",
     "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "ts-jest": "^29.4.9",
     "typescript": "^6.0.2"
   }

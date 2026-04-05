@@ -67,13 +67,13 @@ Adapters wire these to the framework:
 
 ```typescript
 // OSD adapter (server/routes/index.ts)
-router.get({ path: '/api/alarms', validate: false }, async (_ctx, _req, res) => {
+router.get({ path: '/api/alert_manager', validate: false }, async (_ctx, _req, res) => {
   const result = await handleListAlarms(service);
   return res.ok({ body: result.body });
 });
 
 // Express adapter (standalone/server.ts)
-app.get('/api/alarms', async (_req, res) => {
+app.get('/api/alert_manager', async (_req, res) => {
   const result = await handleListAlarms(service);
   res.status(result.status).json(result.body);
 });

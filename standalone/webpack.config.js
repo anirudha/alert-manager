@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 

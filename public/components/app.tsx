@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * OSD-specific app wrapper — bridges OSD services to the shared AlarmsPage.
  */
@@ -23,7 +28,7 @@ interface AlarmsAppDeps {
 function createOsdHttpClient(http: CoreStart['http']): HttpClient {
   return {
     get: <T,>(path: string) => http.get<T>(path),
-    post: <T,>(path: string, body?: any) =>
+    post: <T,>(path: string, body?: unknown) =>
       http.post<T>(path, body ? { body: JSON.stringify(body) } : undefined),
     delete: <T,>(path: string) => http.delete<T>(path),
   };

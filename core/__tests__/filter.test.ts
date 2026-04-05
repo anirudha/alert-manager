@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { emptyFilters, matchesSearch, matchesFilters, sortRules, filterAlerts } from '../filter';
 
 describe('emptyFilters', () => {
@@ -77,7 +82,9 @@ describe('matchesFilters', () => {
   });
 
   it('filters by severity', () => {
-    expect(matchesFilters(rule, { ...emptyFilters(), severity: ['critical', 'warning'] })).toBe(true);
+    expect(matchesFilters(rule, { ...emptyFilters(), severity: ['critical', 'warning'] })).toBe(
+      true
+    );
     expect(matchesFilters(rule, { ...emptyFilters(), severity: ['info'] })).toBe(false);
   });
 
@@ -111,22 +118,22 @@ describe('sortRules', () => {
 
   it('sorts ascending by string field', () => {
     const sorted = sortRules(items, 'name', 'asc');
-    expect(sorted.map(i => i.name)).toEqual(['Alice', 'Bob', 'Charlie']);
+    expect(sorted.map((i) => i.name)).toEqual(['Alice', 'Bob', 'Charlie']);
   });
 
   it('sorts descending by string field', () => {
     const sorted = sortRules(items, 'name', 'desc');
-    expect(sorted.map(i => i.name)).toEqual(['Charlie', 'Bob', 'Alice']);
+    expect(sorted.map((i) => i.name)).toEqual(['Charlie', 'Bob', 'Alice']);
   });
 
   it('sorts by numeric field', () => {
     const sorted = sortRules(items, 'score', 'asc');
-    expect(sorted.map(i => i.score)).toEqual([1, 2, 3]);
+    expect(sorted.map((i) => i.score)).toEqual([1, 2, 3]);
   });
 
   it('supports custom accessor', () => {
     const sorted = sortRules(items, 'name', 'asc', (item, field) => (item as any)[field].length);
-    expect(sorted.map(i => i.name)).toEqual(['Bob', 'Alice', 'Charlie']);
+    expect(sorted.map((i) => i.name)).toEqual(['Bob', 'Alice', 'Charlie']);
   });
 
   it('does not mutate the original array', () => {
@@ -138,9 +145,27 @@ describe('sortRules', () => {
 
 describe('filterAlerts', () => {
   const alerts = [
-    { name: 'CPUHigh', severity: 'critical', state: 'firing', labels: { team: 'infra' }, message: 'CPU at 95%' },
-    { name: 'MemLow', severity: 'warning', state: 'pending', labels: { team: 'app' }, message: 'Memory low' },
-    { name: 'DiskFull', severity: 'critical', state: 'firing', labels: { team: 'infra' }, message: 'Disk full' },
+    {
+      name: 'CPUHigh',
+      severity: 'critical',
+      state: 'firing',
+      labels: { team: 'infra' },
+      message: 'CPU at 95%',
+    },
+    {
+      name: 'MemLow',
+      severity: 'warning',
+      state: 'pending',
+      labels: { team: 'app' },
+      message: 'Memory low',
+    },
+    {
+      name: 'DiskFull',
+      severity: 'critical',
+      state: 'firing',
+      labels: { team: 'infra' },
+      message: 'Disk full',
+    },
   ];
 
   it('returns all when no filters', () => {
