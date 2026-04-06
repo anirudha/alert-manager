@@ -15,7 +15,7 @@ import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/
 
 import { PLUGIN_ID } from '../../common';
 import { AlarmsPage } from './alarms_page';
-import { AlarmsApiClient, HttpClient } from '../services/alarms_client';
+import { AlarmsApiClient } from '../services/alarms_client';
 
 interface AlarmsAppDeps {
   basename: string;
@@ -24,28 +24,32 @@ interface AlarmsAppDeps {
   navigation: NavigationPublicPluginStart;
 }
 
-/** Adapt OSD's HttpServiceBase to our simple HttpClient interface */
-function createOsdHttpClient(http: CoreStart['http']): HttpClient {
+/** Adapt OSD's HttpServiceBase to the HttpClient interface AlarmsPage expects */
+function createOsdHttpClient(http: CoreStart['http']) {
   return {
-    get: <T,>(path: string) => http.get<T>(path),
+    get: <T,>(path: string, opts?: any) => http.get<T>(path, opts),
     post: <T,>(path: string, body?: unknown) =>
       http.post<T>(path, body ? { body: JSON.stringify(body) } : undefined),
+    put: <T,>(path: string, body?: unknown) =>
+      http.put<T>(path, body ? { body: JSON.stringify(body) } : undefined),
     delete: <T,>(path: string) => http.delete<T>(path),
   };
 }
 
 export const AlarmsApp = ({ basename, notifications, http, navigation }: AlarmsAppDeps) => {
-  const apiClient = new AlarmsApiClient(createOsdHttpClient(http), 'osd');
+  const apiClient = new AlarmsApiClient(createOsdHttpClient(http));
 
   return (
     <Router basename={basename}>
       <I18nProvider>
         <>
-          <navigation.ui.TopNavMenu
-            appName={PLUGIN_ID}
-            showSearchBar={false}
-            useDefaultBehaviors={true}
-          />
+          {navigation?.ui?.TopNavMenu && (
+            <navigation.ui.TopNavMenu
+              appName={PLUGIN_ID}
+              showSearchBar={false}
+              useDefaultBehaviors={true}
+            />
+          )}
           <AlarmsPage apiClient={apiClient} />
         </>
       </I18nProvider>
