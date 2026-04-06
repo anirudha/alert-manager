@@ -60,7 +60,7 @@ const standaloneHttp: HttpClient = {
   },
 };
 
-const apiClient = new AlarmsApiClient(standaloneHttp);
+const apiClient = new AlarmsApiClient(standaloneHttp, 'standalone');
 
 const App = () => (
   <OuiContext>

@@ -55,6 +55,16 @@ import {
   handleAcknowledgeAlert,
   handleSilenceAlert,
 } from '../server/routes/monitor_handlers';
+import {
+  handleListSLOs,
+  handleCreateSLO,
+  handleGetSLO,
+  handleUpdateSLO,
+  handleDeleteSLO,
+  handlePreviewSLORules,
+  handleGetSLOStatuses,
+} from '../server/routes/slo_handlers';
+import { SloService } from '../core/slo_service';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
@@ -116,6 +126,9 @@ async function initBackends(): Promise<void> {
     mockOs.seed('ds-1');
     mockOs.seed('ds-3');
     mockProm.seed('ds-2');
+
+    // Seed SLO data for Prometheus datasource
+    await sloService.seed('ds-2');
   } else {
     logger.info('Running in LIVE MODE — connecting to real backends');
     logger.info(`  OpenSearch: ${OPENSEARCH_URL}`);
@@ -171,6 +184,9 @@ async function initBackends(): Promise<void> {
 
 // Suppression service
 const suppressionService = new SuppressionRuleService();
+
+// SLO service (mockMode aligns with MOCK_MODE env var)
+const sloService = new SloService(logger, MOCK_MODE);
 
 const app = express();
 app.use(express.json());
@@ -583,6 +599,40 @@ app.post('/api/webhooks/alertmanager', (req, res) => {
     logger.info(`  [${status.toUpperCase()}] ${name}`);
   }
   res.json({ status: 'ok' });
+});
+
+// ============================================================================
+// SLO Routes
+// ============================================================================
+
+app.get('/api/slos', async (req, res) => {
+  const r = await handleListSLOs(sloService, req.query as any, logger);
+  res.status(r.status).json(r.body);
+});
+app.post('/api/slos', async (req, res) => {
+  const r = await handleCreateSLO(sloService, req.body, logger);
+  res.status(r.status).json(r.body);
+});
+app.get('/api/slos/statuses', async (req, res) => {
+  const ids = req.query.ids ? String(req.query.ids).split(',') : [];
+  const r = await handleGetSLOStatuses(sloService, ids, logger);
+  res.status(r.status).json(r.body);
+});
+app.post('/api/slos/preview', async (req, res) => {
+  const r = await handlePreviewSLORules(sloService, req.body, logger);
+  res.status(r.status).json(r.body);
+});
+app.get('/api/slos/:id', async (req, res) => {
+  const r = await handleGetSLO(sloService, req.params.id, logger);
+  res.status(r.status).json(r.body);
+});
+app.put('/api/slos/:id', async (req, res) => {
+  const r = await handleUpdateSLO(sloService, req.params.id, req.body, logger);
+  res.status(r.status).json(r.body);
+});
+app.delete('/api/slos/:id', async (req, res) => {
+  const r = await handleDeleteSLO(sloService, req.params.id, logger);
+  res.status(r.status).json(r.body);
 });
 
 // ============================================================================

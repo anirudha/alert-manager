@@ -4,13 +4,12 @@
  */
 
 /**
- * Alert Manager UI — shared between OSD plugin and standalone mode.
- * Uses unified views + backend-native drill-down.
+ * Alert Manager UI — single-datasource selection with server-side pagination.
+ * Prometheus datasources are decomposed into selectable workspaces.
  */
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   EuiBasicTable,
-  EuiHealth,
   EuiPage,
   EuiPageBody,
   EuiPageHeader,
@@ -21,261 +20,793 @@ import {
   EuiBadge,
   EuiTab,
   EuiTabs,
-} from '@elastic/eui';
-import { Datasource, UnifiedAlertSummary, UnifiedRuleSummary } from '../../core';
-import { AlarmsApiClient } from '../services/alarms_client';
+  EuiButton,
+  EuiButtonEmpty,
+  EuiFlexGroup,
+  EuiFlexItem,
+  EuiText,
+  EuiPanel,
+  EuiIcon,
+  EuiComboBox,
+  EuiLoadingSpinner,
+  EuiCallOut,
+  EuiGlobalToastList,
+} from '@opensearch-project/oui';
+import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../core';
+import { MonitorsTable } from './monitors_table';
+import { CreateMonitor, MonitorFormState } from './create_monitor';
+import { AlertsDashboard } from './alerts_dashboard';
+import { AlertDetailFlyout } from './alert_detail_flyout';
+import { NotificationRoutingPanel } from './notification_routing_panel';
+import { SuppressionRulesPanel } from './suppression_rules_panel';
+import SloListing from './slo_listing';
+import { AlarmsApiClient, HttpClient } from '../services/alarms_client';
 
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'primary',
-  low: 'subdued',
-  info: 'default',
+// Re-export for components that import from this file
+export { AlarmsApiClient, HttpClient };
+
+// ============================================================================
+// Datasource Selector Component
+// ============================================================================
+
+const DatasourceSelector: React.FC<{
+  datasources: Datasource[];
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+  loading: boolean;
+  workspaceOptions: Datasource[];
+  loadingWorkspaces: boolean;
+}> = ({
+  datasources,
+  selectedIds,
+  onSelectionChange,
+  loading,
+  workspaceOptions,
+  loadingWorkspaces,
+}) => {
+  // Build combo box options: non-prometheus datasources + prometheus workspace entries
+  // EuiComboBox uses `label` as the key, so we build a label->id map
+  const { options, labelToId, idToLabel } = useMemo(() => {
+    const lToId: Record<string, string> = {};
+    const iToL: Record<string, string> = {};
+    const opts: Array<{ label: string; options?: Array<{ label: string }> }> = [];
+
+    // Non-prometheus datasources as direct options
+    const nonProm = datasources.filter((d) => d.type !== 'prometheus');
+    if (nonProm.length > 0) {
+      opts.push({
+        label: 'OpenSearch',
+        options: nonProm.map((d) => {
+          lToId[d.name] = d.id;
+          iToL[d.id] = d.name;
+          return { label: d.name };
+        }),
+      });
+    }
+
+    // Prometheus workspaces grouped under their parent
+    const promDs = datasources.filter((d) => d.type === 'prometheus');
+    for (const pds of promDs) {
+      const wsForDs = workspaceOptions.filter((w) => w.parentDatasourceId === pds.id);
+      if (wsForDs.length > 0) {
+        opts.push({
+          label: pds.name,
+          options: wsForDs.map((w) => {
+            const displayLabel = `${pds.name} / ${w.workspaceName || w.name}`;
+            lToId[displayLabel] = w.id;
+            iToL[w.id] = displayLabel;
+            return { label: displayLabel };
+          }),
+        });
+      } else if (loadingWorkspaces) {
+        opts.push({ label: `${pds.name} (loading workspaces...)`, options: [] });
+      } else {
+        // Fallback: show the raw prometheus datasource
+        lToId[pds.name] = pds.id;
+        iToL[pds.id] = pds.name;
+        opts.push({
+          label: 'Prometheus',
+          options: [{ label: pds.name }],
+        });
+      }
+    }
+    return { options: opts, labelToId: lToId, idToLabel: iToL };
+  }, [datasources, workspaceOptions, loadingWorkspaces]);
+
+  const selectedOptions = useMemo(() => {
+    const all: Array<{ label: string }> = [];
+    for (const id of selectedIds) {
+      const label = idToLabel[id];
+      if (label) all.push({ label });
+    }
+    return all;
+  }, [selectedIds, idToLabel]);
+
+  return (
+    <EuiPanel paddingSize="s" hasBorder style={{ marginBottom: 12 }}>
+      <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+            <EuiFlexItem grow={false}>
+              <EuiIcon type="database" size="s" />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiText size="xs">
+                <strong>Datasource(s)</strong>
+              </EuiText>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiFlexItem>
+        <EuiFlexItem>
+          <EuiComboBox
+            placeholder="Select a datasource to view rules and alerts..."
+            options={options as any}
+            selectedOptions={selectedOptions}
+            onChange={(selected: Array<{ label: string }>) => {
+              const ids = selected.map((s) => labelToId[s.label]).filter(Boolean);
+              onSelectionChange(ids);
+            }}
+            isLoading={loading || loadingWorkspaces}
+            isClearable
+            compressed
+            aria-label="Select datasource"
+          />
+        </EuiFlexItem>
+        {loadingWorkspaces && (
+          <EuiFlexItem grow={false}>
+            <EuiLoadingSpinner size="s" />
+          </EuiFlexItem>
+        )}
+      </EuiFlexGroup>
+    </EuiPanel>
+  );
 };
 
-const STATE_COLORS: Record<string, string> = {
-  active: 'danger',
-  pending: 'warning',
-  acknowledged: 'primary',
-  resolved: 'success',
-  error: 'danger',
+// ============================================================================
+// Pagination Controls
+// ============================================================================
+
+const PaginationBar: React.FC<{
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}> = ({ page, pageSize, total, hasMore, onPageChange, onPageSizeChange }) => {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  return (
+    <EuiFlexGroup
+      alignItems="center"
+      justifyContent="spaceBetween"
+      responsive={false}
+      style={{ padding: '8px 0' }}
+    >
+      <EuiFlexItem grow={false}>
+        <EuiText size="xs" color="subdued">
+          Showing {total > 0 ? start : 0}–{end} of {total} items
+        </EuiText>
+      </EuiFlexItem>
+      <EuiFlexItem grow={false}>
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiText size="xs" color="subdued">
+              Rows:
+            </EuiText>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              style={{
+                padding: '2px 4px',
+                fontSize: 12,
+                border: '1px solid #D3DAE6',
+                borderRadius: 4,
+              }}
+              aria-label="Rows per page"
+            >
+              {[10, 20, 50, 100].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiButtonEmpty
+              size="xs"
+              onClick={() => onPageChange(page - 1)}
+              isDisabled={page <= 1}
+              iconType="arrowLeft"
+              aria-label="Previous page"
+            >
+              Prev
+            </EuiButtonEmpty>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiText size="xs">
+              Page {page} of {totalPages}
+            </EuiText>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiButtonEmpty
+              size="xs"
+              onClick={() => onPageChange(page + 1)}
+              isDisabled={!hasMore}
+              iconType="arrowRight"
+              iconSide="right"
+              aria-label="Next page"
+            >
+              Next
+            </EuiButtonEmpty>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+  );
 };
 
-/** Auto-refresh interval in ms (60 seconds). */
-const AUTO_REFRESH_MS = 60_000;
+// ============================================================================
+// Main Page Component
+// ============================================================================
 
 interface AlarmsPageProps {
   apiClient: AlarmsApiClient;
 }
 
-type TabId = 'alerts' | 'rules';
+type TabId = 'alerts' | 'rules' | 'routing' | 'suppression' | 'slos';
+
+// Fetch a large page from the server so child tables can paginate client-side.
+// The child components (AlertsDashboard, MonitorsTable) handle their own
+// page-size controls (10/20/50/100 rows per page) over this full dataset.
+const DEFAULT_PAGE_SIZE = 1000;
 
 export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [activeTab, setActiveTab] = useState<TabId>('alerts');
-  const [alerts, setAlerts] = useState<UnifiedAlertSummary[]>([]);
-  const [rules, setRules] = useState<UnifiedRuleSummary[]>([]);
   const [datasources, setDatasources] = useState<Datasource[]>([]);
+  const [workspaceOptions, setWorkspaceOptions] = useState<Datasource[]>([]);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+  const [selectedDsIds, setSelectedDsIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<Array<{ datasourceName: string; error: string }>>([]);
 
-  // Track which tabs have been loaded to enable lazy loading
-  const loadedTabs = useRef<Set<TabId>>(new Set());
+  // Paginated data
+  const [alerts, setAlerts] = useState<UnifiedAlert[]>([]);
+  const [alertsTotal, setAlertsTotal] = useState(0);
+  const [alertsPage, setAlertsPage] = useState(1);
+  const [alertsPageSize, setAlertsPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [alertsHasMore, setAlertsHasMore] = useState(false);
 
-  // Memoize datasource name lookup to avoid re-creating on every render
-  const dsNameMap = useMemo(() => new Map(datasources.map((d) => [d.id, d.name])), [datasources]);
+  const [rules, setRules] = useState<UnifiedRule[]>([]);
+  const [rulesTotal, setRulesTotal] = useState(-1); // -1 = not yet loaded
+  const [rulesPage, setRulesPage] = useState(1);
+  const [rulesPageSize, setRulesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [rulesHasMore, setRulesHasMore] = useState(false);
 
-  const fetchDatasources = useCallback(async () => {
-    try {
-      const d = await apiClient.listDatasources();
-      setDatasources(d);
-    } catch (e) {
-      // Non-fatal — datasource names just won't resolve
+  const [deletedRuleIds, setDeletedRuleIds] = useState<Set<string>>(new Set());
+  const [showCreateMonitor, setShowCreateMonitor] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; title: string; color: string; text?: string }>
+  >([]);
+
+  const addToast = (
+    title: string,
+    color: 'success' | 'danger' | 'warning' = 'success',
+    text?: string
+  ) => {
+    setToasts((prev) => [...prev, { id: String(Date.now()), title, color, text }]);
+  };
+
+  const visibleRules = rules.filter((r) => !deletedRuleIds.has(r.id));
+
+  // All selectable datasources for the create form: non-prometheus + workspace entries
+  const creatableDatasources = useMemo(() => {
+    const result: Datasource[] = [];
+    for (const ds of datasources) {
+      if (ds.type !== 'prometheus') {
+        result.push(ds);
+      }
     }
-  }, [apiClient]);
-
-  const fetchAlerts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const a = await apiClient.listAlerts();
-      setAlerts(a);
-      loadedTabs.current.add('alerts');
-    } catch (e) {
-      setError(`Failed to load alerts: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setLoading(false);
+    // Add workspace-scoped entries for Prometheus
+    for (const ws of workspaceOptions) {
+      result.push(ws);
     }
-  }, [apiClient]);
+    return result;
+  }, [datasources, workspaceOptions]);
 
-  const fetchRules = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await apiClient.listRules();
-      setRules(r);
-      loadedTabs.current.add('rules');
-    } catch (e) {
-      setError(`Failed to load rules: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient]);
+  // ---- Load datasources and discover workspaces on mount ----
 
-  // Fetch data for the active tab (lazy loading)
-  const fetchActiveTab = useCallback(() => {
-    fetchDatasources();
-    if (activeTab === 'alerts') {
-      fetchAlerts();
-    } else {
-      fetchRules();
-    }
-  }, [activeTab, fetchDatasources, fetchAlerts, fetchRules]);
-
-  // Initial load + load on tab switch (only if not already loaded)
   useEffect(() => {
-    if (!loadedTabs.current.has(activeTab)) {
-      fetchActiveTab();
-    }
-  }, [activeTab, fetchActiveTab]);
+    (async () => {
+      setLoading(true);
+      try {
+        const ds = await apiClient.listDatasources();
+        setDatasources(ds || []);
 
-  // Initial fetch for the default tab
-  useEffect(() => {
-    fetchActiveTab();
-  }, [fetchActiveTab]);
+        // Discover workspaces for all Prometheus datasources
+        const promDs = (ds || []).filter((d) => d.type === 'prometheus');
+        const nonPromIds = (ds || []).filter((d) => d.type !== 'prometheus').map((d) => d.id);
 
-  // Auto-refresh on an interval
-  useEffect(() => {
-    const interval = setInterval(() => {
-      apiClient.invalidateCache();
-      fetchActiveTab();
-    }, AUTO_REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [apiClient, fetchActiveTab]);
+        if (promDs.length > 0) {
+          setLoadingWorkspaces(true);
+          const allWs: Datasource[] = [];
+          for (const pds of promDs) {
+            try {
+              const ws = await apiClient.listWorkspaces(pds.id);
+              allWs.push(...ws);
+            } catch (e: any) {
+              addToast('Failed to discover workspaces', 'warning', e?.message || 'Unknown error');
+            }
+          }
+          setWorkspaceOptions(allWs);
+          setLoadingWorkspaces(false);
 
-  // --- Alert columns ---
-  const alertColumns = useMemo(
-    () => [
-      { field: 'name', name: 'Name', sortable: true },
-      {
-        field: 'state',
-        name: 'State',
-        render: (state: string) => (
-          <EuiHealth color={STATE_COLORS[state] || 'subdued'}>{state}</EuiHealth>
-        ),
-      },
-      {
-        field: 'severity',
-        name: 'Severity',
-        render: (s: string) => <EuiBadge color={SEVERITY_COLORS[s] || 'default'}>{s}</EuiBadge>,
-      },
-      {
-        field: 'datasourceType',
-        name: 'Backend',
-        render: (t: string) => (
-          <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>
-        ),
-      },
-      {
-        field: 'datasourceId',
-        name: 'Datasource',
-        render: (id: string) => dsNameMap.get(id) || id,
-      },
-      { field: 'message', name: 'Message', truncateText: true },
-      {
-        field: 'startTime',
-        name: 'Started',
-        render: (ts: string) => (ts ? new Date(ts).toLocaleString() : '-'),
-      },
-    ],
-    [dsNameMap]
-  );
-
-  // --- Rule columns ---
-  const ruleColumns = useMemo(
-    () => [
-      { field: 'name', name: 'Name', sortable: true },
-      {
-        field: 'enabled',
-        name: 'Status',
-        render: (e: boolean) => (
-          <EuiBadge color={e ? 'success' : 'default'}>{e ? 'Enabled' : 'Disabled'}</EuiBadge>
-        ),
-      },
-      {
-        field: 'severity',
-        name: 'Severity',
-        render: (s: string) => <EuiBadge color={SEVERITY_COLORS[s] || 'default'}>{s}</EuiBadge>,
-      },
-      {
-        field: 'datasourceType',
-        name: 'Backend',
-        render: (t: string) => (
-          <EuiBadge color={t === 'opensearch' ? 'primary' : 'accent'}>{t}</EuiBadge>
-        ),
-      },
-      {
-        field: 'datasourceId',
-        name: 'Datasource',
-        render: (id: string) => dsNameMap.get(id) || id,
-      },
-      { field: 'query', name: 'Query', truncateText: true },
-      { field: 'group', name: 'Group', render: (g: string) => g || '-' },
-    ],
-    [dsNameMap]
-  );
-
-  const tabs = [
-    { id: 'alerts' as TabId, name: `Alerts (${alerts.length})` },
-    { id: 'rules' as TabId, name: `Rules (${rules.length})` },
-  ];
-
-  const renderError = () => {
-    if (!error) return null;
-    return (
-      <EuiEmptyPrompt
-        data-test-subj="alertManagerError"
-        iconType="alert"
-        title={<h2>Error Loading Data</h2>}
-        body={<p>{error}</p>}
-        actions={
-          <button
-            data-test-subj="alertManagerRetryButton"
-            onClick={() => {
-              apiClient.invalidateCache();
-              fetchActiveTab();
-            }}
-          >
-            Retry
-          </button>
+          // Auto-select all datasources: non-prometheus + first prometheus workspace
+          const prodWs = allWs.find((w) => w.workspaceName === 'production') || allWs[0];
+          const autoIds = [...nonPromIds, ...(prodWs ? [prodWs.id] : [])];
+          if (autoIds.length > 0) {
+            setSelectedDsIds(autoIds);
+          }
+        } else if (nonPromIds.length > 0) {
+          // No Prometheus datasources — auto-select all OpenSearch datasources
+          setSelectedDsIds(nonPromIds);
         }
-      />
+      } catch (e) {
+        console.error('Failed to load datasources', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [apiClient]);
+
+  // ---- Fetch data when datasource selection or page changes ----
+
+  const fetchAlerts = useCallback(
+    async (dsIds: string[], page: number, pageSize: number) => {
+      if (dsIds.length === 0) {
+        setAlerts([]);
+        setAlertsTotal(0);
+        setAlertsHasMore(false);
+        return;
+      }
+      setDataLoading(true);
+      setError(null);
+      setWarnings([]);
+      try {
+        const res = await apiClient.listAlertsPaginated(dsIds, page, pageSize);
+        setAlerts(res.results || []);
+        setAlertsTotal(res.total || 0);
+        setAlertsHasMore(res.hasMore || false);
+        if (res.warnings && res.warnings.length > 0) {
+          setWarnings(
+            res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error }))
+          );
+        }
+      } catch (e: any) {
+        setError(e.message || 'Failed to fetch alerts');
+      } finally {
+        setDataLoading(false);
+      }
+    },
+    [apiClient]
+  );
+
+  const fetchRules = useCallback(
+    async (dsIds: string[], page: number, pageSize: number) => {
+      if (dsIds.length === 0) {
+        setRules([]);
+        setRulesTotal(0);
+        setRulesHasMore(false);
+        return;
+      }
+      setDataLoading(true);
+      setError(null);
+      setWarnings([]);
+      try {
+        const res = await apiClient.listRulesPaginated(dsIds, page, pageSize);
+        setRules(res.results || []);
+        setRulesTotal(res.total || 0);
+        setRulesHasMore(res.hasMore || false);
+        if (res.warnings && res.warnings.length > 0) {
+          setWarnings(
+            res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error }))
+          );
+        }
+      } catch (e: any) {
+        setError(e.message || 'Failed to fetch rules');
+      } finally {
+        setDataLoading(false);
+      }
+    },
+    [apiClient]
+  );
+
+  // Fetch when selection or pagination changes
+  useEffect(() => {
+    if (selectedDsIds.length === 0) return;
+    if (activeTab === 'alerts') {
+      fetchAlerts(selectedDsIds, alertsPage, alertsPageSize);
+    }
+  }, [selectedDsIds, alertsPage, alertsPageSize, activeTab, fetchAlerts]);
+
+  useEffect(() => {
+    if (selectedDsIds.length === 0) return;
+    if (activeTab === 'rules') {
+      fetchRules(selectedDsIds, rulesPage, rulesPageSize);
+    }
+  }, [selectedDsIds, rulesPage, rulesPageSize, activeTab, fetchRules]);
+
+  // Reset pages when datasource selection changes
+  const handleDatasourceChange = useCallback((ids: string[]) => {
+    setSelectedDsIds(ids);
+    setAlertsPage(1);
+    setRulesPage(1);
+    setDeletedRuleIds(new Set());
+  }, []);
+
+  // ---- Handlers ----
+
+  const handleAcknowledgeAlert = async (alertId: string) => {
+    const alert = alerts.find((a) => a.id === alertId);
+    try {
+      await apiClient.acknowledgeAlert(alertId, alert?.datasourceId, alert?.labels?.monitor_id);
+      addToast('Alert acknowledged');
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === alertId
+            ? { ...a, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
+            : a
+        )
+      );
+      // Update the flyout's selected alert inline so it stays open with fresh state
+      setSelectedAlert((prev) =>
+        prev && prev.id === alertId
+          ? { ...prev, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
+          : prev
+      );
+    } catch (e: any) {
+      addToast('Failed to acknowledge alert', 'danger', e?.message || 'Unknown error');
+    }
+  };
+
+  const handleSilenceAlert = async (alertId: string) => {
+    try {
+      await apiClient.silenceAlert(alertId);
+      addToast('Alert silenced');
+      // Silence creates a suppression rule — the alert remains active but is silenced.
+      // We add a 'silenced' label as a visual indicator; the state stays unchanged.
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === alertId
+            ? {
+                ...a,
+                labels: { ...a.labels, _silenced: 'true' },
+                lastUpdated: new Date().toISOString(),
+              }
+            : a
+        )
+      );
+      // Update the flyout's selected alert inline so it stays open with fresh state
+      setSelectedAlert((prev) =>
+        prev && prev.id === alertId
+          ? {
+              ...prev,
+              labels: { ...prev.labels, _silenced: 'true' },
+              lastUpdated: new Date().toISOString(),
+            }
+          : prev
+      );
+    } catch (e: any) {
+      addToast('Failed to silence alert', 'danger', e?.message || 'Unknown error');
+    }
+  };
+
+  const handleDeleteRules = async (ids: string[]) => {
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        await apiClient.deleteMonitor(id);
+      } catch (e: any) {
+        failed.push(id);
+        addToast('Failed to delete monitor', 'danger', e?.message || 'Unknown error');
+      }
+    }
+    const succeeded = ids.filter((id) => !failed.includes(id));
+    if (succeeded.length > 0) {
+      addToast(succeeded.length + ' monitor(s) deleted');
+    }
+    setDeletedRuleIds((prev) => {
+      const next = new Set(prev);
+      succeeded.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const handleSilenceRule = async (id: string) => {
+    const rule = rules.find((r) => r.id === id);
+    if (rule && rule.status === 'muted') {
+      try {
+        await apiClient.deleteSuppressionRule(id);
+        addToast('Monitor unmuted');
+      } catch (e: any) {
+        addToast('Failed to unmute monitor', 'danger', e?.message || 'Unknown error');
+      }
+    } else {
+      try {
+        await apiClient.createSuppressionRule({
+          name: `Silence ${rule?.name || id}`,
+          matchers: { monitor_id: id },
+          schedule: {
+            type: 'one_time',
+            start: new Date().toISOString(),
+            end: new Date(Date.now() + 3600000).toISOString(),
+          },
+          enabled: true,
+        });
+        addToast('Monitor muted for 1 hour');
+      } catch (e: any) {
+        addToast('Failed to mute monitor', 'danger', e?.message || 'Unknown error');
+      }
+    }
+    setRules((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const newStatus = r.status === 'muted' ? 'active' : 'muted';
+          return { ...r, status: newStatus as any };
+        }
+        return r;
+      })
     );
   };
 
-  const renderTable = () => {
-    if (error) return renderError();
+  const handleCloneRule = async (monitor: UnifiedRule) => {
+    const clone: UnifiedRule = {
+      ...monitor,
+      id: `clone-${Date.now()}`,
+      name: `${monitor.name} (Copy)`,
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      createdBy: 'current-user',
+    };
+    try {
+      await apiClient.createMonitor(clone);
+      addToast('Monitor cloned');
+    } catch (e: any) {
+      addToast('Failed to clone monitor', 'danger', e?.message || 'Unknown error');
+    }
+    setRules((prev) => [clone, ...prev]);
+  };
 
+  const handleImportMonitors = async (configs: any[]) => {
+    try {
+      await apiClient.importMonitors(configs);
+      addToast('Monitors imported successfully');
+      fetchRules(selectedDsIds, rulesPage, rulesPageSize);
+    } catch (e: any) {
+      addToast('Failed to import monitors', 'danger', e?.message || 'Unknown error');
+    }
+  };
+
+  const formStateToRule = (formState: MonitorFormState, index = 0): UnifiedRule => {
+    const now = new Date().toISOString();
+
+    if (formState.datasourceType === 'prometheus') {
+      const labelsObj: Record<string, string> = {};
+      for (const l of formState.labels) {
+        if (l.key && l.value) labelsObj[l.key] = l.value;
+      }
+      const annotationsObj: Record<string, string> = {};
+      for (const a of formState.annotations) {
+        if (a.key && a.value) annotationsObj[a.key] = a.value;
+      }
+      return {
+        id: `new-${Date.now()}-${index}`,
+        datasourceId: formState.datasourceId || selectedDsIds[0] || 'ds-2',
+        datasourceType: 'prometheus',
+        name: formState.name,
+        enabled: formState.enabled,
+        severity: formState.severity,
+        query: formState.query,
+        condition: `${formState.threshold.operator} ${formState.threshold.value}${formState.threshold.unit}`,
+        labels: labelsObj,
+        annotations: annotationsObj,
+        monitorType: 'metric',
+        status: formState.enabled ? 'active' : 'disabled',
+        healthStatus: 'healthy',
+        createdBy: 'current-user',
+        createdAt: now,
+        lastModified: now,
+        notificationDestinations: [],
+        description: annotationsObj.description || '',
+        aiSummary: 'Newly created monitor. No historical data available yet.',
+        evaluationInterval: formState.evaluationInterval,
+        pendingPeriod: formState.pendingPeriod,
+        firingPeriod: formState.firingPeriod,
+        threshold: {
+          operator: formState.threshold.operator,
+          value: formState.threshold.value,
+          unit: formState.threshold.unit,
+        },
+        alertHistory: [],
+        conditionPreviewData: [],
+        notificationRouting: [],
+        suppressionRules: [],
+        raw: {} as any,
+      };
+    } else {
+      // OpenSearch monitor
+      const isPPL = formState.monitorType === 'ppl_monitor';
+      const indices = formState.indices
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const monitorType =
+        formState.monitorType === 'ppl_monitor'
+          ? ('metric' as const)
+          : formState.monitorType === 'bucket_level_monitor'
+            ? ('infrastructure' as const)
+            : formState.monitorType === 'doc_level_monitor'
+              ? ('log' as const)
+              : ('metric' as const);
+
+      // PPL monitors have Prometheus-like labels/annotations
+      const labelsObj: Record<string, string> = {};
+      const annotationsObj: Record<string, string> = {};
+      if (isPPL) {
+        for (const l of formState.labels) {
+          if (l.key && l.value) labelsObj[l.key] = l.value;
+        }
+        for (const a of formState.annotations) {
+          if (a.key && a.value) annotationsObj[a.key] = a.value;
+        }
+      }
+      if (indices.length > 0) labelsObj.indices = indices.join(', ');
+      labelsObj.monitorType = formState.monitorType;
+
+      return {
+        id: `new-${Date.now()}-${index}`,
+        datasourceId: formState.datasourceId || selectedDsIds[0] || 'ds-1',
+        datasourceType: 'opensearch',
+        name: formState.name,
+        enabled: formState.enabled,
+        severity: formState.severity,
+        query: formState.query,
+        condition: isPPL
+          ? `${formState.threshold.operator} ${formState.threshold.value}${formState.threshold.unit}`
+          : formState.triggerCondition,
+        labels: labelsObj,
+        annotations: annotationsObj,
+        monitorType,
+        status: formState.enabled ? 'active' : 'disabled',
+        healthStatus: 'healthy',
+        createdBy: 'current-user',
+        createdAt: now,
+        lastModified: now,
+        notificationDestinations: formState.actionName ? [formState.actionName] : [],
+        description: isPPL
+          ? `OpenSearch PPL monitor${indices.length > 0 ? ` on ${indices.join(', ')}` : ''}`
+          : `OpenSearch ${formState.monitorType} on ${indices.join(', ')}`,
+        aiSummary: 'Newly created OpenSearch monitor. No historical data available yet.',
+        evaluationInterval: isPPL
+          ? formState.evaluationInterval
+          : `${formState.schedule.interval} ${formState.schedule.unit.toLowerCase()}`,
+        pendingPeriod: isPPL ? formState.pendingPeriod : '5 minutes',
+        threshold: isPPL
+          ? {
+              operator: formState.threshold.operator,
+              value: formState.threshold.value,
+              unit: formState.threshold.unit,
+            }
+          : undefined,
+        alertHistory: [],
+        conditionPreviewData: [],
+        notificationRouting: [],
+        suppressionRules: [],
+        raw: {} as any,
+      };
+    }
+  };
+
+  const handleCreateMonitor = async (formState: MonitorFormState) => {
+    const newRule = formStateToRule(formState);
+    try {
+      await apiClient.createMonitor(formState);
+      addToast('Monitor created successfully');
+    } catch (e: any) {
+      addToast('Failed to create monitor', 'danger', e?.message || 'Unknown error');
+    }
+    setRules((prev) => [newRule, ...prev]);
+    setShowCreateMonitor(false);
+  };
+
+  const handleBatchCreateMonitors = async (forms: MonitorFormState[]) => {
+    const newRules = forms.map((f, i) => formStateToRule(f, i));
+    let succeeded = 0;
+    for (const f of forms) {
+      try {
+        await apiClient.createMonitor(f);
+        succeeded++;
+      } catch (e: any) {
+        addToast('Failed to create monitor', 'danger', e?.message || 'Unknown error');
+      }
+    }
+    if (succeeded > 0) {
+      addToast(succeeded + ' monitor(s) created successfully');
+    }
+    setRules((prev) => [...newRules, ...prev]);
+    // Don't close flyout — AI wizard shows its own summary step and "Done" button
+  };
+
+  // ---- Render ----
+
+  const tabs = [
+    { id: 'alerts' as TabId, name: `Alerts (${alertsTotal})` },
+    { id: 'rules' as TabId, name: rulesTotal >= 0 ? `Rules (${rulesTotal})` : 'Rules' },
+    { id: 'routing' as TabId, name: 'Routing' },
+    { id: 'suppression' as TabId, name: 'Suppression' },
+    { id: 'slos' as TabId, name: 'SLOs' },
+  ];
+
+  const noDatasourceSelected = selectedDsIds.length === 0;
+
+  const renderTable = () => {
     if (activeTab === 'alerts') {
-      if (!loading && alerts.length === 0)
-        return (
-          <EuiEmptyPrompt
-            data-test-subj="alertManagerEmptyAlerts"
-            title={<h2>No Active Alerts</h2>}
-            body={<p>All systems operating normally.</p>}
-          />
-        );
       return (
-        <EuiBasicTable
-          items={alerts}
-          columns={alertColumns}
-          loading={loading}
-          data-test-subj="alertManagerAlertsTable"
-        />
+        <>
+          <AlertsDashboard
+            alerts={alerts}
+            datasources={datasources}
+            loading={dataLoading}
+            onViewDetail={(alert) => setSelectedAlert(alert)}
+            onAcknowledge={handleAcknowledgeAlert}
+            onSilence={handleSilenceAlert}
+            workspaceOptions={workspaceOptions}
+            loadingWorkspaces={loadingWorkspaces}
+            selectedDsIds={selectedDsIds}
+            onDatasourceChange={handleDatasourceChange}
+          />
+        </>
       );
     }
     if (activeTab === 'rules') {
-      if (!loading && rules.length === 0)
-        return (
-          <EuiEmptyPrompt
-            data-test-subj="alertManagerEmptyRules"
-            title={<h2>No Rules</h2>}
-            body={<p>No alerting rules configured.</p>}
-          />
-        );
       return (
-        <EuiBasicTable
-          items={rules}
-          columns={ruleColumns}
-          loading={loading}
-          data-test-subj="alertManagerRulesTable"
+        <MonitorsTable
+          rules={visibleRules}
+          datasources={datasources}
+          loading={dataLoading}
+          onDelete={handleDeleteRules}
+          onSilence={handleSilenceRule}
+          onClone={handleCloneRule}
+          onImport={handleImportMonitors}
+          onCreateMonitor={() => setShowCreateMonitor(true)}
+          workspaceOptions={workspaceOptions}
+          loadingWorkspaces={loadingWorkspaces}
+          selectedDsIds={selectedDsIds}
+          onDatasourceChange={handleDatasourceChange}
         />
       );
+    }
+    if (activeTab === 'routing') {
+      return <NotificationRoutingPanel apiClient={apiClient} />;
+    }
+    if (activeTab === 'suppression') {
+      return <SuppressionRulesPanel apiClient={apiClient} />;
+    }
+    if (activeTab === 'slos') {
+      return <SloListing apiClient={apiClient} />;
     }
     return null;
   };
 
   return (
-    <EuiPage restrictWidth="1200px" data-test-subj="alertManagerPage">
+    <EuiPage>
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>
@@ -285,20 +816,73 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           </EuiPageHeaderSection>
         </EuiPageHeader>
         <EuiSpacer size="m" />
-        <EuiTabs data-test-subj="alertManagerTabs">
+        <EuiTabs>
           {tabs.map((t) => (
-            <EuiTab
-              key={t.id}
-              isSelected={activeTab === t.id}
-              onClick={() => setActiveTab(t.id)}
-              data-test-subj={`alertManagerTab-${t.id}`}
-            >
+            <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
               {t.name}
             </EuiTab>
           ))}
         </EuiTabs>
-        <EuiSpacer />
+        <EuiSpacer size="s" />
+
+        {/* Datasource selector removed — now integrated into filter panels */}
+
+        {error && (
+          <EuiCallOut
+            title="Error loading data"
+            color="danger"
+            iconType="alert"
+            size="s"
+            style={{ marginBottom: 12 }}
+          >
+            <p>{error}</p>
+          </EuiCallOut>
+        )}
+
+        {warnings.length > 0 && (
+          <EuiCallOut
+            title="Some datasources could not be reached"
+            color="warning"
+            iconType="alert"
+            size="s"
+            style={{ marginBottom: 12 }}
+          >
+            {warnings.map((w, i) => (
+              <p key={i}>
+                <strong>{w.datasourceName}</strong>: {w.error}
+              </p>
+            ))}
+          </EuiCallOut>
+        )}
+
         {renderTable()}
+        {showCreateMonitor && (
+          <CreateMonitor
+            onSave={handleCreateMonitor}
+            onBatchSave={handleBatchCreateMonitors}
+            onCancel={() => setShowCreateMonitor(false)}
+            datasources={creatableDatasources}
+            selectedDsIds={selectedDsIds}
+          />
+        )}
+        {selectedAlert && (
+          <AlertDetailFlyout
+            alert={selectedAlert}
+            datasources={datasources}
+            onClose={() => setSelectedAlert(null)}
+            onAcknowledge={(id) => {
+              handleAcknowledgeAlert(id);
+            }}
+            onSilence={(id) => {
+              handleSilenceAlert(id);
+            }}
+          />
+        )}
+        <EuiGlobalToastList
+          toasts={toasts as any}
+          dismissToast={(t: any) => setToasts((prev) => prev.filter((p) => p.id !== t.id))}
+          toastLifeTimeMs={4000}
+        />
       </EuiPageBody>
     </EuiPage>
   );

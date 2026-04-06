@@ -413,6 +413,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   }
 
   async getAlertmanagerStatus(): Promise<AlertmanagerStatus> {
+    // Routes through DirectQuery: /_plugins/_directquery/_resources/{dsName}/alertmanager/api/v2/status
     return this.get<AlertmanagerStatus>(this.requireDefaultDs(), '/alertmanager/api/v2/status');
   }
 

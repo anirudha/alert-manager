@@ -64,6 +64,11 @@ export class MultiBackendAlertService {
     this.logger.info('Registered OpenSearch alerting backend');
   }
 
+  /** Access the Prometheus backend (e.g. for Alertmanager config route). */
+  getPrometheusBackend(): PrometheusBackend | undefined {
+    return this.promBackend;
+  }
+
   registerPrometheus(backend: PrometheusBackend): void {
     this.promBackend = backend;
     this.logger.info('Registered Prometheus alerting backend');

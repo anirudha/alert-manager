@@ -8,7 +8,14 @@
  */
 import { schema } from '@osd/config-schema';
 import { IRouter } from '../../../../src/core/server';
-import { DatasourceService, MultiBackendAlertService } from '../../core';
+import yaml from 'js-yaml';
+import {
+  DatasourceService,
+  MultiBackendAlertService,
+  SloService,
+  SuppressionRuleService,
+  Logger,
+} from '../../core';
 import {
   handleListDatasources,
   handleGetDatasource,
@@ -30,11 +37,29 @@ import {
   handleGetRuleDetail,
   handleGetAlertDetail,
 } from './handlers';
+import {
+  handleListSuppressionRules,
+  handleCreateSuppressionRule,
+  handleUpdateSuppressionRule,
+  handleDeleteSuppressionRule,
+} from './monitor_handlers';
+import {
+  handleListSLOs,
+  handleCreateSLO,
+  handleGetSLO,
+  handleUpdateSLO,
+  handleDeleteSLO,
+  handlePreviewSLORules,
+  handleGetSLOStatuses,
+} from './slo_handlers';
 
 export function defineRoutes(
   router: IRouter,
   datasourceService: DatasourceService,
-  alertService: MultiBackendAlertService
+  alertService: MultiBackendAlertService,
+  sloService?: SloService,
+  suppressionService?: SuppressionRuleService,
+  logger?: Logger
 ) {
   // Datasource routes
   router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
@@ -342,4 +367,274 @@ export function defineRoutes(
         : res.notFound({ body: result.body });
     }
   );
+
+  // ===========================================================================
+  // Alertmanager Config Route (read-only, fetched via DirectQuery Prometheus)
+  // ===========================================================================
+
+  router.get(
+    { path: '/api/alerting/alertmanager/config', validate: false },
+    async (_ctx, _req, res) => {
+      try {
+        const promBackend = alertService.getPrometheusBackend?.();
+        if (!promBackend?.getAlertmanagerStatus) {
+          return res.ok({ body: { available: false, error: 'Alertmanager not configured' } });
+        }
+        const status = await promBackend.getAlertmanagerStatus();
+        const rawYaml = status.config?.original || '';
+
+        // Parse the Alertmanager YAML config into structured data for the UI
+        let parsedConfig: Record<string, any> | undefined;
+        let configParseError: string | undefined;
+        if (rawYaml) {
+          try {
+            const parsed = yaml.load(rawYaml) as Record<string, any>;
+            if (parsed && typeof parsed === 'object') {
+              // Map receivers: extract integration types from receiver configs
+              const receivers = (parsed.receivers || []).map((r: any) => {
+                const integrations: Array<{ type: string; summary: string }> = [];
+                for (const [key, val] of Object.entries(r)) {
+                  if (key === 'name') continue;
+                  if (key.endsWith('_configs') && Array.isArray(val)) {
+                    const type = key.replace(/_configs$/, '');
+                    for (const cfg of val as any[]) {
+                      const summary =
+                        cfg.url ||
+                        cfg.channel ||
+                        cfg.to ||
+                        cfg.api_url ||
+                        cfg.service_key ||
+                        JSON.stringify(cfg).substring(0, 80);
+                      integrations.push({ type, summary: String(summary) });
+                    }
+                  }
+                }
+                if (integrations.length === 0)
+                  integrations.push({ type: 'none', summary: 'No integrations' });
+                return { name: r.name, integrations };
+              });
+
+              // Map inhibit_rules
+              const inhibitRules = (parsed.inhibit_rules || []).map((r: any) => ({
+                source_matchers: r.source_matchers,
+                target_matchers: r.target_matchers,
+                source_match: r.source_match,
+                target_match: r.target_match,
+                equal: r.equal,
+              }));
+
+              parsedConfig = {
+                global: parsed.global,
+                route: parsed.route,
+                receivers,
+                inhibitRules,
+              };
+            }
+          } catch (yamlErr: any) {
+            configParseError = `Failed to parse YAML: ${yamlErr.message}`;
+          }
+        }
+
+        return res.ok({
+          body: {
+            available: true,
+            cluster: {
+              status: (status.cluster as any)?.status || 'unknown',
+              peers: (status.cluster as any)?.peers || [],
+              peerCount: ((status.cluster as any)?.peers || []).length,
+            },
+            uptime: (status as any).uptime,
+            versionInfo: (status as any).versionInfo || {},
+            config: parsedConfig,
+            configParseError,
+            raw: rawYaml,
+          },
+        });
+      } catch (e: any) {
+        return res.ok({ body: { available: false, error: e.message } });
+      }
+    }
+  );
+
+  // ===========================================================================
+  // Suppression Rules Routes
+  // ===========================================================================
+
+  if (suppressionService) {
+    router.get(
+      { path: '/api/alerting/suppression-rules', validate: false },
+      async (_ctx, _req, res) => {
+        const result = handleListSuppressionRules(suppressionService);
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.post(
+      {
+        path: '/api/alerting/suppression-rules',
+        validate: { body: schema.object({}, { unknowns: 'allow' }) },
+      },
+      async (_ctx, req, res) => {
+        const result = handleCreateSuppressionRule(suppressionService, req.body as any);
+        return result.status === 201
+          ? res.ok({ body: result.body })
+          : res.badRequest({ body: result.body });
+      }
+    );
+
+    router.put(
+      {
+        path: '/api/alerting/suppression-rules/{id}',
+        validate: {
+          params: schema.object({ id: schema.string() }),
+          body: schema.object({}, { unknowns: 'allow' }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = handleUpdateSuppressionRule(
+          suppressionService,
+          req.params.id,
+          req.body as any
+        );
+        return result.status === 200
+          ? res.ok({ body: result.body })
+          : res.notFound({ body: result.body });
+      }
+    );
+
+    router.delete(
+      {
+        path: '/api/alerting/suppression-rules/{id}',
+        validate: { params: schema.object({ id: schema.string() }) },
+      },
+      async (_ctx, req, res) => {
+        const result = handleDeleteSuppressionRule(suppressionService, req.params.id);
+        return result.status === 200
+          ? res.ok({ body: result.body })
+          : res.notFound({ body: result.body });
+      }
+    );
+  }
+
+  // ===========================================================================
+  // SLO Routes
+  // ===========================================================================
+
+  if (sloService) {
+    router.get(
+      {
+        path: '/api/alerting/slos',
+        validate: {
+          query: schema.object({
+            page: schema.maybe(schema.string()),
+            pageSize: schema.maybe(schema.string()),
+            datasourceId: schema.maybe(schema.string()),
+            status: schema.maybe(schema.string()),
+            sliType: schema.maybe(schema.string()),
+            service: schema.maybe(schema.string()),
+            search: schema.maybe(schema.string()),
+          }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleListSLOs(sloService, req.query as any, logger);
+        if (result.status >= 400) {
+          return res.customError({
+            statusCode: result.status,
+            body: { message: (result.body as any)?.error || 'Failed to list SLOs' },
+          });
+        }
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.post(
+      {
+        path: '/api/alerting/slos',
+        validate: { body: schema.object({}, { unknowns: 'allow' }) },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleCreateSLO(sloService, req.body as any, logger);
+        if (result.status === 201) return res.ok({ body: result.body });
+        const errMsg = (result.body as any)?.error || 'SLO creation failed';
+        return res.badRequest({ body: { message: errMsg, attributes: result.body } });
+      }
+    );
+
+    router.get(
+      {
+        path: '/api/alerting/slos/statuses',
+        validate: {
+          query: schema.object({ ids: schema.maybe(schema.string()) }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const ids = req.query.ids ? String(req.query.ids).split(',') : [];
+        const result = await handleGetSLOStatuses(sloService, ids, logger);
+        if (result.status >= 400) {
+          return res.customError({
+            statusCode: result.status,
+            body: { message: (result.body as any)?.error || 'Failed to get statuses' },
+          });
+        }
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.post(
+      {
+        path: '/api/alerting/slos/preview',
+        validate: { body: schema.object({}, { unknowns: 'allow' }) },
+      },
+      async (_ctx, req, res) => {
+        const result = await handlePreviewSLORules(sloService, req.body as any, logger);
+        if (result.status >= 400) {
+          return res.customError({
+            statusCode: result.status,
+            body: { message: (result.body as any)?.error || 'Preview failed' },
+          });
+        }
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.get(
+      {
+        path: '/api/alerting/slos/{id}',
+        validate: { params: schema.object({ id: schema.string() }) },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleGetSLO(sloService, req.params.id, logger);
+        if (result.status === 200) return res.ok({ body: result.body });
+        return res.notFound({ body: { message: (result.body as any)?.error || 'SLO not found' } });
+      }
+    );
+
+    router.put(
+      {
+        path: '/api/alerting/slos/{id}',
+        validate: {
+          params: schema.object({ id: schema.string() }),
+          body: schema.object({}, { unknowns: 'allow' }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleUpdateSLO(sloService, req.params.id, req.body as any, logger);
+        if (result.status === 200) return res.ok({ body: result.body });
+        return res.notFound({ body: { message: (result.body as any)?.error || 'SLO not found' } });
+      }
+    );
+
+    router.delete(
+      {
+        path: '/api/alerting/slos/{id}',
+        validate: { params: schema.object({ id: schema.string() }) },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleDeleteSLO(sloService, req.params.id, logger);
+        if (result.status === 200) return res.ok({ body: result.body });
+        return res.notFound({ body: { message: (result.body as any)?.error || 'SLO not found' } });
+      }
+    );
+  }
 }

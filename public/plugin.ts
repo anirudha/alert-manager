@@ -13,6 +13,7 @@ import {
 } from '../../../src/core/public';
 import { AlarmsPluginSetup, AlarmsPluginStart, AppPluginStartDependencies } from './types';
 import { PLUGIN_NAME } from '../common';
+import { renderApp } from './application';
 
 export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart> {
   public setup(core: CoreSetup): AlarmsPluginSetup {
@@ -23,24 +24,22 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       order: 250,
       euiIconType: 'bell',
       async mount(params: AppMountParameters) {
-        // Load application bundle
-        const { renderApp } = await import('./application');
-        // Get start services as specified in opensearch_dashboards.json
         const [coreStart, depsStart] = await core.getStartServices();
-        // Render the application
         return renderApp(coreStart, depsStart as AppPluginStartDependencies, params);
       },
     });
 
     // Add to observability nav group for workspace mode
-    if (core.chrome.navGroup.getNavGroupEnabled()) {
-      core.chrome.navGroup.addNavLinksToGroup(DEFAULT_NAV_GROUPS.observability, [
-        {
-          id: 'alertManager',
-          category: undefined,
-          order: 250,
-        },
-      ]);
+    try {
+      if (core.chrome?.navGroup?.getNavGroupEnabled()) {
+        const obsGroup = (typeof DEFAULT_NAV_GROUPS !== 'undefined' &&
+          DEFAULT_NAV_GROUPS?.observability) || { id: 'observability' };
+        core.chrome.navGroup.addNavLinksToGroup(obsGroup, [
+          { id: 'alertManager', category: undefined, order: 250 },
+        ]);
+      }
+    } catch (_e) {
+      /* navGroup API may not be available */
     }
 
     // Return methods that should be available to other plugins

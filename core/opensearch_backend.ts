@@ -37,6 +37,13 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     this.http = new HttpClient(logger);
   }
 
+  /** Fall back to env-var credentials when the datasource has no auth configured. */
+  private envAuth(): { username: string; password: string } | undefined {
+    const u = process.env.OPENSEARCH_USER;
+    const p = process.env.OPENSEARCH_PASSWORD;
+    return u && p ? { username: u, password: p } : undefined;
+  }
+
   // =========================================================================
   // Monitors
   // =========================================================================
@@ -248,7 +255,7 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
       method,
       url: `${ds.url.replace(/\/+$/, '')}${path}`,
       body,
-      auth: buildAuthFromDatasource(ds),
+      auth: buildAuthFromDatasource(ds) ?? this.envAuth(),
       // Default false for backward compatibility with self-signed certs.
       // Production deployments should set ds.tls.rejectUnauthorized = true.
       rejectUnauthorized: ds.tls?.rejectUnauthorized ?? false,

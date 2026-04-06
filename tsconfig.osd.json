@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "jsx": "react",
+    "strict": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false,
+    "outDir": "./build/osd-ts-out",
+    "baseUrl": ".",
+    "paths": {
+      "../../../src/core/public": ["./stubs/src/core/public"],
+      "../../../../src/core/public": ["./stubs/src/core/public"],
+      "../../../src/plugins/navigation/public": ["./stubs/src/plugins/navigation/public"],
+      "../../../../src/plugins/navigation/public": ["./stubs/src/plugins/navigation/public"]
+    }
+  },
+  "include": [
+    "public/**/*.ts",
+    "public/**/*.tsx",
+    "core/**/*.ts",
+    "common/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "core/__tests__/**",
+    "public/__mocks__/**",
+    "public/components/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "core/testing.ts",
+    "core/mock_backend.ts",
+    "core/mock_enrichment.ts"
+  ]
+}

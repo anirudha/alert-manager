@@ -29,3 +29,13 @@ export { SuppressionRuleService } from './suppression';
 export type { SuppressionRuleConfig } from './suppression';
 export { matchesSearch, matchesFilters, sortRules, filterAlerts, emptyFilters } from './filter';
 export type { FilterState } from './filter';
+export * from './slo_types';
+export { SloService } from './slo_service';
+export { InMemorySloStore } from './slo_store';
+export {
+  generateSloRuleGroup,
+  sanitizeName,
+  shortHash,
+  parseDurationToMs,
+} from './slo_promql_generator';
+export { validateSloForm, isSloFormValid } from './slo_validators';
