@@ -30,8 +30,9 @@ jobs:
           mkdir -p ../../
           echo '{"compilerOptions":{"target":"ES2020","module":"commonjs","moduleResolution":"node","esModuleInterop":true,"skipLibCheck":true,"jsx":"react","ignoreDeprecations":"5.0"}}' > ../../tsconfig.json
 
-      - name: Lint
-        run: npm run lint
+      # Note: lint is skipped in standalone CI because the ESLint config extends
+      # @elastic/eslint-config-kibana which is only available inside the OSD monorepo.
+      # Lint runs automatically via husky pre-commit hooks during development.
 
       - name: Run tests with coverage
         run: npm run test:coverage
