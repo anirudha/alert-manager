@@ -7,8 +7,14 @@
  * SLO Preview Panel — right-side sticky panel in the Create SLO wizard.
  * Renders a live preview of the Prometheus rules that will be generated
  * from the current form input, updating as the user fills in fields.
+ *
+ * The preview is generated **client-side** using the same pure, stateless
+ * `generateSloRuleGroup()` that the server uses. This module lives in
+ * `core/` (shared between client and server) and has zero I/O or
+ * server-only dependencies, so bundling it client-side is intentional
+ * to provide instant, zero-latency feedback as the user types.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   EuiTitle,
   EuiText,
@@ -18,17 +24,16 @@ import {
   EuiFlexItem,
   EuiPanel,
   EuiCodeBlock,
-  EuiHorizontalRule,
+  EuiButtonGroup,
 } from '@opensearch-project/oui';
 import type {
-  SloDefinition,
   SloInput,
+  SloDefinition,
   GeneratedRuleGroup,
   GeneratedRule,
-  DEFAULT_MWMBR_TIERS,
 } from '../../core/slo_types';
-import { DEFAULT_MWMBR_TIERS as MWMBR_DEFAULTS } from '../../core/slo_types';
-import { generateSloRuleGroup, sanitizeName, shortHash } from '../../core/slo_promql_generator';
+import { DEFAULT_MWMBR_TIERS } from '../../core/slo_types';
+import { generateSloRuleGroup } from '../../core/slo_promql_generator';
 
 // ============================================================================
 // Props
@@ -43,6 +48,11 @@ export interface SloPreviewPanelProps {
 // ============================================================================
 
 type PreviewTab = 'yaml' | 'promql';
+
+const TAB_OPTIONS = [
+  { id: 'yaml', label: 'Rules YAML' },
+  { id: 'promql', label: 'PromQL List' },
+];
 
 // ============================================================================
 // Helpers
@@ -86,7 +96,7 @@ function buildTempDefinition(input: Partial<SloInput>): SloDefinition {
     target: input.target || 0.999,
     budgetWarningThreshold: input.budgetWarningThreshold ?? 0.3,
     window: input.window || { type: 'rolling', duration: '30d' },
-    burnRates: input.burnRates || MWMBR_DEFAULTS,
+    burnRates: input.burnRates || [...DEFAULT_MWMBR_TIERS],
     alarms: input.alarms || {
       sliHealth: { enabled: true },
       attainmentBreach: { enabled: true },
@@ -129,14 +139,17 @@ function ruleBadgeLabel(rule: GeneratedRule): string {
 export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) => {
   const [activeTab, setActiveTab] = useState<PreviewTab>('yaml');
 
+  const handleTabChange = useCallback((id: string) => {
+    setActiveTab(id as PreviewTab);
+  }, []);
+
   // Generate the rule group, memoized to avoid regenerating on every render
   const ruleGroup = useMemo<GeneratedRuleGroup | null>(() => {
     if (!isInputComplete(sloInput)) return null;
     try {
       const tempDef = buildTempDefinition(sloInput);
       return generateSloRuleGroup(tempDef);
-    } catch (err) {
-      console.error('Preview generation error:', err);
+    } catch {
       return null;
     }
   }, [
@@ -161,21 +174,6 @@ export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) =>
   // Counts
   const recordingCount = ruleGroup?.rules.filter((r) => r.type === 'recording').length ?? 0;
   const alertingCount = ruleGroup?.rules.filter((r) => r.type === 'alerting').length ?? 0;
-
-  // ------------------------------------------------------------------
-  // Tab button style
-  // ------------------------------------------------------------------
-
-  const tabButtonStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: '4px 12px',
-    border: 'none',
-    borderBottom: isActive ? '2px solid #006BB4' : '2px solid transparent',
-    background: 'transparent',
-    color: isActive ? '#006BB4' : '#69707D',
-    fontWeight: isActive ? 600 : 400,
-    cursor: 'pointer',
-    fontSize: 13,
-  });
 
   // ------------------------------------------------------------------
   // Render
@@ -204,21 +202,16 @@ export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) =>
 
           <EuiSpacer size="s" />
 
-          {/* Tab switcher */}
-          <div style={{ borderBottom: '1px solid #D3DAE6', marginBottom: 12 }}>
-            <button
-              style={tabButtonStyle(activeTab === 'yaml')}
-              onClick={() => setActiveTab('yaml')}
-            >
-              Rules YAML
-            </button>
-            <button
-              style={tabButtonStyle(activeTab === 'promql')}
-              onClick={() => setActiveTab('promql')}
-            >
-              PromQL List
-            </button>
-          </div>
+          {/* Accessible tab switcher using EuiButtonGroup */}
+          <EuiButtonGroup
+            legend="Preview format"
+            options={TAB_OPTIONS}
+            idSelected={activeTab}
+            onChange={handleTabChange}
+            buttonSize="compressed"
+          />
+
+          <EuiSpacer size="s" />
 
           {/* YAML tab */}
           {activeTab === 'yaml' && (
@@ -235,9 +228,19 @@ export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) =>
 
           {/* PromQL List tab */}
           {activeTab === 'promql' && (
-            <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+            <div
+              style={{ maxHeight: 500, overflowY: 'auto' }}
+              role="list"
+              aria-label="Generated PromQL rules"
+            >
               {ruleGroup.rules.map((rule, idx) => (
-                <EuiPanel key={idx} paddingSize="s" hasBorder style={{ marginBottom: 8 }}>
+                <EuiPanel
+                  key={`${rule.type}-${rule.name}`}
+                  paddingSize="s"
+                  hasBorder
+                  style={{ marginBottom: 8 }}
+                  role="listitem"
+                >
                   <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
                     <EuiFlexItem grow={false}>
                       <EuiBadge color={ruleBadgeColor(rule)}>{ruleBadgeLabel(rule)}</EuiBadge>

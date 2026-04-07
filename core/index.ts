@@ -37,5 +37,7 @@ export {
   sanitizeName,
   shortHash,
   parseDurationToMs,
+  RECORDING_WINDOWS,
 } from './slo_promql_generator';
-export { validateSloForm, isSloFormValid } from './slo_validators';
+export { validateSloForm, validateSloFormFull, isSloFormValid } from './slo_validators';
+export type { SloValidationResult } from './slo_validators';

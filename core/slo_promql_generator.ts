@@ -30,8 +30,11 @@ import type { SloDefinition, GeneratedRuleGroup, GeneratedRule, BurnRateConfig }
  * Ordered from shortest to longest. The burn-rate alerts
  * and attainment alerts reference these instead of computing
  * rate() over large windows at query time.
+ *
+ * Exported so that `slo_validators` can warn when a user-supplied
+ * burn-rate window does not match a pre-existing recording rule.
  */
-const RECORDING_WINDOWS = ['5m', '30m', '1h', '2h', '6h', '1d', '3d'];
+export const RECORDING_WINDOWS = ['5m', '30m', '1h', '2h', '6h', '1d', '3d'];
 
 /** Default evaluation interval for the generated rule group (seconds). */
 const DEFAULT_INTERVAL = 60;
@@ -107,6 +110,16 @@ function buildCommonLabels(slo: SloDefinition): Record<string, string> {
 // ============================================================================
 // Recording Rule Generators
 // ============================================================================
+
+/**
+ * Format an interval in seconds as a Prometheus duration string.
+ * e.g. 60 → "1m", 120 → "2m", 3600 → "1h".
+ */
+function formatIntervalDuration(seconds: number): string {
+  if (seconds >= 3600 && seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds >= 60 && seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
+}
 
 /**
  * Generate intermediate recording rules at multiple window granularities.
@@ -260,11 +273,20 @@ function generateBurnRateAlerts(slo: SloDefinition): GeneratedRule[] {
     const tier = slo.burnRates[i];
     if (!tier.createAlarm) continue;
 
-    const threshold = (tier.burnRateMultiplier * errorBudget).toPrecision(6);
+    const threshold = parseFloat((tier.burnRateMultiplier * errorBudget).toPrecision(6));
     const shortRecord = `slo:sli_error:ratio_rate_${tier.shortWindow}:${sanitized}_${hash}`;
     const longRecord = `slo:sli_error:ratio_rate_${tier.longWindow}:${sanitized}_${hash}`;
 
-    const tierLabel = i === 0 ? 'HighUrgency' : i === 1 ? 'MediumUrgency' : `Tier${i + 1}`;
+    const tierLabel =
+      i === 0
+        ? 'Page'
+        : i === 1
+          ? 'Ticket'
+          : i === 2
+            ? 'Log'
+            : i === 3
+              ? 'Monitor'
+              : `Tier${i + 1}`;
     const alertName = `SLO_BurnRate_${tierLabel}_${sanitized}_${hash}`;
 
     const expr =
@@ -325,8 +347,8 @@ function generateSliHealthAlert(slo: SloDefinition): GeneratedRule | null {
       alarm_type: 'sli_health',
     },
     annotations: {
-      summary: `SLI health degraded — error ratio above target for ${slo.name}`,
-      description: `The current error ratio for ${slo.name} exceeds the ${formatTarget(slo.target)} target over the last 5 minutes.`,
+      summary: `SLI health degraded — error ratio exceeds error budget for ${slo.name}`,
+      description: `The current error ratio for ${slo.name} exceeds the error budget (burn rate > 1x) over the last 5 minutes. Target: ${formatTarget(slo.target)}.`,
     },
     description: `SLI health alert — fires when error ratio exceeds budget (for: 5m)`,
   };
@@ -346,21 +368,27 @@ function generateAttainmentAlert(slo: SloDefinition): GeneratedRule | null {
 
   // Find the closest recording rule window that covers the SLO window
   const recordWindow = findClosestWindow(windowDuration);
+  const isApproximated = recordWindow !== windowDuration;
   const recordName = `slo:sli_error:ratio_rate_${recordWindow}:${sanitized}_${hash}`;
 
   const expr = `${recordName}{slo_id="${slo.id}"} > ${errorBudget}`;
+
+  const labels: Record<string, string> = {
+    ...buildCommonLabels(slo),
+    severity: 'critical',
+    alarm_type: 'attainment',
+    slo_target: String(slo.target),
+  };
+  if (isApproximated) {
+    labels.slo_window_approximated = 'true';
+  }
 
   return {
     type: 'alerting',
     name: `SLO_Attainment_${sanitized}_${hash}`,
     expr,
     for: '5m',
-    labels: {
-      ...buildCommonLabels(slo),
-      severity: 'critical',
-      alarm_type: 'attainment',
-      slo_target: String(slo.target),
-    },
+    labels,
     annotations: {
       summary: `SLO attainment breached — below ${formatTarget(slo.target)} over ${windowDuration} window`,
       description: `The ${windowDuration} rolling attainment for ${slo.name} has fallen below the ${formatTarget(slo.target)} target.`,
@@ -381,6 +409,7 @@ function generateBudgetWarningAlert(slo: SloDefinition): GeneratedRule | null {
   const errorBudget = 1 - slo.target;
 
   const recordWindow = findClosestWindow(windowDuration);
+  const isApproximated = recordWindow !== windowDuration;
   const recordName = `slo:sli_error:ratio_rate_${recordWindow}:${sanitized}_${hash}`;
 
   // Budget remaining = 1 - (error_ratio / error_budget)
@@ -393,17 +422,22 @@ function generateBudgetWarningAlert(slo: SloDefinition): GeneratedRule | null {
 
   const pct = Math.round(slo.budgetWarningThreshold * 100);
 
+  const labels: Record<string, string> = {
+    ...buildCommonLabels(slo),
+    severity: 'warning',
+    alarm_type: 'error_budget_warning',
+    budget_threshold: String(slo.budgetWarningThreshold),
+  };
+  if (isApproximated) {
+    labels.slo_window_approximated = 'true';
+  }
+
   return {
     type: 'alerting',
     name: `SLO_Warning_${sanitized}_${hash}`,
     expr,
     for: '15m',
-    labels: {
-      ...buildCommonLabels(slo),
-      severity: 'warning',
-      alarm_type: 'error_budget_warning',
-      budget_threshold: String(slo.budgetWarningThreshold),
-    },
+    labels,
     annotations: {
       summary: `SLO warning — less than ${pct}% error budget remaining for ${slo.name}`,
       description: `The error budget for ${slo.name} is running low. Less than ${pct}% remains in the current ${windowDuration} window.`,
@@ -419,7 +453,7 @@ function generateBudgetWarningAlert(slo: SloDefinition): GeneratedRule | null {
 function rulesToYaml(groupName: string, interval: number, rules: GeneratedRule[]): string {
   const lines: string[] = [];
   lines.push(`name: ${groupName}`);
-  lines.push(`interval: ${interval}`);
+  lines.push(`interval: ${formatIntervalDuration(interval)}`);
   lines.push('rules:');
 
   for (const rule of rules) {
@@ -488,7 +522,18 @@ function formatTarget(target: number): string {
 
 /**
  * Find the closest recording rule window that is >= the SLO window duration.
- * If the SLO window exceeds all recording windows, return the largest.
+ * If the SLO window exceeds all recording windows, return the largest
+ * available window (currently `3d`).
+ *
+ * **Approximation note:** For SLO windows larger than `3d` (e.g. `7d`, `30d`),
+ * the returned window is shorter than the actual SLO window. This is a
+ * deliberate approximation — a 3-day error ratio that already exceeds the
+ * budget is a reasonable proxy for the full window. Alerts generated from an
+ * approximated window receive an `slo_window_approximated: "true"` label so
+ * operators can identify them.
+ *
+ * @param windowDuration - Prometheus duration string (e.g. "7d", "30d")
+ * @returns The closest recording window from {@link RECORDING_WINDOWS}
  */
 function findClosestWindow(windowDuration: string): string {
   const durationMs = parseDurationToMs(windowDuration);

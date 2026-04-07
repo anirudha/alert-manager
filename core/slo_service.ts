@@ -24,7 +24,7 @@ import type {
 } from './slo_types';
 import { DEFAULT_MWMBR_TIERS } from './slo_types';
 import { generateSloRuleGroup, sanitizeName, shortHash } from './slo_promql_generator';
-import { validateSloForm } from './slo_validators';
+import { validateSloFormFull } from './slo_validators';
 import { InMemorySloStore } from './slo_store';
 import type { Logger, PaginatedResponse } from './types';
 
@@ -65,9 +65,12 @@ export class SloService {
 
   async create(input: SloInput, createdBy = 'system'): Promise<SloDefinition> {
     // Validate
-    const errors = validateSloForm(input);
+    const { errors, warnings } = validateSloFormFull(input);
     if (Object.keys(errors).length > 0) {
       throw new Error(`Validation failed: ${JSON.stringify(errors)}`);
+    }
+    if (Object.keys(warnings).length > 0) {
+      this.logger.warn(`SLO create warnings for "${input.name}": ${JSON.stringify(warnings)}`);
     }
 
     const id = `slo-${Date.now()}-${++this.counter}`;
@@ -171,9 +174,12 @@ export class SloService {
     };
 
     // Re-validate
-    const errors = validateSloForm(updated);
+    const { errors, warnings } = validateSloFormFull(updated);
     if (Object.keys(errors).length > 0) {
       throw new Error(`Validation failed: ${JSON.stringify(errors)}`);
+    }
+    if (Object.keys(warnings).length > 0) {
+      this.logger.warn(`SLO update warnings for "${updated.name}": ${JSON.stringify(warnings)}`);
     }
 
     // Regenerate rules
@@ -274,8 +280,17 @@ export class SloService {
   }
 
   /**
-   * Compute mock status from the SLO definition.
-   * In a real implementation, this would execute PromQL queries.
+   * Compute **mock** status from the SLO definition.
+   *
+   * **This is mock-only.** In a production implementation this method should
+   * be replaced with live Prometheus queries:
+   *   1. `slo:sli_error:ratio_rate_<window>` → current error ratio
+   *   2. Attainment = 1 − error_ratio
+   *   3. Budget remaining = 1 − (error_ratio / error_budget)
+   *   4. Derive {@link SloStatus} from attainment + budget thresholds
+   *
+   * For seeded SLOs it returns pre-set mock values; for user-created SLOs
+   * it simulates a healthy state (50 % budget remaining).
    */
   private computeMockStatus(slo: SloDefinition): SloLiveStatus {
     // For seeded SLOs, use the attached mock status data.

@@ -242,10 +242,10 @@ describe('generateSloRuleGroup — MWMBR Burn-Rate Alerts', () => {
   });
 
   it('sets correct for: durations', () => {
-    expect(burnAlerts[0].for).toBe('2m'); // Critical tier
-    expect(burnAlerts[1].for).toBe('5m'); // Warning tier
-    expect(burnAlerts[2].for).toBe('10m'); // Ticket tier
-    expect(burnAlerts[3].for).toBe('30m'); // Low tier
+    expect(burnAlerts[0].for).toBe('2m'); // Page tier (critical)
+    expect(burnAlerts[1].for).toBe('5m'); // Ticket tier (critical)
+    expect(burnAlerts[2].for).toBe('10m'); // Log tier (warning)
+    expect(burnAlerts[3].for).toBe('30m'); // Monitor tier (warning)
   });
 
   it('sets correct severity labels', () => {
@@ -255,12 +255,12 @@ describe('generateSloRuleGroup — MWMBR Burn-Rate Alerts', () => {
     expect(burnAlerts[3].labels.severity).toBe('warning');
   });
 
-  it('names the first tier HighUrgency', () => {
-    expect(burnAlerts[0].name).toContain('HighUrgency');
+  it('names the first tier Page', () => {
+    expect(burnAlerts[0].name).toContain('Page');
   });
 
-  it('names the second tier MediumUrgency', () => {
-    expect(burnAlerts[1].name).toContain('MediumUrgency');
+  it('names the second tier Ticket', () => {
+    expect(burnAlerts[1].name).toContain('Ticket');
   });
 
   it('includes all common labels on burn rate alerts', () => {
@@ -549,7 +549,7 @@ describe('YAML output', () => {
     const slo = makeAvailabilitySlo();
     const result = generateSloRuleGroup(slo);
     expect(result.yaml).toContain(`name: ${result.groupName}`);
-    expect(result.yaml).toContain('interval: 60');
+    expect(result.yaml).toContain('interval: 1m');
   });
 
   it('contains record: entries for recording rules', () => {
@@ -561,7 +561,7 @@ describe('YAML output', () => {
   it('contains alert: entries for alerting rules', () => {
     const slo = makeAvailabilitySlo();
     const result = generateSloRuleGroup(slo);
-    expect(result.yaml).toContain('- alert: SLO_BurnRate_HighUrgency');
+    expect(result.yaml).toContain('- alert: SLO_BurnRate_Page');
     expect(result.yaml).toContain('- alert: SLO_SLIHealth');
     expect(result.yaml).toContain('- alert: SLO_Attainment');
     expect(result.yaml).toContain('- alert: SLO_Warning');
@@ -610,6 +610,51 @@ describe('generateSloRuleGroup — Period-based SLI', () => {
     const result = generateSloRuleGroup(slo);
     const periodRule = findRuleByNamePattern(result.rules, 'good_period');
     expect(periodRule).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// Window Approximation Label
+// ============================================================================
+
+describe('generateSloRuleGroup — Window Approximation', () => {
+  it('adds slo_window_approximated label when SLO window exceeds max recording window', () => {
+    const slo = makeAvailabilitySlo({
+      window: { type: 'rolling', duration: '30d' },
+    });
+    const result = generateSloRuleGroup(slo);
+
+    const attainment = findRuleByNamePattern(result.rules, 'SLO_Attainment');
+    expect(attainment).toBeDefined();
+    expect(attainment!.labels.slo_window_approximated).toBe('true');
+
+    const warning = findRuleByNamePattern(result.rules, 'SLO_Warning');
+    expect(warning).toBeDefined();
+    expect(warning!.labels.slo_window_approximated).toBe('true');
+  });
+
+  it('does not add slo_window_approximated when window matches a recording window', () => {
+    const slo = makeAvailabilitySlo({
+      window: { type: 'rolling', duration: '1d' },
+    });
+    const result = generateSloRuleGroup(slo);
+
+    const attainment = findRuleByNamePattern(result.rules, 'SLO_Attainment');
+    expect(attainment).toBeDefined();
+    expect(attainment!.labels.slo_window_approximated).toBeUndefined();
+  });
+
+  it('adds slo_window_approximated for 7d window (falls back to 3d recording)', () => {
+    const slo = makeAvailabilitySlo({
+      window: { type: 'rolling', duration: '7d' },
+    });
+    const result = generateSloRuleGroup(slo);
+
+    const attainment = findRuleByNamePattern(result.rules, 'SLO_Attainment');
+    expect(attainment).toBeDefined();
+    expect(attainment!.labels.slo_window_approximated).toBe('true');
+    // Confirm it references the 3d recording rule
+    expect(attainment!.expr).toContain('ratio_rate_3d');
   });
 });
 

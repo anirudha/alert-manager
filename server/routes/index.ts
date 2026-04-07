@@ -520,6 +520,77 @@ export function defineRoutes(
   // SLO Routes
   // ===========================================================================
 
+  // ----------- Typed schemas for @osd/config-schema validation -------------
+
+  const sliLabelSchema = schema.object({
+    labelName: schema.string({ minLength: 1, maxLength: 128 }),
+    labelValue: schema.string({ minLength: 1, maxLength: 256 }),
+  });
+
+  const burnRateSchema = schema.object({
+    shortWindow: schema.string({ minLength: 1 }),
+    longWindow: schema.string({ minLength: 1 }),
+    burnRateMultiplier: schema.number({ min: 0.01, max: 1000 }),
+    severity: schema.oneOf([schema.literal('critical'), schema.literal('warning')]),
+    createAlarm: schema.boolean(),
+    forDuration: schema.string({ minLength: 1 }),
+    notificationChannel: schema.maybe(schema.string()),
+  });
+
+  const sloAlarmToggle = schema.object({
+    enabled: schema.boolean(),
+    notificationChannel: schema.maybe(schema.string()),
+  });
+
+  const sloBodySchema = schema.object({
+    name: schema.string({ minLength: 1, maxLength: 128 }),
+    datasourceId: schema.string({ minLength: 1 }),
+    sli: schema.object({
+      type: schema.oneOf([
+        schema.literal('availability'),
+        schema.literal('latency_p99'),
+        schema.literal('latency_p90'),
+        schema.literal('latency_p50'),
+      ]),
+      calcMethod: schema.oneOf([schema.literal('good_requests'), schema.literal('good_periods')]),
+      sourceType: schema.oneOf([
+        schema.literal('service_operation'),
+        schema.literal('service_dependency'),
+      ]),
+      metric: schema.string({ minLength: 1 }),
+      goodEventsFilter: schema.maybe(schema.string()),
+      latencyThreshold: schema.maybe(schema.number({ min: 0 })),
+      service: sliLabelSchema,
+      operation: sliLabelSchema,
+      dependency: schema.maybe(sliLabelSchema),
+      periodLength: schema.maybe(schema.string()),
+    }),
+    target: schema.number({ min: 0.9, max: 0.9999 }),
+    budgetWarningThreshold: schema.number({ min: 0.01, max: 0.99 }),
+    window: schema.object({
+      type: schema.oneOf([schema.literal('rolling')]),
+      duration: schema.string({ minLength: 1 }),
+    }),
+    burnRates: schema.arrayOf(burnRateSchema),
+    alarms: schema.object({
+      sliHealth: sloAlarmToggle,
+      attainmentBreach: sloAlarmToggle,
+      budgetWarning: sloAlarmToggle,
+    }),
+    exclusionWindows: schema.arrayOf(
+      schema.object({
+        name: schema.string(),
+        schedule: schema.string(),
+        duration: schema.string(),
+        reason: schema.maybe(schema.string()),
+      })
+    ),
+    tags: schema.recordOf(schema.string(), schema.string()),
+  });
+
+  // Partial body for updates — same structure but all optional
+  const sloUpdateBodySchema = schema.object({}, { unknowns: 'allow' });
+
   if (sloService) {
     router.get(
       {
@@ -537,11 +608,28 @@ export function defineRoutes(
         },
       },
       async (_ctx, req, res) => {
-        const result = await handleListSLOs(sloService, req.query as any, logger);
+        const query = req.query;
+        const result = await handleListSLOs(
+          sloService,
+          {
+            page: query.page ? parseInt(query.page, 10) : undefined,
+            pageSize: query.pageSize ? parseInt(query.pageSize, 10) : undefined,
+            datasourceId: query.datasourceId || undefined,
+            status: query.status ? query.status.split(',') : undefined,
+            sliType: query.sliType ? query.sliType.split(',') : undefined,
+            service: query.service ? query.service.split(',') : undefined,
+            search: query.search || undefined,
+          },
+          logger
+        );
         if (result.status >= 400) {
           return res.customError({
             statusCode: result.status,
-            body: { message: (result.body as any)?.error || 'Failed to list SLOs' },
+            body: {
+              message: String(
+                (result.body as Record<string, unknown>)?.error || 'Failed to list SLOs'
+              ),
+            },
           });
         }
         return res.ok({ body: result.body });
@@ -551,13 +639,18 @@ export function defineRoutes(
     router.post(
       {
         path: '/api/alerting/slos',
-        validate: { body: schema.object({}, { unknowns: 'allow' }) },
+        validate: { body: sloBodySchema },
       },
       async (_ctx, req, res) => {
-        const result = await handleCreateSLO(sloService, req.body as any, logger);
+        const result = await handleCreateSLO(sloService, req.body, logger);
         if (result.status === 201) return res.ok({ body: result.body });
-        const errMsg = (result.body as any)?.error || 'SLO creation failed';
-        return res.badRequest({ body: { message: errMsg, attributes: result.body } });
+        const errBody = result.body as Record<string, unknown>;
+        return res.badRequest({
+          body: {
+            message: String(errBody?.error || 'SLO creation failed'),
+            attributes: result.body,
+          },
+        });
       }
     );
 
@@ -574,7 +667,11 @@ export function defineRoutes(
         if (result.status >= 400) {
           return res.customError({
             statusCode: result.status,
-            body: { message: (result.body as any)?.error || 'Failed to get statuses' },
+            body: {
+              message: String(
+                (result.body as Record<string, unknown>)?.error || 'Failed to get statuses'
+              ),
+            },
           });
         }
         return res.ok({ body: result.body });
@@ -584,14 +681,16 @@ export function defineRoutes(
     router.post(
       {
         path: '/api/alerting/slos/preview',
-        validate: { body: schema.object({}, { unknowns: 'allow' }) },
+        validate: { body: sloBodySchema },
       },
       async (_ctx, req, res) => {
-        const result = await handlePreviewSLORules(sloService, req.body as any, logger);
+        const result = await handlePreviewSLORules(sloService, req.body, logger);
         if (result.status >= 400) {
           return res.customError({
             statusCode: result.status,
-            body: { message: (result.body as any)?.error || 'Preview failed' },
+            body: {
+              message: String((result.body as Record<string, unknown>)?.error || 'Preview failed'),
+            },
           });
         }
         return res.ok({ body: result.body });
@@ -606,7 +705,11 @@ export function defineRoutes(
       async (_ctx, req, res) => {
         const result = await handleGetSLO(sloService, req.params.id, logger);
         if (result.status === 200) return res.ok({ body: result.body });
-        return res.notFound({ body: { message: (result.body as any)?.error || 'SLO not found' } });
+        return res.notFound({
+          body: {
+            message: String((result.body as Record<string, unknown>)?.error || 'SLO not found'),
+          },
+        });
       }
     );
 
@@ -615,13 +718,17 @@ export function defineRoutes(
         path: '/api/alerting/slos/{id}',
         validate: {
           params: schema.object({ id: schema.string() }),
-          body: schema.object({}, { unknowns: 'allow' }),
+          body: sloUpdateBodySchema,
         },
       },
       async (_ctx, req, res) => {
-        const result = await handleUpdateSLO(sloService, req.params.id, req.body as any, logger);
+        const result = await handleUpdateSLO(sloService, req.params.id, req.body, logger);
         if (result.status === 200) return res.ok({ body: result.body });
-        return res.notFound({ body: { message: (result.body as any)?.error || 'SLO not found' } });
+        return res.notFound({
+          body: {
+            message: String((result.body as Record<string, unknown>)?.error || 'SLO not found'),
+          },
+        });
       }
     );
 
@@ -633,7 +740,11 @@ export function defineRoutes(
       async (_ctx, req, res) => {
         const result = await handleDeleteSLO(sloService, req.params.id, logger);
         if (result.status === 200) return res.ok({ body: result.body });
-        return res.notFound({ body: { message: (result.body as any)?.error || 'SLO not found' } });
+        return res.notFound({
+          body: {
+            message: String((result.body as Record<string, unknown>)?.error || 'SLO not found'),
+          },
+        });
       }
     );
   }
