@@ -16,7 +16,10 @@ module.exports = {
       transform: {
         '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
       },
-      moduleNameMapper: {},
+      moduleNameMapper: {
+        // Map OSD core server types to local stubs (not available outside the OSD monorepo)
+        '^.*/src/core/server$': '<rootDir>/stubs/src/core/server/stub.js',
+      },
     },
     // React component tests (jsdom environment)
     {
