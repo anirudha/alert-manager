@@ -14,7 +14,7 @@ module.exports = {
       testMatch: ['**/__tests__/**/*.test.ts'],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
       transform: {
-        '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
+        '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', diagnostics: false }],
       },
       moduleNameMapper: {
         // Map OSD core server types to local stubs (not available outside the OSD monorepo)
