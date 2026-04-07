@@ -23,8 +23,26 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      # Create a minimal parent tsconfig.json stub for standalone CI.
+      # The plugin's tsconfig.json extends ../../tsconfig.json (the OSD monorepo root).
+      - name: Create parent tsconfig stub
+        run: |
+          mkdir -p ../../
+          echo '{"compilerOptions":{"target":"ES2020","module":"commonjs","moduleResolution":"node","esModuleInterop":true,"skipLibCheck":true,"jsx":"react","ignoreDeprecations":"5.0"}}' > ../../tsconfig.json
+
+      - name: Lint
+        run: npm run lint
+
       - name: Run tests with coverage
         run: npm run test:coverage
+
+      - name: Upload coverage artifact
+        if: matrix.node-version == 20
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
 
       - name: Build standalone
         working-directory: standalone

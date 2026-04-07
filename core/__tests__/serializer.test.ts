@@ -174,4 +174,143 @@ describe('deserializeMonitor', () => {
     const { config } = deserializeMonitor(input);
     expect(config!.labels).toEqual({});
   });
+
+  // --- Additional coverage ---
+
+  it('rejects input too large (>1MB)', () => {
+    const huge = { ...validInput, query: 'x'.repeat(1_100_000) };
+    const { config, errors } = deserializeMonitor(huge);
+    expect(config).toBeNull();
+    expect(errors).toEqual(['Input too large (max 1MB)']);
+  });
+
+  it('rejects non-string name', () => {
+    const { errors } = deserializeMonitor({ ...validInput, name: 42 });
+    expect(errors.some((e) => e.includes('name'))).toBe(true);
+  });
+
+  it('rejects name too long', () => {
+    const { errors } = deserializeMonitor({ ...validInput, name: 'x'.repeat(10_001) });
+    expect(errors.some((e) => e.includes('name') && e.includes('too long'))).toBe(true);
+  });
+
+  it('rejects non-string query', () => {
+    const { errors } = deserializeMonitor({ ...validInput, query: 123 });
+    expect(errors.some((e) => e.includes('query'))).toBe(true);
+  });
+
+  it('rejects query too long', () => {
+    const { errors } = deserializeMonitor({ ...validInput, query: 'x'.repeat(10_001) });
+    expect(errors.some((e) => e.includes('query') && e.includes('too long'))).toBe(true);
+  });
+
+  it('rejects missing threshold object', () => {
+    const { errors } = deserializeMonitor({ ...validInput, threshold: null });
+    expect(errors.some((e) => e.includes('threshold'))).toBe(true);
+  });
+
+  it('rejects threshold with non-string operator', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      threshold: { operator: 123, value: 10, forDuration: '5m' },
+    });
+    expect(errors.some((e) => e.includes('threshold.operator'))).toBe(true);
+  });
+
+  it('rejects threshold with NaN value', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      threshold: { operator: '>', value: NaN, forDuration: '5m' },
+    });
+    expect(errors.some((e) => e.includes('threshold.value'))).toBe(true);
+  });
+
+  it('rejects threshold with Infinity value', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      threshold: { operator: '>', value: Infinity, forDuration: '5m' },
+    });
+    expect(errors.some((e) => e.includes('threshold.value'))).toBe(true);
+  });
+
+  it('rejects threshold with invalid forDuration', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      threshold: { operator: '>', value: 10, forDuration: 'xyz' },
+    });
+    expect(errors.some((e) => e.includes('threshold.forDuration'))).toBe(true);
+  });
+
+  it('rejects threshold missing forDuration', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      threshold: { operator: '>', value: 10 },
+    });
+    expect(errors.some((e) => e.includes('threshold.forDuration'))).toBe(true);
+  });
+
+  it('rejects missing evaluation object', () => {
+    const { errors } = deserializeMonitor({ ...validInput, evaluation: null });
+    expect(errors.some((e) => e.includes('evaluation'))).toBe(true);
+  });
+
+  it('rejects evaluation with invalid interval', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      evaluation: { interval: 'xyz', pendingPeriod: '5m' },
+    });
+    expect(errors.some((e) => e.includes('evaluation.interval'))).toBe(true);
+  });
+
+  it('rejects evaluation with invalid pendingPeriod', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      evaluation: { interval: '1m', pendingPeriod: 'xyz' },
+    });
+    expect(errors.some((e) => e.includes('evaluation.pendingPeriod'))).toBe(true);
+  });
+
+  it('rejects evaluation missing interval', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      evaluation: { pendingPeriod: '5m' },
+    });
+    expect(errors.some((e) => e.includes('evaluation.interval'))).toBe(true);
+  });
+
+  it('rejects evaluation with invalid firingPeriod', () => {
+    const { errors } = deserializeMonitor({
+      ...validInput,
+      evaluation: { interval: '1m', pendingPeriod: '5m', firingPeriod: 'bad' },
+    });
+    expect(errors.some((e) => e.includes('evaluation.firingPeriod'))).toBe(true);
+  });
+
+  it('deserializes valid config with labels, annotations, and routing', () => {
+    const input = {
+      ...validInput,
+      labels: { env: 'prod', team: 'sre' },
+      annotations: { summary: 'test', runbook: 'https://wiki/test' },
+      routing: [{ channel: 'slack', destination: '#alerts', severity: ['critical'] }],
+    };
+    const { config, errors } = deserializeMonitor(input);
+    expect(errors).toHaveLength(0);
+    expect(config).not.toBeNull();
+    expect(config!.labels).toEqual({ env: 'prod', team: 'sre' });
+    expect(config!.annotations).toEqual({ summary: 'test', runbook: 'https://wiki/test' });
+    expect(config!.routing).toHaveLength(1);
+    expect(config!.routing![0].channel).toBe('slack');
+  });
+
+  it('rejects string input', () => {
+    const { config, errors } = deserializeMonitor('not an object' as any);
+    expect(config).toBeNull();
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rejects number input', () => {
+    const { config, errors } = deserializeMonitor(42 as any);
+    expect(config).toBeNull();
+    expect(errors.length).toBeGreaterThan(0);
+  });
 });

@@ -41,12 +41,22 @@ export const EuiTab: React.FC<Props & { isSelected?: boolean; onClick?: () => vo
 
 export const EuiBasicTable: React.FC<
   Props & { items?: unknown[]; columns?: unknown[]; loading?: boolean }
-> = ({ items = [], 'data-test-subj': testSubj, loading }) => (
+> = ({ items = [], columns = [], 'data-test-subj': testSubj, loading }) => (
   <table data-eui="EuiBasicTable" data-test-subj={testSubj} data-loading={loading}>
     <tbody>
       {(items as any[]).map((item, i) => (
         <tr key={item?.id ?? i}>
-          <td>{item?.name ?? ''}</td>
+          {(columns as any[]).map((col: any, ci: number) => {
+            const val = col.field ? item?.[col.field] : undefined;
+            let content: React.ReactNode = val ?? item?.name ?? '';
+            try {
+              if (typeof col.render === 'function') content = col.render(val, item);
+            } catch {
+              /* render failed — show raw value */
+            }
+            return <td key={col.field ?? ci}>{content}</td>;
+          })}
+          {(columns as any[]).length === 0 && <td>{item?.name ?? ''}</td>}
         </tr>
       ))}
     </tbody>
@@ -62,27 +72,107 @@ export const EuiTitle = stub('EuiTitle');
 export const EuiSpacer = stub('EuiSpacer');
 export const EuiTabs = stub('EuiTabs');
 export const EuiEmptyPrompt = stub('EuiEmptyPrompt');
-export const EuiHealth = stub('EuiHealth');
-export const EuiBadge = stub('EuiBadge');
-export const EuiButton = stub('EuiButton');
-export const EuiButtonEmpty = stub('EuiButtonEmpty');
-export const EuiButtonIcon = stub('EuiButtonIcon');
+export const EuiHealth: React.FC<Props & { color?: string }> = ({
+  children,
+  color,
+  'data-test-subj': testSubj,
+}) => (
+  <span data-eui="EuiHealth" data-test-subj={testSubj} data-color={color}>
+    {children}
+  </span>
+);
+export const EuiBadge: React.FC<Props & { color?: string }> = ({
+  children,
+  color,
+  'data-test-subj': testSubj,
+}) => (
+  <span data-eui="EuiBadge" data-test-subj={testSubj} data-color={color}>
+    {children}
+  </span>
+);
+export const EuiButton: React.FC<Props & { onClick?: () => void; isDisabled?: boolean }> = ({
+  children,
+  onClick,
+  'data-test-subj': testSubj,
+}) => (
+  <button data-eui="EuiButton" data-test-subj={testSubj} onClick={onClick}>
+    {children}
+  </button>
+);
+export const EuiButtonEmpty: React.FC<Props & { onClick?: () => void; isDisabled?: boolean }> = ({
+  children,
+  onClick,
+  'data-test-subj': testSubj,
+}) => (
+  <button data-eui="EuiButtonEmpty" data-test-subj={testSubj} onClick={onClick}>
+    {children}
+  </button>
+);
+export const EuiButtonIcon: React.FC<Props & { onClick?: () => void }> = ({
+  children,
+  onClick,
+  'data-test-subj': testSubj,
+}) => (
+  <button data-eui="EuiButtonIcon" data-test-subj={testSubj} onClick={onClick}>
+    {children}
+  </button>
+);
 export const EuiFlexGroup = stub('EuiFlexGroup');
 export const EuiFlexItem = stub('EuiFlexItem');
 export const EuiPanel = stub('EuiPanel');
 export const EuiText = stub('EuiText');
-export const EuiCallOut = stub('EuiCallOut');
+export const EuiCallOut: React.FC<Props & { title?: React.ReactNode }> = ({
+  children,
+  title,
+  'data-test-subj': testSubj,
+}) => (
+  <div data-eui="EuiCallOut" data-test-subj={testSubj}>
+    {title && <strong>{title}</strong>}
+    {children}
+  </div>
+);
 export const EuiComboBox = stub('EuiComboBox');
 export const EuiFieldSearch = stub('EuiFieldSearch');
 export const EuiFieldText = stub('EuiFieldText');
 export const EuiFieldNumber = stub('EuiFieldNumber');
 export const EuiSelect = stub('EuiSelect');
-export const EuiCheckbox = stub('EuiCheckbox');
+export const EuiCheckbox: React.FC<
+  Props & { label?: React.ReactNode; checked?: boolean; onChange?: () => void; id?: string }
+> = ({ children, label, checked, onChange, id, 'data-test-subj': testSubj }) => (
+  <div data-eui="EuiCheckbox" data-test-subj={testSubj}>
+    <input type="checkbox" checked={checked} onChange={onChange} id={id} readOnly={!onChange} />
+    {label && <label htmlFor={id}>{label}</label>}
+    {children}
+  </div>
+);
 export const EuiCheckboxGroup = stub('EuiCheckboxGroup');
 export const EuiRadioGroup = stub('EuiRadioGroup');
 export const EuiSwitch = stub('EuiSwitch');
-export const EuiFormRow = stub('EuiFormRow');
-export const EuiAccordion = stub('EuiAccordion');
+export const EuiFormRow: React.FC<
+  Props & {
+    label?: React.ReactNode;
+    helpText?: React.ReactNode;
+    isInvalid?: boolean;
+    error?: React.ReactNode;
+  }
+> = ({ children, label, helpText, error, isInvalid, 'data-test-subj': testSubj }) => (
+  <div data-eui="EuiFormRow" data-test-subj={testSubj}>
+    {label && <label>{label}</label>}
+    {children}
+    {helpText && <div data-eui="EuiFormHelpText">{helpText}</div>}
+    {isInvalid && error && <div data-eui="EuiFormError">{error}</div>}
+  </div>
+);
+export const EuiAccordion: React.FC<Props & { buttonContent?: React.ReactNode }> = ({
+  children,
+  buttonContent,
+  'data-test-subj': testSubj,
+}) => (
+  <div data-eui="EuiAccordion" data-test-subj={testSubj}>
+    {buttonContent && <div data-eui="EuiAccordionButton">{buttonContent}</div>}
+    {children}
+  </div>
+);
 export const EuiFlyout = stub('EuiFlyout');
 export const EuiFlyoutHeader = stub('EuiFlyoutHeader');
 export const EuiFlyoutBody = stub('EuiFlyoutBody');
@@ -90,7 +180,30 @@ export const EuiFlyoutFooter = stub('EuiFlyoutFooter');
 export const EuiPopover = stub('EuiPopover');
 export const EuiContextMenuPanel = stub('EuiContextMenuPanel');
 export const EuiContextMenuItem = stub('EuiContextMenuItem');
-export const EuiConfirmModal = stub('EuiConfirmModal');
+export const EuiConfirmModal: React.FC<
+  Props & {
+    title?: React.ReactNode;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+    confirmButtonText?: string;
+    cancelButtonText?: string;
+  }
+> = ({
+  children,
+  title,
+  onConfirm,
+  onCancel,
+  confirmButtonText,
+  cancelButtonText,
+  'data-test-subj': testSubj,
+}) => (
+  <div data-eui="EuiConfirmModal" data-test-subj={testSubj}>
+    {title && <div>{title}</div>}
+    {children}
+    {cancelButtonText && <button onClick={onCancel}>{cancelButtonText}</button>}
+    {confirmButtonText && <button onClick={onConfirm}>{confirmButtonText}</button>}
+  </div>
+);
 export const EuiModal = stub('EuiModal');
 export const EuiModalHeader = stub('EuiModalHeader');
 export const EuiModalBody = stub('EuiModalBody');
@@ -108,14 +221,16 @@ export const EuiGlobalToastList = stub('EuiGlobalToastList');
 export const EuiFilterGroup = stub('EuiFilterGroup');
 export const EuiFilterButton = stub('EuiFilterButton');
 export const EuiResizableContainer = ({ children }: any) => {
-  // EuiResizableContainer passes a render function; call it with a stub Panel
+  // EuiResizableContainer passes a render function; call it with stub Panel, Button, and actions
   if (typeof children === 'function') {
     const PanelStub: any = ({ children: c, ...rest }: any) => (
       <div data-eui="EuiResizablePanel" {...rest}>
         {c}
       </div>
     );
-    return <div data-eui="EuiResizableContainer">{children(PanelStub, () => {})}</div>;
+    const ButtonStub: any = (props: any) => <div data-eui="EuiResizableButton" />;
+    const actions = { togglePanel: () => {} };
+    return <div data-eui="EuiResizableContainer">{children(PanelStub, ButtonStub, actions)}</div>;
   }
   return <div data-eui="EuiResizableContainer">{children}</div>;
 };
@@ -130,3 +245,25 @@ export const EuiRange = stub('EuiRange');
 export const EuiTextColor = stub('EuiTextColor');
 export const EuiCopy = stub('EuiCopy');
 export const EuiOverlayMask = stub('EuiOverlayMask');
+export const EuiListGroup = stub('EuiListGroup');
+export const EuiListGroupItem = stub('EuiListGroupItem');
+export const EuiButtonGroup: React.FC<
+  Props & {
+    options?: { id: string; label: string }[];
+    idSelected?: string;
+    onChange?: (id: string) => void;
+  }
+> = ({ options = [], idSelected, onChange, 'data-test-subj': testSubj }) => (
+  <div data-eui="EuiButtonGroup" data-test-subj={testSubj} role="group">
+    {options.map((opt: any) => (
+      <button
+        key={opt.id}
+        role="radio"
+        aria-checked={opt.id === idSelected}
+        onClick={() => onChange?.(opt.id)}
+      >
+        {opt.label}
+      </button>
+    ))}
+  </div>
+);

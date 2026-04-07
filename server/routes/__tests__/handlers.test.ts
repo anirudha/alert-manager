@@ -21,6 +21,8 @@ import {
   handleGetPromAlerts,
   handleGetUnifiedAlerts,
   handleGetUnifiedRules,
+  handleGetRuleDetail,
+  handleGetAlertDetail,
 } from '../handlers';
 import { InMemoryDatasourceService, MultiBackendAlertService, Logger } from '../../../core';
 
@@ -309,5 +311,263 @@ describe('handleGetUnifiedRules', () => {
     const alertSvc = createAlertService(dsSvc);
     const result = await handleGetUnifiedRules(alertSvc, { dsIds: 'ds-1' });
     expect(result.status).toBe(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Success-path helpers (mock backend)
+// ---------------------------------------------------------------------------
+
+async function createServicesWithMockBackend() {
+  const dsSvc = createDatasourceService();
+  const alertSvc = createAlertService(dsSvc);
+  const ds = await dsSvc.create(dsInput);
+  const { MockOpenSearchBackend } = await import('../../../core/testing');
+  const mockBackend = new MockOpenSearchBackend(noopLogger);
+  alertSvc.registerOpenSearch(mockBackend);
+  return { dsSvc, alertSvc, dsId: ds.id, mockBackend };
+}
+
+// ---------------------------------------------------------------------------
+// safeError (exported implicitly via handlers — test via handler responses)
+// ---------------------------------------------------------------------------
+
+describe('safeError — error masking behaviour', () => {
+  it('masks internal errors to generic message', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    // Spy to throw an error that does NOT contain "not found" / "required" / "must be"
+    jest.spyOn(alertSvc, 'getOSMonitors').mockRejectedValueOnce(new Error('Connection refused'));
+    const result = await handleGetOSMonitors(alertSvc, 'some-ds');
+    expect(result.status).toBe(400);
+    expect(result.body.error).toBe('An internal error occurred');
+  });
+
+  it('passes through "not found" messages', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    const result = await handleGetOSMonitor(alertSvc, dsId, 'non-existent-monitor');
+    expect(result.status).toBe(404);
+    expect(result.body.error).toContain('not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenSearch Monitor Handler — success paths
+// ---------------------------------------------------------------------------
+
+describe('handleGetOSMonitor — success path', () => {
+  it('returns 200 with monitor when found', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    const monitors = await alertSvc.getOSMonitors(dsId);
+    const monitorId = monitors[0].id;
+    const result = await handleGetOSMonitor(alertSvc, dsId, monitorId);
+    expect(result.status).toBe(200);
+    expect(result.body.id).toBe(monitorId);
+    expect(result.body.name).toBeDefined();
+  });
+
+  it('returns 404 when monitor not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleGetOSMonitor(alertSvc, dsId, 'non-existent');
+    expect(result.status).toBe(404);
+    expect(result.body.error).toBe('Monitor not found');
+  });
+});
+
+describe('handleUpdateOSMonitor — success path', () => {
+  it('returns 200 on successful update', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    const monitors = await alertSvc.getOSMonitors(dsId);
+    const monitorId = monitors[0].id;
+    const result = await handleUpdateOSMonitor(alertSvc, dsId, monitorId, {
+      name: 'Updated Monitor',
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.name).toBe('Updated Monitor');
+  });
+
+  it('returns 404 when monitor not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleUpdateOSMonitor(alertSvc, dsId, 'non-existent', { name: 'x' });
+    expect(result.status).toBe(404);
+    expect(result.body.error).toBe('Monitor not found');
+  });
+});
+
+describe('handleDeleteOSMonitor — success path', () => {
+  it('returns 200 with deleted:true on success', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    const monitors = await alertSvc.getOSMonitors(dsId);
+    const monitorId = monitors[0].id;
+    const result = await handleDeleteOSMonitor(alertSvc, dsId, monitorId);
+    expect(result.status).toBe(200);
+    expect(result.body.deleted).toBe(true);
+  });
+
+  it('returns 404 when monitor not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleDeleteOSMonitor(alertSvc, dsId, 'non-existent');
+    expect(result.status).toBe(404);
+    expect(result.body.error).toBe('Monitor not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prometheus Handler — success paths
+// ---------------------------------------------------------------------------
+
+describe('handleGetPromRuleGroups — success path', () => {
+  it('returns 200 wrapping groups in Prometheus-compatible response', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    const ds = await dsSvc.create({
+      name: 'Prom',
+      type: 'prometheus',
+      url: 'http://localhost:9090',
+      enabled: true,
+    });
+    const { MockPrometheusBackend } = await import('../../../core/testing');
+    const promBackend = new MockPrometheusBackend(noopLogger);
+    promBackend.seed(ds.id);
+    alertSvc.registerPrometheus(promBackend);
+
+    const result = await handleGetPromRuleGroups(alertSvc, ds.id);
+    expect(result.status).toBe(200);
+    expect(result.body.status).toBe('success');
+    expect(result.body.data).toBeDefined();
+    expect(result.body.data.groups).toBeDefined();
+    expect(Array.isArray(result.body.data.groups)).toBe(true);
+  });
+});
+
+describe('handleGetPromAlerts — success path', () => {
+  it('returns 200 wrapping alerts in Prometheus-compatible response', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    const ds = await dsSvc.create({
+      name: 'Prom',
+      type: 'prometheus',
+      url: 'http://localhost:9090',
+      enabled: true,
+    });
+    const { MockPrometheusBackend } = await import('../../../core/testing');
+    const promBackend = new MockPrometheusBackend(noopLogger);
+    promBackend.seed(ds.id);
+    alertSvc.registerPrometheus(promBackend);
+
+    const result = await handleGetPromAlerts(alertSvc, ds.id);
+    expect(result.status).toBe(200);
+    expect(result.body.status).toBe('success');
+    expect(result.body.data).toBeDefined();
+    expect(result.body.data.alerts).toBeDefined();
+    expect(Array.isArray(result.body.data.alerts)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unified Handlers — maxResults and error paths
+// ---------------------------------------------------------------------------
+
+describe('handleGetUnifiedAlerts — additional paths', () => {
+  it('parses maxResults query parameter', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    const result = await handleGetUnifiedAlerts(alertSvc, { maxResults: '10' });
+    expect(result.status).toBe(200);
+    expect(result.body.results).toEqual([]);
+  });
+
+  it('returns 500 when alertSvc throws', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    jest.spyOn(alertSvc, 'getUnifiedAlerts').mockRejectedValueOnce(new Error('boom'));
+    const result = await handleGetUnifiedAlerts(alertSvc);
+    expect(result.status).toBe(500);
+    expect(result.body.error).toBe('An internal error occurred');
+  });
+});
+
+describe('handleGetUnifiedRules — additional paths', () => {
+  it('parses maxResults query parameter', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    const result = await handleGetUnifiedRules(alertSvc, { maxResults: '5' });
+    expect(result.status).toBe(200);
+    expect(result.body.results).toEqual([]);
+  });
+
+  it('returns 500 when alertSvc throws', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    jest.spyOn(alertSvc, 'getUnifiedRules').mockRejectedValueOnce(new Error('boom'));
+    const result = await handleGetUnifiedRules(alertSvc);
+    expect(result.status).toBe(500);
+    expect(result.body.error).toBe('An internal error occurred');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Detail View Handlers
+// ---------------------------------------------------------------------------
+
+describe('handleGetRuleDetail', () => {
+  it('returns 200 with rule detail when found', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    const unified = await alertSvc.getUnifiedRules({ dsIds: [dsId] });
+    const ruleId = unified.results[0].id;
+    const result = await handleGetRuleDetail(alertSvc, dsId, ruleId);
+    expect(result.status).toBe(200);
+    expect(result.body.id).toBe(ruleId);
+  });
+
+  it('returns 404 when rule not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleGetRuleDetail(alertSvc, dsId, 'non-existent-rule');
+    expect(result.status).toBe(404);
+    expect(result.body.error).toBe('Rule not found');
+  });
+
+  it('returns 400 when backend throws', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    jest.spyOn(alertSvc, 'getRuleDetail').mockRejectedValueOnce(new Error('DB crash'));
+    const result = await handleGetRuleDetail(alertSvc, 'ds-1', 'rule-1');
+    expect(result.status).toBe(400);
+    expect(result.body.error).toBe('An internal error occurred');
+  });
+});
+
+describe('handleGetAlertDetail', () => {
+  it('returns 200 with alert detail when found', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    const unified = await alertSvc.getUnifiedAlerts({ dsIds: [dsId] });
+    if (unified.results.length > 0) {
+      const alertId = unified.results[0].id;
+      const result = await handleGetAlertDetail(alertSvc, dsId, alertId);
+      expect(result.status).toBe(200);
+      expect(result.body.id).toBe(alertId);
+    }
+  });
+
+  it('returns 404 when alert not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleGetAlertDetail(alertSvc, dsId, 'non-existent-alert');
+    expect(result.status).toBe(404);
+    expect(result.body.error).toBe('Alert not found');
+  });
+
+  it('returns 400 when backend throws', async () => {
+    const dsSvc = createDatasourceService();
+    const alertSvc = createAlertService(dsSvc);
+    jest.spyOn(alertSvc, 'getAlertDetail').mockRejectedValueOnce(new Error('timeout'));
+    const result = await handleGetAlertDetail(alertSvc, 'ds-1', 'alert-1');
+    expect(result.status).toBe(400);
+    expect(result.body.error).toBe('An internal error occurred');
   });
 });

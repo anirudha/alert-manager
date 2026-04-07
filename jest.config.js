@@ -40,6 +40,8 @@ module.exports = {
         '^moment$': '<rootDir>/public/__mocks__/style_mock.ts',
         // Mock style imports
         '\\.(css|scss)$': '<rootDir>/public/__mocks__/style_mock.ts',
+        // Mock echarts (uses canvas, not available in jsdom)
+        '^echarts$': '<rootDir>/public/__mocks__/style_mock.ts',
       },
     },
   ],
@@ -51,20 +53,21 @@ module.exports = {
     '!core/mock_backend.ts',
     '!core/mock_enrichment.ts',
     '!core/testing.ts',
-    // Exclude integration-only modules — need real backend; TODO: CI integration tests
+    // Exclude integration-only modules — need real backend
     '!core/directquery_prometheus_backend.ts',
-    // Exclude OSD plugin shell — depends on OSD core; TODO: CI integration tests in OSD context
+    // Exclude OSD plugin shell — depends on OSD core
     '!public/plugin.ts',
     '!public/application.tsx',
     '!public/types.ts',
     '!public/components/app.tsx',
     '!server/plugin.ts',
-    // Exclude UI components validated via Playwright E2E, not unit tests
+    // Exclude render-heavy UI orchestrators (validated via Cypress E2E, not unit tests).
+    // These 1000+ line components have 50%+ of their code as deeply-nested JSX
+    // render logic that can only be exercised in a real browser (Cypress E2E).
+    '!public/components/alarms_page.tsx',
     '!public/components/alerts_dashboard.tsx',
     '!public/components/monitors_table.tsx',
     '!public/components/slo_listing.tsx',
-    '!public/components/slo_detail_flyout.tsx',
-    '!public/components/slo_preview_panel.tsx',
     '!public/components/create_slo_wizard.tsx',
     '!public/components/create_monitor.tsx',
     '!public/components/ai_monitor_wizard.tsx',
@@ -76,20 +79,16 @@ module.exports = {
     '!public/components/promql_editor.tsx',
     '!public/components/echarts_render.tsx',
     '!public/components/table_pagination.tsx',
-    '!public/components/shared_constants.ts',
-    '!public/services/alarms_client.ts',
-    '!server/routes/slo_handlers.ts',
-    '!server/slo_saved_object_store.ts',
     '!**/index.ts',
     '!**/__tests__/**',
     '!**/__mocks__/**',
   ],
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 60,
-      lines: 60,
-      statements: 60,
+      branches: 80,
+      functions: 90,
+      lines: 90,
+      statements: 90,
     },
   },
 };
