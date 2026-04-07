@@ -134,5 +134,136 @@ describe('InMemoryDatasourceService', () => {
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/unknown datasource type/i);
     });
+
+    it('handles connection error for opensearch', async () => {
+      const ds = await service.create({
+        name: 'OS',
+        type: 'opensearch',
+        url: 'http://localhost:19999', // unreachable port
+        enabled: true,
+      });
+      // Mock the httpClient to simulate a connection error
+      const httpClient = (service as any).httpClient;
+      const originalRequest = httpClient.request.bind(httpClient);
+      httpClient.request = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+      const result = await service.testConnection(ds.id);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Connection failed');
+      httpClient.request = originalRequest;
+    });
+
+    it('handles connection error for prometheus', async () => {
+      const ds = await service.create({
+        name: 'Prom',
+        type: 'prometheus',
+        url: 'http://localhost:19999',
+        enabled: true,
+      });
+      const httpClient = (service as any).httpClient;
+      const originalRequest = httpClient.request.bind(httpClient);
+      httpClient.request = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+      const result = await service.testConnection(ds.id);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Connection failed');
+      httpClient.request = originalRequest;
+    });
+
+    it('returns success for opensearch when httpClient responds', async () => {
+      const ds = await service.create({
+        name: 'OS',
+        type: 'opensearch',
+        url: 'http://localhost:9200',
+        enabled: true,
+      });
+      const httpClient = (service as any).httpClient;
+      const originalRequest = httpClient.request.bind(httpClient);
+      httpClient.request = jest.fn().mockResolvedValue({
+        statusCode: 200,
+        body: { status: 'green' },
+      });
+      const result = await service.testConnection(ds.id);
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('green');
+      httpClient.request = originalRequest;
+    });
+  });
+
+  describe('setPrometheusBackend and listWorkspaces', () => {
+    it('returns empty array when no prom backend is set', async () => {
+      const ds = await service.create({
+        name: 'Prom',
+        type: 'prometheus',
+        url: 'http://localhost:9090',
+        enabled: true,
+      });
+      const result = await service.listWorkspaces(ds.id);
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array for non-existent datasource', async () => {
+      const result = await service.listWorkspaces('ds-999');
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array for non-prometheus datasource', async () => {
+      const mockBackend = {
+        listWorkspaces: jest.fn().mockResolvedValue([]),
+      };
+      service.setPrometheusBackend(mockBackend as any);
+      const ds = await service.create({
+        name: 'OS',
+        type: 'opensearch',
+        url: 'http://localhost:9200',
+        enabled: true,
+      });
+      const result = await service.listWorkspaces(ds.id);
+      expect(result).toEqual([]);
+    });
+
+    it('returns workspaces from prometheus backend', async () => {
+      const mockBackend = {
+        listWorkspaces: jest
+          .fn()
+          .mockResolvedValue([{ id: 'ws-1', name: 'dev', alias: 'Dev WS', status: 'active' }]),
+      };
+      service.setPrometheusBackend(mockBackend as any);
+      const ds = await service.create({
+        name: 'Prom',
+        type: 'prometheus',
+        url: 'http://localhost:9090',
+        enabled: true,
+      });
+      const result = await service.listWorkspaces(ds.id);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(`${ds.id}::ws-1`);
+      expect(result[0].name).toContain('Dev WS');
+      expect(result[0].enabled).toBe(true);
+      expect(mockBackend.listWorkspaces).toHaveBeenCalled();
+    });
+  });
+
+  describe('seed', () => {
+    it('pre-populates datasources', async () => {
+      service.seed([
+        { name: 'OS', type: 'opensearch', url: 'http://a', enabled: true },
+        { name: 'Prom', type: 'prometheus', url: 'http://b', enabled: true },
+      ]);
+      const list = await service.list();
+      expect(list).toHaveLength(2);
+      expect(list[0].name).toBe('OS');
+      expect(list[1].name).toBe('Prom');
+    });
+
+    it('increments counter correctly after seed', async () => {
+      service.seed([{ name: 'Seeded', type: 'opensearch', url: 'http://a', enabled: true }]);
+      const ds = await service.create({
+        name: 'After Seed',
+        type: 'opensearch',
+        url: 'http://b',
+        enabled: true,
+      });
+      // Seed creates ds-1, next should be ds-2
+      expect(ds.id).toBe('ds-2');
+    });
   });
 });

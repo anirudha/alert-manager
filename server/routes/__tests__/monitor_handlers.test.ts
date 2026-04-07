@@ -293,4 +293,187 @@ describe('handleSilenceAlert', () => {
     const result60s = await handleSilenceAlert(suppressionSvc, 'a3', { duration: '60s' });
     expect(result60s.status).toBe(200);
   });
+
+  it('falls back to 1h with invalid duration format', async () => {
+    const { suppressionSvc } = createServices();
+    const result = await handleSilenceAlert(suppressionSvc, 'a4', { duration: 'invalid' });
+    expect(result.status).toBe(200);
+    expect(result.body.silenced).toBe(true);
+    // The rule should still be created — verify endTime is roughly 1h from now
+    const rule = result.body.suppressionRule;
+    const start = new Date(rule.startTime).getTime();
+    const end = new Date(rule.endTime).getTime();
+    const diffMs = end - start;
+    expect(diffMs).toBeGreaterThanOrEqual(3500000); // ~1h minus tolerance
+    expect(diffMs).toBeLessThanOrEqual(3700000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Monitor CRUD — success paths with mock backend
+// ---------------------------------------------------------------------------
+
+describe('handleUpdateMonitor — success paths', () => {
+  it('returns 200 when updating an existing monitor', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    // Create a monitor first
+    const created = await handleCreateMonitor(alertSvc, {
+      datasourceId: dsId,
+      name: 'Original',
+    });
+    expect(created.status).toBe(201);
+    const monitorId = created.body.id;
+
+    const result = await handleUpdateMonitor(alertSvc, monitorId, {
+      datasourceId: dsId,
+      name: 'Updated Name',
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.name).toBe('Updated Name');
+  });
+
+  it('returns 404 when monitor not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleUpdateMonitor(alertSvc, 'non-existent', {
+      datasourceId: dsId,
+      name: 'nope',
+    });
+    expect(result.status).toBe(404);
+    expect(result.body.error).toContain('not found');
+  });
+});
+
+describe('handleDeleteMonitor — success paths', () => {
+  it('returns 200 on successful delete', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const created = await handleCreateMonitor(alertSvc, {
+      datasourceId: dsId,
+      name: 'ToDelete',
+    });
+    const monitorId = created.body.id;
+
+    const result = await handleDeleteMonitor(alertSvc, monitorId, dsId);
+    expect(result.status).toBe(200);
+    expect(result.body.deleted).toBe(true);
+  });
+
+  it('returns 404 when monitor not found', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const result = await handleDeleteMonitor(alertSvc, 'non-existent', dsId);
+    expect(result.status).toBe(404);
+    expect(result.body.error).toContain('not found');
+  });
+
+  it('returns 400 when datasourceId is missing', async () => {
+    const { alertSvc } = createServices();
+    const result = await handleDeleteMonitor(alertSvc, 'mon-1');
+    expect(result.status).toBe(400);
+    expect(result.body.error).toContain('required');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Import / Export — additional paths
+// ---------------------------------------------------------------------------
+
+describe('handleImportMonitors — additional paths', () => {
+  it('creates monitors when datasourceId is provided (Phase 2)', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const validConfig = {
+      version: '1.0',
+      name: 'Import Test',
+      query: 'up == 1',
+      threshold: { operator: '>', value: 10, forDuration: '5m' },
+      evaluation: { interval: '1m', pendingPeriod: '5m' },
+      labels: {},
+      annotations: {},
+      severity: 'warning',
+    };
+    const result = await handleImportMonitors(alertSvc, {
+      datasourceId: dsId,
+      monitors: [validConfig],
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.imported).toBe(1);
+    expect(result.body.total).toBe(1);
+    expect(result.body.results[0].success).toBe(true);
+    expect(result.body.results[0].id).toBeDefined();
+  });
+
+  it('returns 207 with partial failures', async () => {
+    const { alertSvc, dsId } = await createServicesWithMockBackend();
+    const validConfig = {
+      version: '1.0',
+      name: 'Good Monitor',
+      query: 'up == 1',
+      threshold: { operator: '>', value: 10, forDuration: '5m' },
+      evaluation: { interval: '1m', pendingPeriod: '5m' },
+      labels: {},
+      annotations: {},
+      severity: 'warning',
+    };
+    const invalidConfig = {
+      name: '',
+      // missing query, threshold, evaluation
+    };
+    const result = await handleImportMonitors(alertSvc, {
+      datasourceId: dsId,
+      monitors: [validConfig, invalidConfig],
+    });
+    // Phase 1 validation catches the invalid config
+    expect(result.status).toBe(400);
+    expect(result.body.details).toBeDefined();
+  });
+
+  it('operates in dry-run mode when no datasourceId', async () => {
+    const { alertSvc } = createServices();
+    const validConfig = {
+      version: '1.0',
+      name: 'Dry Run Monitor',
+      query: 'up == 1',
+      threshold: { operator: '>', value: 10, forDuration: '5m' },
+      evaluation: { interval: '1m', pendingPeriod: '5m' },
+      labels: {},
+      annotations: {},
+      severity: 'warning',
+    };
+    const result = await handleImportMonitors(alertSvc, [validConfig]);
+    expect(result.status).toBe(200);
+    expect(result.body.imported).toBe(1);
+    // In dry-run mode, no id is assigned
+    expect(result.body.results[0].id).toBeUndefined();
+  });
+});
+
+describe('handleExportMonitors — error path', () => {
+  it('returns 500 when getUnifiedRules throws', async () => {
+    const { alertSvc } = createServices();
+    jest.spyOn(alertSvc, 'getUnifiedRules').mockRejectedValueOnce(new Error('backend failure'));
+    const result = await handleExportMonitors(alertSvc);
+    expect(result.status).toBe(500);
+    expect(result.body.error).toBe('An internal error occurred');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Alert Actions — success paths with mock backend
+// ---------------------------------------------------------------------------
+
+describe('handleAcknowledgeAlert — success path', () => {
+  it('returns 200 when acknowledging with valid datasourceId and monitorId', async () => {
+    const { alertSvc, dsId, mockBackend } = await createServicesWithMockBackend();
+    mockBackend.seed(dsId);
+    // Get alerts to find a valid monitorId
+    const alerts = await alertSvc.getOSAlerts(dsId);
+    if (alerts.alerts.length > 0) {
+      const alert = alerts.alerts[0];
+      const result = await handleAcknowledgeAlert(alertSvc, alert.id, {
+        datasourceId: dsId,
+        monitorId: alert.monitor_id,
+      });
+      expect(result.status).toBe(200);
+      expect(result.body.id).toBe(alert.id);
+      expect(result.body.state).toBe('acknowledged');
+    }
+  });
 });

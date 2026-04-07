@@ -11,3 +11,6 @@ standalone/node_modules/
 .playwright/
 .pytest_cache/
 coverage/
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/

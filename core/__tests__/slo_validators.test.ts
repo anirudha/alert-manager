@@ -314,4 +314,392 @@ describe('validateSloForm — tags validation', () => {
     const errors = validateSloForm(makeValidInput({ tags: [] as any }));
     expect(errors.tags).toBeDefined();
   });
+
+  it('rejects null as tags', () => {
+    const errors = validateSloForm(makeValidInput({ tags: null as any }));
+    expect(errors.tags).toBeDefined();
+    expect(errors.tags).toContain('plain object');
+  });
+});
+
+// ============================================================================
+// Name Length Validation
+// ============================================================================
+
+describe('validateSloForm — name length', () => {
+  it('rejects name longer than 128 characters', () => {
+    const errors = validateSloForm(makeValidInput({ name: 'x'.repeat(129) }));
+    expect(errors.name).toBeDefined();
+    expect(errors.name).toContain('128');
+  });
+});
+
+// ============================================================================
+// Budget Warning Threshold Validation
+// ============================================================================
+
+describe('validateSloForm — budgetWarningThreshold', () => {
+  it('rejects missing budgetWarningThreshold', () => {
+    const input = { ...makeValidInput(), budgetWarningThreshold: undefined } as any;
+    const errors = validateSloForm(input);
+    expect(errors.budgetWarningThreshold).toBeDefined();
+    expect(errors.budgetWarningThreshold).toContain('required');
+  });
+
+  it('rejects budgetWarningThreshold below 0.01', () => {
+    const errors = validateSloForm(makeValidInput({ budgetWarningThreshold: 0.001 }));
+    expect(errors.budgetWarningThreshold).toBeDefined();
+  });
+
+  it('rejects budgetWarningThreshold above 0.99', () => {
+    const errors = validateSloForm(makeValidInput({ budgetWarningThreshold: 1.0 }));
+    expect(errors.budgetWarningThreshold).toBeDefined();
+  });
+});
+
+// ============================================================================
+// Window Duration — additional edge cases
+// ============================================================================
+
+describe('validateSloForm — window edge cases', () => {
+  it('rejects window duration shorter than 1d', () => {
+    const errors = validateSloForm(
+      makeValidInput({ window: { type: 'rolling', duration: '12h' } })
+    );
+    expect(errors['window.duration']).toBeDefined();
+    expect(errors['window.duration']).toContain('Minimum');
+  });
+
+  it('rejects missing window duration', () => {
+    const errors = validateSloForm(makeValidInput({ window: { type: 'rolling', duration: '' } }));
+    expect(errors['window.duration']).toBeDefined();
+    expect(errors['window.duration']).toContain('required');
+  });
+
+  it('rejects window type other than rolling', () => {
+    const errors = validateSloForm(
+      makeValidInput({ window: { type: 'calendar' as any, duration: '7d' } })
+    );
+    expect(errors['window.type']).toBeDefined();
+    expect(errors['window.type']).toContain('rolling');
+  });
+});
+
+// ============================================================================
+// SLI Enum Validation — additional types
+// ============================================================================
+
+describe('validateSloForm — calcMethod and sourceType enums', () => {
+  it('rejects invalid calcMethod', () => {
+    const input = makeValidInput();
+    (input.sli as any).calcMethod = 'bad_method';
+    const errors = validateSloForm(input);
+    expect(errors['sli.calcMethod']).toBeDefined();
+    expect(errors['sli.calcMethod']).toContain('bad_method');
+  });
+
+  it('rejects invalid sourceType', () => {
+    const input = makeValidInput();
+    (input.sli as any).sourceType = 'bad_source';
+    const errors = validateSloForm(input);
+    expect(errors['sli.sourceType']).toBeDefined();
+    expect(errors['sli.sourceType']).toContain('bad_source');
+  });
+});
+
+// ============================================================================
+// SLI Metric Validation
+// ============================================================================
+
+describe('validateSloForm — metric validation', () => {
+  it('rejects missing metric', () => {
+    const input = makeValidInput();
+    (input.sli as any).metric = '';
+    const errors = validateSloForm(input);
+    expect(errors['sli.metric']).toBeDefined();
+    expect(errors['sli.metric']).toContain('required');
+  });
+
+  it('rejects invalid metric name (starts with digit)', () => {
+    const input = makeValidInput();
+    input.sli.metric = '0_invalid_metric';
+    const errors = validateSloForm(input);
+    expect(errors['sli.metric']).toBeDefined();
+    expect(errors['sli.metric']).toContain('Invalid');
+  });
+});
+
+// ============================================================================
+// SLI Service — additional validation
+// ============================================================================
+
+describe('validateSloForm — service validation', () => {
+  it('rejects missing service labelValue', () => {
+    const input = makeValidInput();
+    input.sli.service.labelValue = '';
+    const errors = validateSloForm(input);
+    expect(errors['sli.service']).toBeDefined();
+    expect(errors['sli.service']).toContain('required');
+  });
+
+  it('rejects service labelName that fails LABEL_NAME_RE', () => {
+    const input = makeValidInput();
+    input.sli.service.labelName = '0starts_with_digit';
+    const errors = validateSloForm(input);
+    expect(errors['sli.service.labelName']).toBeDefined();
+    expect(errors['sli.service.labelName']).toContain('Invalid');
+  });
+
+  it('rejects unsafe service label value (contains backslash)', () => {
+    const input = makeValidInput();
+    input.sli.service.labelValue = 'my\\service';
+    const errors = validateSloForm(input);
+    expect(errors['sli.service.labelValue']).toBeDefined();
+    expect(errors['sli.service.labelValue']).toContain('backslashes');
+  });
+});
+
+// ============================================================================
+// SLI Operation — additional validation
+// ============================================================================
+
+describe('validateSloForm — operation validation', () => {
+  it('rejects invalid operation labelName', () => {
+    const input = makeValidInput();
+    input.sli.operation.labelName = 'has-hyphen';
+    const errors = validateSloForm(input);
+    expect(errors['sli.operation.labelName']).toBeDefined();
+  });
+
+  it('rejects unsafe operation label value (contains newline)', () => {
+    const input = makeValidInput();
+    input.sli.operation.labelValue = 'line1\nline2';
+    const errors = validateSloForm(input);
+    expect(errors['sli.operation.labelValue']).toBeDefined();
+  });
+});
+
+// ============================================================================
+// SLI Dependency — validation
+// ============================================================================
+
+describe('validateSloForm — dependency validation', () => {
+  it('rejects invalid dependency labelName', () => {
+    const input = makeValidInput();
+    input.sli.dependency = { labelName: 'bad-name', labelValue: 'dep-svc' };
+    const errors = validateSloForm(input);
+    expect(errors['sli.dependency.labelName']).toBeDefined();
+  });
+
+  it('rejects unsafe dependency label value', () => {
+    const input = makeValidInput();
+    input.sli.dependency = { labelName: 'dep', labelValue: 'dep"svc' };
+    const errors = validateSloForm(input);
+    expect(errors['sli.dependency.labelValue']).toBeDefined();
+  });
+});
+
+// ============================================================================
+// Latency Threshold — missing for latency SLI
+// ============================================================================
+
+describe('validateSloForm — latency threshold for latency SLI', () => {
+  it('requires latencyThreshold for latency SLI types', () => {
+    const input = makeValidInput();
+    input.sli.type = 'latency_p99';
+    input.sli.latencyThreshold = undefined;
+    const errors = validateSloForm(input);
+    expect(errors['sli.latencyThreshold']).toBeDefined();
+    expect(errors['sli.latencyThreshold']).toContain('greater than 0');
+  });
+});
+
+// ============================================================================
+// Alarms — missing
+// ============================================================================
+
+describe('validateSloForm — missing alarms', () => {
+  it('rejects undefined alarms', () => {
+    const input = { ...makeValidInput(), alarms: undefined } as any;
+    const errors = validateSloForm(input);
+    expect(errors.alarms).toBeDefined();
+    expect(errors.alarms).toContain('required');
+  });
+});
+
+// ============================================================================
+// Exclusion Windows — max
+// ============================================================================
+
+describe('validateSloForm — exclusion windows', () => {
+  it('rejects more than 10 exclusion windows', () => {
+    const windows = Array.from({ length: 11 }, (_, i) => ({
+      name: `window-${i}`,
+      schedule: '0 0 * * *',
+      duration: '1h',
+    }));
+    const errors = validateSloForm(makeValidInput({ exclusionWindows: windows }));
+    expect(errors.exclusionWindows).toBeDefined();
+    expect(errors.exclusionWindows).toContain('10');
+  });
+});
+
+// ============================================================================
+// Burn Rate — additional validation
+// ============================================================================
+
+describe('validateSloForm — burn rate validation', () => {
+  it('rejects missing shortWindow', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '',
+          longWindow: '1h',
+          burnRateMultiplier: 14.4,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const errors = validateSloForm(input);
+    expect(errors['burnRates[0].shortWindow']).toBeDefined();
+    expect(errors['burnRates[0].shortWindow']).toContain('required');
+  });
+
+  it('rejects missing longWindow', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '5m',
+          longWindow: '',
+          burnRateMultiplier: 14.4,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const errors = validateSloForm(input);
+    expect(errors['burnRates[0].longWindow']).toBeDefined();
+    expect(errors['burnRates[0].longWindow']).toContain('required');
+  });
+
+  it('rejects short >= long window', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '1h',
+          longWindow: '30m',
+          burnRateMultiplier: 14.4,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const errors = validateSloForm(input);
+    expect(errors['burnRates[0].shortWindow']).toBeDefined();
+    expect(errors['burnRates[0].shortWindow']).toContain('shorter');
+  });
+
+  it('rejects multiplier <= 0', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '5m',
+          longWindow: '1h',
+          burnRateMultiplier: 0,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const errors = validateSloForm(input);
+    expect(errors['burnRates[0].burnRateMultiplier']).toBeDefined();
+    expect(errors['burnRates[0].burnRateMultiplier']).toContain('> 0');
+  });
+
+  it('rejects multiplier > 1000', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '5m',
+          longWindow: '1h',
+          burnRateMultiplier: 1001,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const errors = validateSloForm(input);
+    expect(errors['burnRates[0].burnRateMultiplier']).toBeDefined();
+    expect(errors['burnRates[0].burnRateMultiplier']).toContain('1000');
+  });
+
+  it('rejects missing forDuration', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '5m',
+          longWindow: '1h',
+          burnRateMultiplier: 14.4,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '',
+        },
+      ],
+    });
+    const errors = validateSloForm(input);
+    expect(errors['burnRates[0].forDuration']).toBeDefined();
+    expect(errors['burnRates[0].forDuration']).toContain('required');
+  });
+});
+
+describe('validateSloFormFull — burn rate warnings', () => {
+  it('warns for non-standard longWindow', () => {
+    const input = makeValidInput({
+      burnRates: [
+        {
+          shortWindow: '5m',
+          longWindow: '45m',
+          burnRateMultiplier: 14.4,
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const { warnings } = validateSloFormFull(input);
+    expect(warnings['burnRates[0].longWindow']).toBeDefined();
+    expect(warnings['burnRates[0].longWindow']).toContain('recording rule');
+  });
+
+  it('warns when computed threshold > 1.0 (never fires)', () => {
+    const input = makeValidInput({
+      target: 0.9, // error budget = 0.1
+      burnRates: [
+        {
+          shortWindow: '5m',
+          longWindow: '1h',
+          burnRateMultiplier: 14.4, // 14.4 * 0.1 = 1.44 > 1.0
+          severity: 'critical',
+          createAlarm: true,
+          forDuration: '2m',
+        },
+      ],
+    });
+    const { warnings } = validateSloFormFull(input);
+    expect(warnings['burnRates[0].burnRateMultiplier']).toBeDefined();
+    expect(warnings['burnRates[0].burnRateMultiplier']).toContain('never fire');
+  });
+
+  it('warns when burnRates is empty (no MWMBR alerts)', () => {
+    const input = makeValidInput({ burnRates: [] });
+    const { warnings } = validateSloFormFull(input);
+    expect(warnings.burnRates).toBeDefined();
+    expect(warnings.burnRates).toContain('No burn rate');
+  });
 });
