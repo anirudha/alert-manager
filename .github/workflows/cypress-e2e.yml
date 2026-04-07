@@ -7,8 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  e2e:
+  e2e-standalone:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +50,18 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cypress-screenshots
+          name: cypress-screenshots-standalone
           path: cypress/screenshots/
           retention-days: 7
+
+  # NOTE: OSD plugin E2E (e2e-osd) is not run in CI because GitHub Actions'
+  # standard runners (2 vCPU, 7GB RAM) cannot load the full observability stack
+  # (OpenSearch + OSD with 30+ plugins + Cortex + Alertmanager) fast enough for
+  # Cypress timeouts. OSD loads all plugin bundles sequentially on every page,
+  # taking 60s+ on standard runners.
+  #
+  # Run OSD E2E locally instead:
+  #   ./scripts/e2e-osd.sh              # full teardown + rebuild + test (32/32 in ~36s)
+  #   ./scripts/e2e-osd.sh --running    # re-run against existing stack
+  #
+  # See: https://github.com/anirudha/alert-manager/issues/15

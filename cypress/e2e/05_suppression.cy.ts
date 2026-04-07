@@ -5,7 +5,7 @@
 
 describe('Suppression Rules', () => {
   beforeEach(() => {
-    cy.visitAndWait('/');
+    cy.ensureLoaded();
     cy.contains('Suppression').click();
   });
 
@@ -13,40 +13,27 @@ describe('Suppression Rules', () => {
     cy.get('body').should('be.visible');
   });
 
-  it('shows create suppression rule button', () => {
+  it('shows create button and opens form', () => {
     cy.contains(/Create|Add|New/).should('exist');
-  });
-
-  it('opens create suppression rule form', () => {
     cy.contains(/Create|Add|New/)
       .first()
       .click();
     cy.get('body').should('be.visible');
-  });
-
-  it('validates required fields on create', () => {
-    cy.contains(/Create|Add|New/)
-      .first()
-      .click();
-    // Try to submit empty form — should show validation
-    cy.get('body').should('be.visible');
+    // Close form/dialog so next test starts clean
+    cy.get('body').type('{esc}');
   });
 
   it('can create a suppression rule', () => {
     cy.contains(/Create|Add|New/)
       .first()
       .click();
-    // Fill in required fields
     cy.get('input').first().type('Test Suppression Rule');
     cy.get('body').should('be.visible');
+    // Close form
+    cy.get('body').type('{esc}');
   });
 
   it('displays existing suppression rules', () => {
-    // MOCK_MODE may seed suppression rules
-    cy.get('body').should('be.visible');
-  });
-
-  it('can toggle schedule for a rule', () => {
     cy.get('body').should('be.visible');
   });
 

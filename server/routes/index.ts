@@ -612,8 +612,8 @@ export function defineRoutes(
         const result = await handleListSLOs(
           sloService,
           {
-            page: query.page ? parseInt(query.page, 10) : undefined,
-            pageSize: query.pageSize ? parseInt(query.pageSize, 10) : undefined,
+            page: query.page || undefined,
+            pageSize: query.pageSize || undefined,
             datasourceId: query.datasourceId || undefined,
             status: query.status ? query.status.split(',') : undefined,
             sliType: query.sliType ? query.sliType.split(',') : undefined,

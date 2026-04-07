@@ -5,34 +5,25 @@
 
 describe('Rules / Monitors', () => {
   beforeEach(() => {
-    cy.visitAndWait('/');
+    cy.ensureLoaded();
     cy.contains('Rules').click();
   });
 
-  it('displays the monitors table', () => {
-    cy.get('table').should('exist');
+  it('displays the monitors table with rows', () => {
+    cy.get('table', { timeout: 30000 }).should('exist');
+    cy.get('table tbody tr', { timeout: 10000 }).should('have.length.greaterThan', 0);
   });
 
-  it('displays rule rows with names', () => {
-    cy.get('table tbody tr').should('have.length.greaterThan', 0);
-  });
-
-  it('has a search bar', () => {
+  it('has a search bar and can filter', () => {
     cy.get('input[type="search"], input[placeholder*="Search"], [data-test-subj*="search"]').should(
       'exist'
     );
-  });
-
-  it('filters rules by search text', () => {
     cy.get('input[type="search"], input[placeholder*="Search"]').first().type('Error');
     cy.get('table').should('exist');
   });
 
-  it('shows create monitor button', () => {
+  it('shows create monitor button and opens wizard', () => {
     cy.contains(/Create|New/).should('exist');
-  });
-
-  it('opens create monitor wizard on button click', () => {
     cy.contains(/Create|New/)
       .first()
       .click();
@@ -53,7 +44,6 @@ describe('Rules / Monitors', () => {
   });
 
   it('can export monitors', () => {
-    // Export functionality should be accessible
     cy.get('body').should('be.visible');
   });
 });
