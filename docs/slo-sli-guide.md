@@ -14,7 +14,7 @@
 
 **Error Budget** is the inverse of the SLO target — the amount of "allowed" unreliability. For a 99.9% SLO:
 - Error budget = 1 - 0.999 = 0.001 (0.1%)
-- Over a 30-day window, this means ~43 minutes of allowed downtime
+- Over a 30-day window with uniform traffic and total outage, this translates to ~43 minutes of allowed downtime
 
 ---
 
@@ -134,15 +134,30 @@ alert fires when:
 
 The Alert Manager uses 4 tiers following Google SRE recommendations:
 
-| Tier | Short Window | Long Window | Burn Rate | Severity | For | Time to Exhaust Budget |
-|------|-------------|-------------|-----------|----------|-----|----------------------|
-| 1 (Page) | 5m | 1h | 14.4x | Critical | 2m | ~1 hour |
-| 2 (Ticket) | 30m | 6h | 6x | Critical | 5m | ~4 hours |
-| 3 (Log) | 2h | 1d | 3x | Warning | 10m | ~8 hours |
-| 4 (Monitor) | 6h | 3d | 1x | Warning | 30m | ~1 day |
+| Tier | Short Window | Long Window | Burn Rate | Severity | For | Budget Exhaustion (1d window) | Budget Exhaustion (30d window) |
+|------|-------------|-------------|-----------|----------|-----|-------------------------------|--------------------------------|
+| 1 (Page) | 5m | 1h | 14.4x | Critical | 2m | ~1.7 hours | ~50 hours |
+| 2 (Ticket) | 30m | 6h | 6x | Critical | 5m | ~4 hours | ~5 days |
+| 3 (Log) | 2h | 1d | 3x | Warning | 10m | ~8 hours | ~10 days |
+| 4 (Monitor) | 6h | 3d | 1x | Warning | 30m | ~1 day | ~30 days |
+
+Time to exhaust the full error budget = `window_duration / burn_rate_multiplier`. The values above show two common window sizes; your actual exhaustion time depends on the SLO window you configure.
+
+> **Severity mapping rationale:** The tier names (Page, Ticket, Log, Monitor) come from
+> Google SRE Workbook Chapter 5 (Alerting on SLOs) and describe the *response type*,
+> not a Prometheus severity label. Our mapping to Prometheus severities is:
+>
+> | Response Type | Severity | Why |
+> |---------------|----------|-----|
+> | Page (Tier 1) | `critical` | 14.4x burn rate — fastest budget consumption; immediate paging required |
+> | Ticket (Tier 2) | `critical` | 6x burn rate — budget exhausted in hours (1d window) to days (30d window); still urgent enough for paging |
+> | Log (Tier 3) | `warning` | 3x burn rate — slower consumption; next-business-day response |
+> | Monitor (Tier 4) | `warning` | 1x burn rate — budget consumed at exactly the allowed rate; informational |
+>
+> Operators can adjust these severities per-tier when creating an SLO.
 
 **Burn rate multiplier** represents how fast the error budget is being consumed:
-- **14.4x** means errors are accumulating 14.4 times faster than the budget allows — at this rate, the entire monthly budget would be exhausted in about 1 hour
+- **14.4x** means errors are accumulating 14.4 times faster than the budget allows — at this rate, the budget would be exhausted in `window / 14.4` (e.g. ~1.7 hours for a 1-day window, ~50 hours for a 30-day window)
 - **1x** means errors are accumulating exactly at the budget rate — the budget will be fully consumed by the end of the window
 
 ### Example: 99.9% SLO
@@ -184,10 +199,10 @@ For a typical availability SLO with all alarms enabled and 4 MWMBR tiers:
 | `slo:sli_error:ratio_rate_6h:...` | Recording | Error ratio over 6h |
 | `slo:sli_error:ratio_rate_1d:...` | Recording | Error ratio over 1d |
 | `slo:sli_error:ratio_rate_3d:...` | Recording | Error ratio over 3d |
-| `SLO_BurnRate_HighUrgency_...` | Alerting | 14.4x burn rate (5m/1h) |
-| `SLO_BurnRate_MediumUrgency_...` | Alerting | 6x burn rate (30m/6h) |
-| `SLO_BurnRate_Tier3_...` | Alerting | 3x burn rate (2h/1d) |
-| `SLO_BurnRate_Tier4_...` | Alerting | 1x burn rate (6h/3d) |
+| `SLO_BurnRate_Page_...` | Alerting | 14.4x burn rate (5m/1h) |
+| `SLO_BurnRate_Ticket_...` | Alerting | 6x burn rate (30m/6h) |
+| `SLO_BurnRate_Log_...` | Alerting | 3x burn rate (2h/1d) |
+| `SLO_BurnRate_Monitor_...` | Alerting | 1x burn rate (6h/3d) |
 | `SLO_SLIHealth_...` | Alerting | SLI drops below target (for: 5m) |
 | `SLO_Attainment_...` | Alerting | Attainment below target over window |
 | `SLO_Warning_...` | Alerting | Error budget below warning threshold |
@@ -198,6 +213,7 @@ All rules include labels:
 - `slo_id`: Links rules back to the SLO definition
 - `slo_name`: Human-readable SLO name
 - `alarm_type`: `burn_rate`, `sli_health`, `attainment`, or `error_budget_warning`
+- `slo_window_approximated`: `"true"` on attainment and budget-warning alerts when the SLO window (e.g. 7d, 30d) exceeds the largest recording window (3d). The alert uses the 3d recording rule as a conservative proxy.
 - `tag_*`: User-defined tags (e.g., `tag_team: platform`)
 
 ---
@@ -230,6 +246,8 @@ GET /api/slos?datasourceId=ds-1&status=breached,warning&sliType=availability&ser
 | Exclusion windows | PromQL cannot retroactively filter data by time | Suppresses alert notifications (data not excluded from calculation) |
 | Recording rule delay | Period-based SLIs have a 1-evaluation-cycle lag | Use request-based SLIs when possible |
 | Error budget visualization | Must be computed on read | Cached for 60 seconds in the service layer |
+| Zero-traffic windows | Recording rules produce `NaN` when there are no requests (division by zero). Alerting rules comparing `NaN > threshold` evaluate to `false` in PromQL, so alerts do **not** spuriously fire during zero-traffic periods. | Expected behavior — no workaround needed |
+| Window approximation | SLO windows > 3d (e.g. 7d, 30d) use the 3d recording rule as a proxy. This is conservative — a 3d breach may trigger the alert even if 30d attainment is still above target. | Check the `slo_window_approximated` label on alerts |
 
 ---
 

@@ -54,8 +54,13 @@ export interface SliDefinition {
    */
   goodEventsFilter?: string;
   /**
-   * Latency threshold in seconds for latency SLIs.
-   * e.g. 0.5 for 500ms.
+   * Latency threshold for latency SLIs, **always in seconds** (matching
+   * the Prometheus histogram `_bucket` `le` label convention).
+   *
+   * Examples: `0.5` for 500 ms, `1.0` for 1 s, `0.1` for 100 ms.
+   *
+   * Values greater than 60 are flagged with a validator warning because
+   * they likely indicate a milliseconds-vs-seconds mistake.
    */
   latencyThreshold?: number;
   /** Service label matcher. */
@@ -75,11 +80,18 @@ export interface SliDefinition {
 /**
  * A single burn rate tier with paired short + long windows.
  *
- * Google SRE Workbook recommends these default tiers:
- *   - Critical: short=5m, long=1h,  multiplier=14.4, severity=critical
- *   - Warning:  short=30m, long=6h, multiplier=6,    severity=warning
- *   - Ticket:   short=2h, long=1d,  multiplier=3,    severity=warning  (optional)
- *   - Low:      short=6h, long=3d,  multiplier=1,    severity=warning  (optional)
+ * Google SRE Workbook (Chapter 5 — Alerting on SLOs) recommends these
+ * default tiers. Tier names describe the *response type*, not a
+ * Prometheus severity level:
+ *
+ *   - Page:    short=5m,  long=1h,  multiplier=14.4, severity=critical
+ *   - Ticket:  short=30m, long=6h,  multiplier=6,    severity=critical
+ *   - Log:     short=2h,  long=1d,  multiplier=3,    severity=warning  (optional)
+ *   - Monitor: short=6h,  long=3d,  multiplier=1,    severity=warning  (optional)
+ *
+ * Time to exhaust the full error budget = `window / multiplier`.
+ * For a **1-day** window: 14.4x ≈ 1.7 h, 6x = 4 h, 3x = 8 h, 1x = 24 h.
+ * For a **30-day** window: 14.4x ≈ 50 h, 6x ≈ 5 d, 3x = 10 d, 1x = 30 d.
  *
  * The alert fires only when BOTH windows exceed the threshold (AND condition),
  * balancing fast detection against false positives.
@@ -198,7 +210,7 @@ export interface SloLiveStatus {
   /**
    * Current SLI value:
    *  - For availability: ratio (e.g. 0.9997 for 99.97%)
-   *  - For latency: milliseconds (e.g. 412)
+   *  - For latency: seconds (e.g. 0.412 for 412 ms), matching Prometheus convention
    */
   currentValue: number;
   /** Current attainment over the window (0–1 decimal). */
@@ -291,6 +303,12 @@ export const DEFAULT_MWMBR_TIERS: readonly BurnRateConfig[] = [
     shortWindow: '30m',
     longWindow: '6h',
     burnRateMultiplier: 6,
+    // Severity rationale: Google SRE Workbook Chapter 5 labels this tier as
+    // "Ticket" (response type), not a Prometheus severity level. A 6x burn rate
+    // exhausts the error budget in window/6 (e.g. ~4 h for a 1d window,
+    // ~5 d for a 30d window) — urgent enough to warrant `critical` so on-call
+    // gets paged before the budget is gone. Operators who prefer a softer
+    // response can downgrade this tier to `warning` in the UI.
     severity: 'critical',
     createAlarm: true,
     forDuration: '5m',

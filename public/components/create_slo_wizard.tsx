@@ -45,7 +45,7 @@ import type {
   ExclusionWindow,
 } from '../../core/slo_types';
 import { DEFAULT_MWMBR_TIERS } from '../../core/slo_types';
-import { validateSloForm } from '../../core/slo_validators';
+import { validateSloFormFull } from '../../core/slo_validators';
 import { SloPreviewPanel } from './slo_preview_panel';
 
 // ============================================================================
@@ -614,7 +614,10 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
   ]);
 
   // Validation
-  const validationErrors = useMemo(() => validateSloForm(sloInput as SloInput), [sloInput]);
+  const { errors: validationErrors, warnings: validationWarnings } = useMemo(
+    () => validateSloFormFull(sloInput as SloInput),
+    [sloInput]
+  );
   const isFormValid = Object.keys(validationErrors).length === 0;
 
   // Field change handler for SLI section
@@ -704,6 +707,18 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
         <EuiFlexGroup gutterSize="l">
           {/* Left: Form */}
           <EuiFlexItem grow={3}>
+            {Object.keys(validationWarnings).length > 0 && (
+              <>
+                <EuiCallOut title="Validation warnings" color="warning" iconType="help" size="s">
+                  {Object.entries(validationWarnings).map(([field, msg]) => (
+                    <p key={field}>
+                      <strong>{field}:</strong> {msg}
+                    </p>
+                  ))}
+                </EuiCallOut>
+                <EuiSpacer size="m" />
+              </>
+            )}
             {submitError && (
               <>
                 <EuiCallOut title="Error creating SLO" color="danger" iconType="alert">
