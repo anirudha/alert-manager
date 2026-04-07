@@ -781,6 +781,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           rules={visibleRules}
           datasources={datasources}
           loading={dataLoading}
+          apiClient={apiClient}
           onDelete={handleDeleteRules}
           onSilence={handleSilenceRule}
           onClone={handleCloneRule}
@@ -869,6 +870,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           <AlertDetailFlyout
             alert={selectedAlert}
             datasources={datasources}
+            apiClient={apiClient}
             onClose={() => setSelectedAlert(null)}
             onAcknowledge={(id) => {
               handleAcknowledgeAlert(id);

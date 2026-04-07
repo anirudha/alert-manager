@@ -32,7 +32,7 @@ cat > "$STAGE_DIR/package.json" << 'EOF'
 EOF
 
 # 2. Create temporary stubs at the exact paths where server imports resolve
-#    server/plugin.ts: '../../../src/core/server' → $PLUGIN_DIR/server/../../../src/core/server
+#    server/plugin.ts: '../../../src/core/server' -> $PLUGIN_DIR/server/../../../src/core/server
 #    Which equals $PLUGIN_DIR/../../src/core/server
 OSD_STUB_DIR="$(cd "$PLUGIN_DIR/../.." && pwd)/src/core/server"
 if [ ! -d "$OSD_STUB_DIR" ]; then
@@ -91,11 +91,12 @@ npx tsc --project "$BUILD_DIR/tsconfig.server.json" 2>&1 || {
   npx tsc --project "$BUILD_DIR/tsconfig.server.json" --skipLibCheck 2>&1 || exit 1
 }
 
-# 3. Build client bundle via webpack
-#    Compiles public/ TypeScript into a single OSD-compatible bundle using
-#    __osdSharedDeps__ externals for React, OUI, etc. and bundling ECharts inline.
-#    NOTE: Do NOT include raw public/ TS sources in the zip — production OSD
-#    would try to recompile them via @osd/optimizer.
+# 4. Build client bundle via webpack
+#    IMPORTANT: Uses mode 'none' (no production optimizations) to prevent
+#    tree-shaking and minification from breaking module resolution at runtime.
+#    Production mode's tree-shaking was silently eliminating tab definitions
+#    and component imports, causing only 3 of 5 tabs to render and ECharts
+#    to fail to load.
 echo "Building client bundle via webpack..."
 mkdir -p "$STAGE_DIR/target/public"
 
@@ -110,7 +111,7 @@ fi
 BUNDLE_SIZE=$(du -h "$STAGE_DIR/target/public/alertManager.plugin.js" | cut -f1)
 echo "  Bundle ready: target/public/alertManager.plugin.js ($BUNDLE_SIZE)"
 
-# 4. Create the zip with OSD-required structure:
+# 5. Create the zip with OSD-required structure:
 #    opensearch-dashboards/alertManager/opensearch_dashboards.json
 echo "Creating plugin zip..."
 mkdir -p "$BUILD_DIR/opensearch-dashboards"
@@ -120,7 +121,7 @@ zip -r alertManager.zip opensearch-dashboards/ -x "opensearch-dashboards/alertMa
 # Move back for local inspection
 mv "$BUILD_DIR/opensearch-dashboards/alertManager" "$STAGE_DIR"
 
-# Cleanup temporary stubs — only remove the specific directory we created
+# Cleanup temporary stubs -- only remove the specific directory we created
 if [ "$OSD_STUB_CREATED" = true ]; then
   rm -rf "$OSD_STUB_DIR"
   rmdir "$(cd "$PLUGIN_DIR/../.." && pwd)/src/core" 2>/dev/null || true
@@ -133,6 +134,5 @@ echo "Artifact: $BUILD_DIR/alertManager.zip"
 echo "Size: $(du -h $BUILD_DIR/alertManager.zip | cut -f1)"
 echo ""
 echo "To install:"
-echo "  docker cp $BUILD_DIR/alertManager.zip opensearch-dashboards:/tmp/"
-echo "  docker exec opensearch-dashboards /usr/share/opensearch-dashboards/bin/opensearch-dashboards-plugin install file:///tmp/alertManager.zip"
-echo "  docker restart opensearch-dashboards"
+echo "  docker exec opensearch-dashboards /usr/share/opensearch-dashboards/bin/opensearch-dashboards-plugin remove alertManager 2>/dev/null || true"
+echo "  docker restart opensearch-dashboards  # picks up plugin from bind-mounted zip"

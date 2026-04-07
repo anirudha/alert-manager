@@ -48,7 +48,14 @@ const PLUGIN_DIR = __dirname;
 const STUBS_DIR = path.resolve(PLUGIN_DIR, 'stubs');
 
 module.exports = {
-  mode: 'production',
+  // IMPORTANT: Do NOT use 'production' mode. Production mode enables tree-shaking
+  // and terser minification which silently break the bundle at runtime:
+  // - Tree-shaking eliminates the Routing and Suppression tab entries from the
+  //   tabs array because they look like unreachable code to the static analyzer
+  // - Terser's name mangling breaks the ECharts init() → echarts.init() chain
+  // - Result: only 3 of 5 tabs render, no charts visible, no flyouts
+  // Using 'none' produces a larger but correct bundle (~3MB vs ~1.2MB).
+  mode: 'none',
   devtool: false,
 
   entry: './public/index.ts',
@@ -64,6 +71,10 @@ module.exports = {
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     alias: {
+      // Use echarts' pre-built CJS bundle instead of the ESM entry that gets
+      // tree-shaken. The ESM index.js re-exports individual modules which webpack
+      // strips in production mode. The dist bundle is self-contained (~1MB).
+      echarts: path.resolve(PLUGIN_DIR, 'node_modules/echarts/dist/echarts.min.js'),
       // OSD monorepo relative paths → local stubs
       [path.resolve(PLUGIN_DIR, 'public/../../../src/core/public')]: path.resolve(
         STUBS_DIR,
@@ -168,13 +179,15 @@ module.exports = {
   ],
 
   optimization: {
-    minimize: true,
+    minimize: false, // Do NOT minimize — terser breaks ECharts and OUI component resolution
     splitChunks: false, // OSD expects a single bundle file
+    usedExports: false, // Disable tree-shaking — it removes tab definitions
+    sideEffects: false, // Treat all modules as having side effects (don't eliminate)
   },
 
-  // Suppress performance warnings for large bundles (ECharts adds ~300KB)
+  // Suppress performance warnings — unminified bundle with ECharts is ~3MB
   performance: {
-    maxAssetSize: 2 * 1024 * 1024,
-    maxEntrypointSize: 2 * 1024 * 1024,
+    maxAssetSize: 5 * 1024 * 1024,
+    maxEntrypointSize: 5 * 1024 * 1024,
   },
 };
