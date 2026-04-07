@@ -53,6 +53,8 @@ interface ApiPaths {
   alertmanagerConfig: string;
   acknowledgeAlert: (id: string) => string;
   silenceAlert: (id: string) => string;
+  alertDetail: (dsId: string, alertId: string) => string;
+  ruleDetail: (dsId: string, ruleId: string) => string;
 }
 
 const OSD_PATHS: ApiPaths = {
@@ -65,6 +67,10 @@ const OSD_PATHS: ApiPaths = {
   alertmanagerConfig: '/api/alerting/alertmanager/config',
   acknowledgeAlert: (id) => `/api/alerting/alerts/${encodeURIComponent(id)}/acknowledge`,
   silenceAlert: (id) => `/api/alerting/alerts/${encodeURIComponent(id)}/silence`,
+  alertDetail: (dsId, alertId) =>
+    `/api/alerting/alerts/${encodeURIComponent(dsId)}/${encodeURIComponent(alertId)}`,
+  ruleDetail: (dsId, ruleId) =>
+    `/api/alerting/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`,
 };
 
 const STANDALONE_PATHS: ApiPaths = {
@@ -77,6 +83,10 @@ const STANDALONE_PATHS: ApiPaths = {
   alertmanagerConfig: '/api/alertmanager/config',
   acknowledgeAlert: (id) => `/api/alerts/${encodeURIComponent(id)}/acknowledge`,
   silenceAlert: (id) => `/api/alerts/${encodeURIComponent(id)}/silence`,
+  alertDetail: (dsId, alertId) =>
+    `/api/alerts/${encodeURIComponent(dsId)}/${encodeURIComponent(alertId)}`,
+  ruleDetail: (dsId, ruleId) =>
+    `/api/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`,
 };
 
 // ---------------------------------------------------------------------------
@@ -221,6 +231,16 @@ export class AlarmsApiClient {
   }
   async silenceAlert(id: string, duration?: string): Promise<any> {
     return this.http.post(this.paths.silenceAlert(id), { duration: duration || '1h' });
+  }
+
+  // ---- Detail views (flyouts) ---------------------------------------------
+
+  async getAlertDetail(dsId: string, alertId: string): Promise<any> {
+    return this.http.get(this.paths.alertDetail(dsId, alertId));
+  }
+
+  async getRuleDetail(dsId: string, ruleId: string): Promise<any> {
+    return this.http.get(this.paths.ruleDetail(dsId, ruleId));
   }
 
   // ---- Cache management ---------------------------------------------------

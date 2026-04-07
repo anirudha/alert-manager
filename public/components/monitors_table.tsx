@@ -115,6 +115,7 @@ interface MonitorsTableProps {
   rules: UnifiedRule[];
   datasources: Datasource[];
   loading: boolean;
+  apiClient: import('../services/alarms_client').AlarmsApiClient;
   onDelete: (ids: string[]) => void;
   onClone?: (monitor: UnifiedRule) => void;
   onSilence?: (id: string) => void;
@@ -457,6 +458,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   rules,
   datasources,
   loading,
+  apiClient,
   onDelete,
   onClone,
   onSilence,
@@ -1596,6 +1598,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
               {selectedMonitor && (
                 <MonitorDetailFlyout
                   monitor={selectedMonitor}
+                  apiClient={apiClient}
                   onClose={() => setSelectedMonitor(null)}
                   onSilence={(id) => {
                     if (onSilence) onSilence(id);

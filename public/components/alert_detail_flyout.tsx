@@ -32,6 +32,7 @@ import {
   EuiLink,
 } from '@opensearch-project/oui';
 import { UnifiedAlert, Datasource } from '../../core';
+import { AlarmsApiClient } from '../services/alarms_client';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'danger',
@@ -63,6 +64,7 @@ const INTERNAL_LABEL_KEYS = new Set([
 export interface AlertDetailFlyoutProps {
   alert: UnifiedAlert;
   datasources: Datasource[];
+  apiClient: AlarmsApiClient;
   onClose: () => void;
   onAcknowledge: (alertId: string) => void;
   onSilence: (alertId: string) => void;
@@ -71,6 +73,7 @@ export interface AlertDetailFlyoutProps {
 export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   alert,
   datasources,
+  apiClient,
   onClose,
   onAcknowledge,
   onSilence,
@@ -80,18 +83,18 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   // Fetch full detail (with raw data) from the API when flyout opens
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/alerts/${encodeURIComponent(alert.datasourceId)}/${encodeURIComponent(alert.id)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+    apiClient
+      .getAlertDetail(alert.datasourceId, alert.id)
+      .then((data: any) => {
         if (!cancelled && data) setDetailData(data);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Failed to load alert details:', err);
       });
     return () => {
       cancelled = true;
     };
-  }, [alert.datasourceId, alert.id]);
+  }, [alert.datasourceId, alert.id, apiClient]);
 
   // Merge detail data over summary — detail has `raw` and potentially richer labels
   const mergedAlert = detailData ? { ...alert, ...detailData } : alert;

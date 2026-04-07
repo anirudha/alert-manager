@@ -46,6 +46,7 @@ import {
   OSMonitor,
   OSMonitorInput,
 } from '../../core';
+import { AlarmsApiClient } from '../services/alarms_client';
 
 // ============================================================================
 // Color maps
@@ -88,7 +89,10 @@ const ConditionPreviewGraph: React.FC<{
   if (!data || data.length === 0)
     return (
       <EuiText size="s" color="subdued">
-        Not configured
+        <em>
+          No recent evaluation data available. The condition preview populates after the monitor
+          executes and records metric data.
+        </em>
       </EuiText>
     );
 
@@ -161,6 +165,7 @@ const ConditionPreviewGraph: React.FC<{
 
 export interface MonitorDetailFlyoutProps {
   monitor: UnifiedRule;
+  apiClient: AlarmsApiClient;
   onClose: () => void;
   onSilence: (id: string) => void;
   onDelete: (id: string) => void;
@@ -173,6 +178,7 @@ export interface MonitorDetailFlyoutProps {
 
 export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
   monitor,
+  apiClient,
   onClose,
   onSilence,
   onDelete,
@@ -188,12 +194,12 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
     setDetailLoading(true);
     const dsId = monitor.datasourceId;
     const ruleId = monitor.id;
-    fetch(`/api/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+    apiClient
+      .getRuleDetail(dsId, ruleId)
+      .then((data: any) => {
         if (!cancelled && data) setDetail(data);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Failed to load monitor details:', err);
       })
       .finally(() => {
@@ -202,7 +208,7 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [monitor.datasourceId, monitor.id]);
+  }, [monitor.datasourceId, monitor.id, apiClient]);
 
   // Use detail data when available, fall back to summary props
   const full = detail || monitor;
