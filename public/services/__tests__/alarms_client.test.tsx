@@ -364,4 +364,149 @@ describe('AlarmsApiClient', () => {
       expect(http.get).toHaveBeenCalledWith('/api/alertmanager/config');
     });
   });
+
+  // ---- Detail views (flyouts) ---------------------------------------------
+
+  describe('detail views', () => {
+    it('fetches alert detail (standalone)', async () => {
+      const http = createMockHttp();
+      const client = new AlarmsApiClient(http, 'standalone');
+      await client.getAlertDetail('ds-1', 'alert-123');
+      expect(http.get).toHaveBeenCalledWith('/api/alerts/ds-1/alert-123');
+    });
+
+    it('fetches alert detail (OSD mode)', async () => {
+      const http = createMockHttp();
+      const client = new AlarmsApiClient(http, 'osd');
+      await client.getAlertDetail('ds-1', 'alert-123');
+      expect(http.get).toHaveBeenCalledWith('/api/alerting/alerts/ds-1/alert-123');
+    });
+
+    it('fetches rule detail (standalone)', async () => {
+      const http = createMockHttp();
+      const client = new AlarmsApiClient(http, 'standalone');
+      await client.getRuleDetail('ds-1', 'rule-456');
+      expect(http.get).toHaveBeenCalledWith('/api/rules/ds-1/rule-456');
+    });
+
+    it('fetches rule detail (OSD mode)', async () => {
+      const http = createMockHttp();
+      const client = new AlarmsApiClient(http, 'osd');
+      await client.getRuleDetail('ds-1', 'rule-456');
+      expect(http.get).toHaveBeenCalledWith('/api/alerting/rules/ds-1/rule-456');
+    });
+  });
+
+  // ---- Prometheus Metadata ------------------------------------------------
+
+  describe('getMetricNames', () => {
+    it('fetches metric names without search (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ metrics: ['up'], total: 1, truncated: false });
+      const client = new AlarmsApiClient(http, 'standalone');
+      const result = await client.getMetricNames('ds-1');
+      expect(result.metrics).toEqual(['up']);
+      expect(http.get).toHaveBeenCalledWith('/api/datasources/ds-1/metadata/metrics');
+    });
+
+    it('fetches metric names with search (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ metrics: ['http_requests_total'], total: 1, truncated: false });
+      const client = new AlarmsApiClient(http, 'standalone');
+      await client.getMetricNames('ds-1', 'http');
+      expect(http.get).toHaveBeenCalledWith('/api/datasources/ds-1/metadata/metrics?search=http');
+    });
+
+    it('fetches metric names with search (OSD mode uses query option)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ metrics: ['http_requests_total'], total: 1, truncated: false });
+      const client = new AlarmsApiClient(http, 'osd');
+      await client.getMetricNames('ds-1', 'http');
+      expect(http.get).toHaveBeenCalledWith('/api/alerting/prometheus/ds-1/metadata/metrics', {
+        query: { search: 'http' },
+      });
+    });
+  });
+
+  describe('getLabelNames', () => {
+    it('fetches label names without metric (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ labels: ['job', 'instance'] });
+      const client = new AlarmsApiClient(http, 'standalone');
+      const result = await client.getLabelNames('ds-1');
+      expect(result.labels).toEqual(['job', 'instance']);
+    });
+
+    it('fetches label names with metric filter (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ labels: ['status_code'] });
+      const client = new AlarmsApiClient(http, 'standalone');
+      await client.getLabelNames('ds-1', 'http_requests_total');
+      expect(http.get).toHaveBeenCalledWith(
+        '/api/datasources/ds-1/metadata/labels?metric=http_requests_total'
+      );
+    });
+
+    it('fetches label names with metric filter (OSD mode)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ labels: ['status_code'] });
+      const client = new AlarmsApiClient(http, 'osd');
+      await client.getLabelNames('ds-1', 'http_requests_total');
+      expect(http.get).toHaveBeenCalledWith('/api/alerting/prometheus/ds-1/metadata/labels', {
+        query: { metric: 'http_requests_total' },
+      });
+    });
+  });
+
+  describe('getLabelValues', () => {
+    it('fetches label values without selector (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ values: ['val1'], total: 1, truncated: false });
+      const client = new AlarmsApiClient(http, 'standalone');
+      const result = await client.getLabelValues('ds-1', 'job');
+      expect(result.values).toEqual(['val1']);
+    });
+
+    it('fetches label values with selector (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ values: ['val1'], total: 1, truncated: false });
+      const client = new AlarmsApiClient(http, 'standalone');
+      await client.getLabelValues('ds-1', 'instance', '{job="prom"}');
+      expect(http.get).toHaveBeenCalledWith(
+        expect.stringContaining('/metadata/label-values/instance?selector=')
+      );
+    });
+
+    it('fetches label values with selector (OSD mode)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ values: ['val1'], total: 1, truncated: false });
+      const client = new AlarmsApiClient(http, 'osd');
+      await client.getLabelValues('ds-1', 'instance', '{job="prom"}');
+      expect(http.get).toHaveBeenCalledWith(
+        '/api/alerting/prometheus/ds-1/metadata/label-values/instance',
+        { query: { selector: '{job="prom"}' } }
+      );
+    });
+  });
+
+  describe('getMetricMetadata', () => {
+    it('fetches metric metadata (standalone)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ metadata: [{ metric: 'up', type: 'gauge', help: 'Up' }] });
+      const client = new AlarmsApiClient(http, 'standalone');
+      const result = await client.getMetricMetadata('ds-1');
+      expect(result.metadata).toHaveLength(1);
+      expect(http.get).toHaveBeenCalledWith('/api/datasources/ds-1/metadata/metric-metadata');
+    });
+
+    it('fetches metric metadata (OSD mode)', async () => {
+      const http = createMockHttp();
+      http.get.mockResolvedValue({ metadata: [] });
+      const client = new AlarmsApiClient(http, 'osd');
+      await client.getMetricMetadata('ds-1');
+      expect(http.get).toHaveBeenCalledWith(
+        '/api/alerting/prometheus/ds-1/metadata/metric-metadata'
+      );
+    });
+  });
 });

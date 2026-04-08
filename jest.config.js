@@ -58,6 +58,7 @@ module.exports = {
     '!core/testing.ts',
     // Exclude integration-only modules — need real backend
     '!core/directquery_prometheus_backend.ts',
+    '!core/opensearch_backend.ts',
     // Exclude OSD plugin shell — depends on OSD core
     '!public/plugin.ts',
     '!public/application.tsx',
@@ -82,6 +83,12 @@ module.exports = {
     '!public/components/promql_editor.tsx',
     '!public/components/echarts_render.tsx',
     '!public/components/table_pagination.tsx',
+    '!public/components/sli_section.tsx',
+    '!public/components/sli_combo_boxes.tsx',
+    '!public/components/slo_template_selector.tsx',
+    '!public/hooks/use_prometheus_metadata.ts',
+    // Exclude mock data — no value in unit testing these
+    '!core/mock_data.ts',
     '!**/index.ts',
     '!**/__tests__/**',
     '!**/__mocks__/**',

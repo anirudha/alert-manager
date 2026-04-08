@@ -13,6 +13,7 @@
  *  - Full CRUD: monitors, suppression rules, alert actions, SLOs
  */
 import { Datasource } from '../../core';
+import type { PrometheusMetricMetadata } from '../../core/types';
 import type { SloDefinition, SloInput, SloSummary } from '../../core/slo_types';
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,10 @@ interface ApiPaths {
   silenceAlert: (id: string) => string;
   alertDetail: (dsId: string, alertId: string) => string;
   ruleDetail: (dsId: string, ruleId: string) => string;
+  metricNames: (dsId: string) => string;
+  labelNames: (dsId: string) => string;
+  labelValues: (dsId: string, label: string) => string;
+  metricMetadata: (dsId: string) => string;
 }
 
 const OSD_PATHS: ApiPaths = {
@@ -71,6 +76,14 @@ const OSD_PATHS: ApiPaths = {
     `/api/alerting/alerts/${encodeURIComponent(dsId)}/${encodeURIComponent(alertId)}`,
   ruleDetail: (dsId, ruleId) =>
     `/api/alerting/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`,
+  metricNames: (dsId) => `/api/alerting/prometheus/${encodeURIComponent(dsId)}/metadata/metrics`,
+  labelNames: (dsId) => `/api/alerting/prometheus/${encodeURIComponent(dsId)}/metadata/labels`,
+  labelValues: (dsId, label) =>
+    `/api/alerting/prometheus/${encodeURIComponent(
+      dsId
+    )}/metadata/label-values/${encodeURIComponent(label)}`,
+  metricMetadata: (dsId) =>
+    `/api/alerting/prometheus/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
 };
 
 const STANDALONE_PATHS: ApiPaths = {
@@ -87,6 +100,13 @@ const STANDALONE_PATHS: ApiPaths = {
     `/api/alerts/${encodeURIComponent(dsId)}/${encodeURIComponent(alertId)}`,
   ruleDetail: (dsId, ruleId) =>
     `/api/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`,
+  metricNames: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/metrics`,
+  labelNames: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/labels`,
+  labelValues: (dsId, label) =>
+    `/api/datasources/${encodeURIComponent(dsId)}/metadata/label-values/${encodeURIComponent(
+      label
+    )}`,
+  metricMetadata: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
 };
 
 // ---------------------------------------------------------------------------
@@ -222,6 +242,51 @@ export class AlarmsApiClient {
   }
   async deleteSlo(id: string): Promise<{ deleted: boolean; generatedRuleNames: string[] }> {
     return this.http.delete(`${this.paths.slos}/${encodeURIComponent(id)}`);
+  }
+
+  // ---- Prometheus Metadata ------------------------------------------------
+
+  async getMetricNames(
+    dsId: string,
+    search?: string
+  ): Promise<{ metrics: string[]; total: number; truncated: boolean }> {
+    if (search) {
+      // OSD HTTP client double-encodes ? in paths — use { query } option in OSD mode
+      if (this.mode === 'osd') {
+        return this.http.get(this.paths.metricNames(dsId), { query: { search } });
+      }
+      const path = `${this.paths.metricNames(dsId)}?search=${encodeURIComponent(search)}`;
+      return this.http.get(path);
+    }
+    return this.cachedGet(this.paths.metricNames(dsId));
+  }
+
+  async getLabelNames(dsId: string, metric?: string): Promise<{ labels: string[] }> {
+    if (metric && this.mode === 'osd') {
+      return this.http.get(this.paths.labelNames(dsId), { query: { metric } });
+    }
+    const path = metric
+      ? `${this.paths.labelNames(dsId)}?metric=${encodeURIComponent(metric)}`
+      : this.paths.labelNames(dsId);
+    return this.cachedGet(path);
+  }
+
+  async getLabelValues(
+    dsId: string,
+    labelName: string,
+    selector?: string
+  ): Promise<{ values: string[]; total: number; truncated: boolean }> {
+    if (selector && this.mode === 'osd') {
+      return this.http.get(this.paths.labelValues(dsId, labelName), { query: { selector } });
+    }
+    const path = selector
+      ? `${this.paths.labelValues(dsId, labelName)}?selector=${encodeURIComponent(selector)}`
+      : this.paths.labelValues(dsId, labelName);
+    return this.cachedGet(path);
+  }
+
+  async getMetricMetadata(dsId: string): Promise<{ metadata: PrometheusMetricMetadata[] }> {
+    return this.cachedGet(this.paths.metricMetadata(dsId));
   }
 
   // ---- Alert actions ------------------------------------------------------

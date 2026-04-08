@@ -9,8 +9,10 @@
  *
  * Uses the same generateSloRuleGroup() function client-side (for preview)
  * and server-side (for deployment) to ensure no divergence.
+ *
+ * SLI form state is managed by `useReducer` in the extracted `SliSection`.
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useReducer } from 'react';
 import {
   EuiSpacer,
   EuiPanel,
@@ -24,7 +26,6 @@ import {
   EuiButtonEmpty,
   EuiButtonIcon,
   EuiText,
-  EuiBadge,
   EuiAccordion,
   EuiCallOut,
   EuiFlyout,
@@ -32,20 +33,22 @@ import {
   EuiFlyoutBody,
   EuiFlyoutFooter,
   EuiTitle,
-  EuiRadioGroup,
   EuiCheckbox,
+  EuiIcon,
+  EuiBadge,
 } from '@opensearch-project/oui';
 import type {
   SloInput,
-  SliType,
-  SliCalcMethod,
-  SliSourceType,
   BurnRateConfig,
   SloAlarmConfig,
   ExclusionWindow,
 } from '../../core/slo_types';
 import { DEFAULT_MWMBR_TIERS } from '../../core/slo_types';
 import { validateSloFormFull } from '../../core/slo_validators';
+import { formatErrorBudget } from '../../core/slo_templates';
+import { parseDurationToMs } from '../../core/slo_promql_generator';
+import type { AlarmsApiClient } from '../services/alarms_client';
+import { SliSection, sliFormReducer, initialSliState } from './sli_section';
 import { SloPreviewPanel } from './slo_preview_panel';
 
 // ============================================================================
@@ -56,29 +59,15 @@ interface CreateSloWizardProps {
   datasourceId: string;
   onClose: () => void;
   onCreated: () => void;
-  apiClient: { createSlo: (data: any) => Promise<unknown> };
+  apiClient: Pick<
+    AlarmsApiClient,
+    'createSlo' | 'getMetricNames' | 'getLabelNames' | 'getLabelValues' | 'getMetricMetadata'
+  >;
 }
 
 // ============================================================================
 // Constants
 // ============================================================================
-
-const SLI_TYPE_OPTIONS = [
-  { value: 'availability', text: 'Availability' },
-  { value: 'latency_p99', text: 'Latency (p99)' },
-  { value: 'latency_p90', text: 'Latency (p90)' },
-  { value: 'latency_p50', text: 'Latency (p50)' },
-];
-
-const CALC_METHOD_OPTIONS = [
-  { value: 'good_requests', text: 'Number of good requests' },
-  { value: 'good_periods', text: 'Number of good periods' },
-];
-
-const SOURCE_TYPE_RADIOS = [
-  { id: 'service_operation', label: 'Service operation' },
-  { id: 'service_dependency', label: 'Service dependency' },
-];
 
 const WINDOW_DURATION_OPTIONS = [
   { value: '1d', text: '1 day' },
@@ -89,222 +78,43 @@ const WINDOW_DURATION_OPTIONS = [
 ];
 
 // ============================================================================
-// Sub-components — rendered inline, not separate files
+// Sub-components — BurnRateSection remains inline (not extracted in this PR)
 // ============================================================================
 
-/* --- Section 1: Set SLI --- */
-const SliSection: React.FC<{
-  sliType: SliType;
-  calcMethod: SliCalcMethod;
-  sourceType: SliSourceType;
-  metric: string;
-  service: string;
-  serviceLabelName: string;
-  operation: string;
-  operationLabelName: string;
-  goodEventsFilter: string;
-  latencyThreshold: string;
-  dependency: string;
-  dependencyLabelName: string;
-  periodLength: string;
-  hasSubmitted: boolean;
-  errors: Record<string, string>;
-  onChange: (field: string, value: string) => void;
-}> = (props) => {
-  const {
-    sliType,
-    calcMethod,
-    sourceType,
-    metric,
-    service,
-    serviceLabelName,
-    operation,
-    operationLabelName,
-    goodEventsFilter,
-    latencyThreshold,
-    dependency,
-    dependencyLabelName,
-    periodLength,
-    hasSubmitted,
-    errors,
-    onChange,
-  } = props;
-  const isLatency = sliType.startsWith('latency_');
-
-  return (
-    <>
-      <EuiFormRow label="Source type">
-        <EuiRadioGroup
-          options={SOURCE_TYPE_RADIOS}
-          idSelected={sourceType}
-          onChange={(id) => onChange('sourceType', id)}
-        />
-      </EuiFormRow>
-      <EuiSpacer size="m" />
-      <EuiFormRow
-        label="Prometheus metric"
-        helpText="The base metric name (e.g. http_requests_total)"
-        isInvalid={hasSubmitted && !!errors['sli.metric']}
-        error={hasSubmitted ? errors['sli.metric'] : undefined}
-      >
-        <EuiFieldText
-          placeholder="http_requests_total"
-          value={metric}
-          onChange={(e) => onChange('metric', e.target.value)}
-        />
-      </EuiFormRow>
-      <EuiSpacer size="m" />
-      <EuiFlexGroup gutterSize="m">
-        <EuiFlexItem>
-          <EuiFormRow label="Calculate">
-            <EuiSelect
-              options={CALC_METHOD_OPTIONS}
-              value={calcMethod}
-              onChange={(e) => onChange('calcMethod', e.target.value)}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiFormRow label="SLI type">
-            <EuiSelect
-              options={SLI_TYPE_OPTIONS}
-              value={sliType}
-              onChange={(e) => onChange('sliType', e.target.value)}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      {calcMethod === 'good_periods' && (
-        <>
-          <EuiSpacer size="m" />
-          <EuiFormRow label="Period length" helpText="Evaluation granularity for period-based SLIs">
-            <EuiSelect
-              options={[
-                { value: '1m', text: '1 minute' },
-                { value: '5m', text: '5 minutes' },
-                { value: '10m', text: '10 minutes' },
-              ]}
-              value={periodLength}
-              onChange={(e) => onChange('periodLength', e.target.value)}
-            />
-          </EuiFormRow>
-          <EuiSpacer size="s" />
-          <EuiCallOut title="Period-based SLI" iconType="iInCircle" size="s" color="primary">
-            <p>
-              Period-based SLIs require a recording rule to pre-compute per-period results. This
-              will create an additional recording rule.
-            </p>
-          </EuiCallOut>
-        </>
-      )}
-      <EuiSpacer size="m" />
-      <EuiFlexGroup gutterSize="m">
-        <EuiFlexItem>
-          <EuiFormRow
-            label="Service"
-            isInvalid={hasSubmitted && !!errors['sli.service']}
-            error={hasSubmitted ? errors['sli.service'] : undefined}
-          >
-            <EuiFieldText
-              placeholder="pet-clinic-frontend"
-              value={service}
-              onChange={(e) => onChange('service', e.target.value)}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false} style={{ width: 160 }}>
-          <EuiFormRow label="Label name">
-            <EuiFieldText
-              value={serviceLabelName}
-              onChange={(e) => onChange('serviceLabelName', e.target.value)}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      <EuiFlexGroup gutterSize="m">
-        <EuiFlexItem>
-          <EuiFormRow
-            label="Operation"
-            isInvalid={hasSubmitted && !!errors['sli.operation']}
-            error={hasSubmitted ? errors['sli.operation'] : undefined}
-          >
-            <EuiFieldText
-              placeholder="POST /api/customer/owners"
-              value={operation}
-              onChange={(e) => onChange('operation', e.target.value)}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false} style={{ width: 160 }}>
-          <EuiFormRow label="Label name">
-            <EuiFieldText
-              value={operationLabelName}
-              onChange={(e) => onChange('operationLabelName', e.target.value)}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      {sourceType === 'service_dependency' && (
-        <EuiFlexGroup gutterSize="m">
-          <EuiFlexItem>
-            <EuiFormRow label="Dependency">
-              <EuiFieldText
-                placeholder="payment-api"
-                value={dependency}
-                onChange={(e) => onChange('dependency', e.target.value)}
-              />
-            </EuiFormRow>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false} style={{ width: 160 }}>
-            <EuiFormRow label="Label name">
-              <EuiFieldText
-                value={dependencyLabelName}
-                onChange={(e) => onChange('dependencyLabelName', e.target.value)}
-              />
-            </EuiFormRow>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      )}
-      <EuiSpacer size="m" />
-      {!isLatency ? (
-        <EuiFormRow
-          label="Good events filter"
-          helpText='Label matcher to identify successful requests (e.g. status_code!~"5..")'
-        >
-          <EuiFieldText
-            value={goodEventsFilter}
-            onChange={(e) => onChange('goodEventsFilter', e.target.value)}
-          />
-        </EuiFormRow>
-      ) : (
-        <EuiFormRow
-          label="Latency threshold (seconds)"
-          helpText="Requests exceeding this latency are counted as errors"
-          isInvalid={hasSubmitted && !!errors['sli.latencyThreshold']}
-          error={hasSubmitted ? errors['sli.latencyThreshold'] : undefined}
-        >
-          <EuiFieldNumber
-            placeholder="0.5"
-            value={latencyThreshold}
-            onChange={(e) => onChange('latencyThreshold', e.target.value)}
-            step={0.01}
-            min={0}
-          />
-        </EuiFormRow>
-      )}
-    </>
-  );
-};
+/** Format burn-rate depletion time in human-readable form. */
+function formatDepletionTime(burnRateMultiplier: number, windowDuration: string): string {
+  if (burnRateMultiplier <= 0) return '';
+  const windowMs = parseDurationToMs(windowDuration);
+  const depletionHours = windowMs / (burnRateMultiplier * 3600000);
+  if (depletionHours < 1) {
+    const minutes = Math.round(depletionHours * 60);
+    return `~${minutes}m`;
+  }
+  if (depletionHours < 48) {
+    return `~${depletionHours.toFixed(1).replace(/\.0$/, '')}h`;
+  }
+  const days = depletionHours / 24;
+  return `~${days.toFixed(1).replace(/\.0$/, '')}d`;
+}
 
 /* --- Section 4: Burn Rate & Alarms --- */
 const BurnRateSection: React.FC<{
   burnRates: BurnRateConfig[];
   alarms: SloAlarmConfig;
+  windowDuration: string;
   hasSubmitted: boolean;
   errors: Record<string, string>;
   onBurnRatesChange: (rates: BurnRateConfig[]) => void;
   onAlarmsChange: (alarms: SloAlarmConfig) => void;
-}> = ({ burnRates, alarms, hasSubmitted, errors, onBurnRatesChange, onAlarmsChange }) => {
+}> = ({
+  burnRates,
+  alarms,
+  windowDuration,
+  hasSubmitted,
+  errors,
+  onBurnRatesChange,
+  onAlarmsChange,
+}) => {
   const addBurnRate = () => {
     onBurnRatesChange([
       ...burnRates,
@@ -342,25 +152,22 @@ const BurnRateSection: React.FC<{
       <EuiFlexGroup justifyContent="spaceBetween" alignItems="center">
         <EuiFlexItem grow={false}>
           <EuiText size="s">
-            <strong>Burn rate tiers (MWMBR)</strong>
+            <strong>Burn rate alert tiers</strong>
           </EuiText>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiButtonEmpty size="s" onClick={useRecommended} iconType="sparkles">
-            Use recommended (Google SRE)
+            Use recommended defaults
           </EuiButtonEmpty>
         </EuiFlexItem>
       </EuiFlexGroup>
       <EuiSpacer size="s" />
-      <EuiCallOut
-        title="Multi-window multi-burn-rate (MWMBR)"
-        iconType="iInCircle"
-        size="s"
-        color="primary"
-      >
+      <EuiCallOut title="How burn rate alerts work" iconType="iInCircle" size="s" color="primary">
         <p>
-          Each tier uses paired short + long windows with AND condition. Both must exceed the
-          threshold for the alert to fire, balancing fast detection against false positives.
+          Each tier detects error budget consumption at a different speed. A higher rate (e.g.
+          14.4x) catches fast-burning incidents in minutes; a lower rate (e.g. 3x) catches slow
+          degradation over hours. Both a short and long window must agree before the alert fires,
+          which prevents false positives from brief spikes.
         </p>
       </EuiCallOut>
       <EuiSpacer size="m" />
@@ -374,7 +181,8 @@ const BurnRateSection: React.FC<{
           <EuiFlexGroup gutterSize="s" alignItems="center">
             <EuiFlexItem grow={false} style={{ width: 90 }}>
               <EuiFormRow
-                label={i === 0 ? 'Short' : undefined}
+                label={i === 0 ? 'Short window' : undefined}
+                helpText={i === 0 ? 'Fast check' : undefined}
                 isInvalid={hasSubmitted && !!errors[`burnRates[${i}].shortWindow`]}
               >
                 <EuiFieldText
@@ -385,7 +193,10 @@ const BurnRateSection: React.FC<{
               </EuiFormRow>
             </EuiFlexItem>
             <EuiFlexItem grow={false} style={{ width: 90 }}>
-              <EuiFormRow label={i === 0 ? 'Long' : undefined}>
+              <EuiFormRow
+                label={i === 0 ? 'Long window' : undefined}
+                helpText={i === 0 ? 'Confirmation' : undefined}
+              >
                 <EuiFieldText
                   compressed
                   value={tier.longWindow}
@@ -394,7 +205,10 @@ const BurnRateSection: React.FC<{
               </EuiFormRow>
             </EuiFlexItem>
             <EuiFlexItem grow={false} style={{ width: 80 }}>
-              <EuiFormRow label={i === 0 ? 'Rate' : undefined}>
+              <EuiFormRow
+                label={i === 0 ? 'Burn rate' : undefined}
+                helpText={i === 0 ? 'Multiplier' : undefined}
+              >
                 <EuiFieldNumber
                   compressed
                   value={tier.burnRateMultiplier}
@@ -407,7 +221,10 @@ const BurnRateSection: React.FC<{
               </EuiFormRow>
             </EuiFlexItem>
             <EuiFlexItem grow={false} style={{ width: 100 }}>
-              <EuiFormRow label={i === 0 ? 'Severity' : undefined}>
+              <EuiFormRow
+                label={i === 0 ? 'Severity' : undefined}
+                helpText={i === 0 ? 'Alert level' : undefined}
+              >
                 <EuiSelect
                   compressed
                   options={[
@@ -420,7 +237,10 @@ const BurnRateSection: React.FC<{
               </EuiFormRow>
             </EuiFlexItem>
             <EuiFlexItem grow={false} style={{ width: 80 }}>
-              <EuiFormRow label={i === 0 ? 'For' : undefined}>
+              <EuiFormRow
+                label={i === 0 ? 'Pending' : undefined}
+                helpText={i === 0 ? 'Wait time' : undefined}
+              >
                 <EuiFieldText
                   compressed
                   value={tier.forDuration}
@@ -438,6 +258,12 @@ const BurnRateSection: React.FC<{
               />
             </EuiFlexItem>
           </EuiFlexGroup>
+          {tier.burnRateMultiplier > 0 && (
+            <EuiText size="xs" color="subdued" style={{ marginTop: 2, marginLeft: 4 }}>
+              Budget depletion: {formatDepletionTime(tier.burnRateMultiplier, windowDuration)} at
+              this burn rate
+            </EuiText>
+          )}
         </EuiPanel>
       ))}
 
@@ -447,12 +273,15 @@ const BurnRateSection: React.FC<{
 
       <EuiSpacer size="l" />
       <EuiText size="s">
-        <strong>SLO alarms</strong>
+        <strong>Additional SLO alarms</strong>
+      </EuiText>
+      <EuiText size="xs" color="subdued">
+        These alarms complement the burn rate tiers above with broader SLO health checks.
       </EuiText>
       <EuiSpacer size="s" />
       <EuiCheckbox
         id="alarm-sli-health"
-        label="SLI health alarm — fires when error ratio exceeds budget over 5m"
+        label="SLI health alarm"
         checked={alarms.sliHealth.enabled}
         onChange={() =>
           onAlarmsChange({
@@ -461,10 +290,13 @@ const BurnRateSection: React.FC<{
           })
         }
       />
-      <EuiSpacer size="s" />
+      <EuiText size="xs" color="subdued" style={{ marginLeft: 24, marginBottom: 8 }}>
+        Fires when the instantaneous error ratio exceeds the budget rate over a 5-minute window.
+        Good for detecting sudden spikes.
+      </EuiText>
       <EuiCheckbox
         id="alarm-attainment"
-        label="SLO attainment breach alarm — fires when attainment drops below target"
+        label="Attainment breach alarm"
         checked={alarms.attainmentBreach.enabled}
         onChange={() =>
           onAlarmsChange({
@@ -476,10 +308,13 @@ const BurnRateSection: React.FC<{
           })
         }
       />
-      <EuiSpacer size="s" />
+      <EuiText size="xs" color="subdued" style={{ marginLeft: 24, marginBottom: 8 }}>
+        Fires when cumulative attainment drops below your target (e.g. 99.9%). Indicates the SLO has
+        already been breached.
+      </EuiText>
       <EuiCheckbox
         id="alarm-budget-warning"
-        label="Error budget warning alarm — fires when remaining budget drops below threshold"
+        label="Budget depletion warning"
         checked={alarms.budgetWarning.enabled}
         onChange={() =>
           onAlarmsChange({
@@ -488,9 +323,51 @@ const BurnRateSection: React.FC<{
           })
         }
       />
+      <EuiText size="xs" color="subdued" style={{ marginLeft: 24 }}>
+        Fires when remaining error budget drops below the warning threshold you set in Section 2.
+        Gives early notice before a full breach.
+      </EuiText>
     </>
   );
 };
+
+// ============================================================================
+// Section completion helpers
+// ============================================================================
+
+/** Map validation error keys to wizard section numbers. */
+function getSectionErrors(errors: Record<string, string>): Record<number, boolean> {
+  const sections: Record<number, boolean> = { 1: true, 2: true, 3: true, 4: true };
+  for (const key of Object.keys(errors)) {
+    if (key.startsWith('sli.') || key === 'sli') sections[1] = false;
+    else if (key === 'target' || key === 'budgetWarningThreshold') sections[2] = false;
+    else if (key === 'name') sections[3] = false;
+    else if (key.startsWith('burnRates')) sections[4] = false;
+  }
+  return sections;
+}
+
+/** Accordion button with optional green checkmark when section is valid. */
+const SectionButton: React.FC<{
+  label: string;
+  isComplete: boolean;
+  showIndicator: boolean;
+}> = ({ label, isComplete, showIndicator }) => (
+  <span>
+    {label}
+    {showIndicator && isComplete && (
+      <>
+        {' '}
+        <EuiIcon
+          type="checkInCircleFilled"
+          color="success"
+          size="s"
+          aria-label="Section complete"
+        />
+      </>
+    )}
+  </span>
+);
 
 // ============================================================================
 // Main Component
@@ -502,29 +379,20 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
   onCreated,
   apiClient,
 }) => {
-  // Form state
-  const [sliType, setSliType] = useState<SliType>('availability');
-  const [calcMethod, setCalcMethod] = useState<SliCalcMethod>('good_requests');
-  const [sourceType, setSourceType] = useState<SliSourceType>('service_operation');
-  const [metric, setMetric] = useState('http_requests_total');
-  const [service, setService] = useState('');
-  const [serviceLabelName, setServiceLabelName] = useState('service');
-  const [operation, setOperation] = useState('');
-  const [operationLabelName, setOperationLabelName] = useState('endpoint');
-  const [goodEventsFilter, setGoodEventsFilter] = useState('status_code!~"5.."');
-  const [latencyThreshold, setLatencyThreshold] = useState('0.5');
-  const [dependency, setDependency] = useState('');
-  const [dependencyLabelName, setDependencyLabelName] = useState('peer_service');
-  const [periodLength, setPeriodLength] = useState('1m');
+  // SLI form state — managed by useReducer for atomic template application
+  const [sliState, sliDispatch] = useReducer(sliFormReducer, initialSliState);
 
+  // Section 2: SLO target
   const [target, setTarget] = useState('99.9');
   const [budgetWarningThreshold, setBudgetWarningThreshold] = useState('30');
   const [windowDuration, setWindowDuration] = useState('1d');
   const [exclusionWindows] = useState<ExclusionWindow[]>([]);
 
+  // Section 3: Name
   const [sloName, setSloName] = useState('');
   const [autoName, setAutoName] = useState(true);
 
+  // Section 4: Burn rates and alarms
   const [burnRates, setBurnRates] = useState<BurnRateConfig[]>([...DEFAULT_MWMBR_TIERS]);
   const [alarms, setAlarms] = useState<SloAlarmConfig>({
     sliHealth: { enabled: true },
@@ -532,8 +400,10 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
     budgetWarning: { enabled: true },
   });
 
+  // Section 5: Tags
   const [tags, setTags] = useState<Array<{ key: string; value: string }>>([]);
 
+  // Submission state
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -541,20 +411,31 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
   // Auto-generate name from service + operation + SLI type
   const generatedName = useMemo(() => {
     const typeName =
-      sliType === 'availability'
+      sliState.sliType === 'availability'
         ? 'Availability'
-        : sliType === 'latency_p99'
-          ? 'p99 Latency'
-          : sliType === 'latency_p90'
-            ? 'p90 Latency'
-            : 'p50 Latency';
-    const parts = [service, operation, typeName].filter(Boolean);
+        : sliState.sliType === 'latency_p99'
+        ? 'p99 Latency'
+        : sliState.sliType === 'latency_p90'
+        ? 'p90 Latency'
+        : 'p50 Latency';
+    const parts = [sliState.service, sliState.operation, typeName].filter(Boolean);
     return parts.length >= 2 ? parts.join(' — ') : '';
-  }, [service, operation, sliType]);
+  }, [sliState.service, sliState.operation, sliState.sliType]);
 
   const effectiveName = autoName ? generatedName : sloName;
 
-  // Build the SLO input for validation and preview
+  // Error budget display
+  const errorBudgetDisplay = useMemo(() => {
+    const targetDecimal = parseFloat(target) / 100;
+    if (isNaN(targetDecimal) || targetDecimal <= 0 || targetDecimal >= 1) return null;
+    try {
+      return formatErrorBudget(targetDecimal, windowDuration);
+    } catch {
+      return null;
+    }
+  }, [target, windowDuration]);
+
+  // Build the SLO input for validation and preview — derived from reducer state
   const sloInput: Partial<SloInput> = useMemo(() => {
     const tagMap: Record<string, string> = {};
     for (const t of tags) {
@@ -565,20 +446,29 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
       datasourceId,
       name: effectiveName,
       sli: {
-        type: sliType,
-        calcMethod,
-        sourceType,
-        metric: metric.trim(),
-        goodEventsFilter: sliType === 'availability' ? goodEventsFilter : undefined,
+        type: sliState.sliType,
+        calcMethod: sliState.calcMethod,
+        sourceType: sliState.sourceType,
+        metric: sliState.metric.trim(),
+        goodEventsFilter:
+          sliState.sliType === 'availability' ? sliState.goodEventsFilter : undefined,
         latencyThreshold:
-          sliType !== 'availability' ? parseFloat(latencyThreshold) || undefined : undefined,
-        service: { labelName: serviceLabelName, labelValue: service.trim() },
-        operation: { labelName: operationLabelName, labelValue: operation.trim() },
-        dependency:
-          sourceType === 'service_dependency'
-            ? { labelName: dependencyLabelName, labelValue: dependency.trim() }
+          sliState.sliType !== 'availability'
+            ? parseFloat(sliState.latencyThreshold) || undefined
             : undefined,
-        periodLength: calcMethod === 'good_periods' ? periodLength : undefined,
+        service: { labelName: sliState.serviceLabelName, labelValue: sliState.service.trim() },
+        operation: {
+          labelName: sliState.operationLabelName,
+          labelValue: sliState.operation.trim(),
+        },
+        dependency:
+          sliState.sourceType === 'service_dependency'
+            ? {
+                labelName: sliState.dependencyLabelName,
+                labelValue: sliState.dependency.trim(),
+              }
+            : undefined,
+        periodLength: sliState.calcMethod === 'good_periods' ? sliState.periodLength : undefined,
       },
       target: parseFloat(target) / 100, // UI shows %, store as decimal
       budgetWarningThreshold: parseFloat(budgetWarningThreshold) / 100,
@@ -591,19 +481,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
   }, [
     datasourceId,
     effectiveName,
-    sliType,
-    calcMethod,
-    sourceType,
-    metric,
-    service,
-    serviceLabelName,
-    operation,
-    operationLabelName,
-    goodEventsFilter,
-    latencyThreshold,
-    dependency,
-    dependencyLabelName,
-    periodLength,
+    sliState,
     target,
     budgetWarningThreshold,
     windowDuration,
@@ -619,51 +497,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
     [sloInput]
   );
   const isFormValid = Object.keys(validationErrors).length === 0;
-
-  // Field change handler for SLI section
-  const handleSliChange = useCallback((field: string, value: string) => {
-    switch (field) {
-      case 'sliType':
-        setSliType(value as SliType);
-        break;
-      case 'calcMethod':
-        setCalcMethod(value as SliCalcMethod);
-        break;
-      case 'sourceType':
-        setSourceType(value as SliSourceType);
-        break;
-      case 'metric':
-        setMetric(value);
-        break;
-      case 'service':
-        setService(value);
-        break;
-      case 'serviceLabelName':
-        setServiceLabelName(value);
-        break;
-      case 'operation':
-        setOperation(value);
-        break;
-      case 'operationLabelName':
-        setOperationLabelName(value);
-        break;
-      case 'goodEventsFilter':
-        setGoodEventsFilter(value);
-        break;
-      case 'latencyThreshold':
-        setLatencyThreshold(value);
-        break;
-      case 'dependency':
-        setDependency(value);
-        break;
-      case 'dependencyLabelName':
-        setDependencyLabelName(value);
-        break;
-      case 'periodLength':
-        setPeriodLength(value);
-        break;
-    }
-  }, []);
+  const sectionComplete = useMemo(() => getSectionErrors(validationErrors), [validationErrors]);
 
   // Submit
   const handleSubmit = useCallback(async () => {
@@ -673,7 +507,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await apiClient.createSlo(sloInput);
+      await apiClient.createSlo(sloInput as SloInput);
       onCreated();
       onClose();
     } catch (e: unknown) {
@@ -698,8 +532,9 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
           <h2 id="createSloTitle">Create Service Level Objective (SLO)</h2>
         </EuiTitle>
         <EuiText size="s" color="subdued">
-          Define your SLO and the system will generate Prometheus recording and alerting rules
-          automatically.
+          An SLO defines how reliable your service should be. Pick a template below, choose your
+          service and target, and the system generates Prometheus recording and alerting rules
+          automatically. Start with Section 1 and work your way down.
         </EuiText>
       </EuiFlyoutHeader>
 
@@ -731,27 +566,23 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
             {/* Section 1: Set SLI */}
             <EuiAccordion
               id="slo-section-sli"
-              buttonContent="Section 1 — Set Service Level Indicator (SLI)"
+              buttonContent={
+                <SectionButton
+                  label="Section 1 — Set Service Level Indicator (SLI)"
+                  isComplete={sectionComplete[1]}
+                  showIndicator={hasSubmitted || sectionComplete[1]}
+                />
+              }
               initialIsOpen
               paddingSize="m"
             >
               <SliSection
-                sliType={sliType}
-                calcMethod={calcMethod}
-                sourceType={sourceType}
-                metric={metric}
-                service={service}
-                serviceLabelName={serviceLabelName}
-                operation={operation}
-                operationLabelName={operationLabelName}
-                goodEventsFilter={goodEventsFilter}
-                latencyThreshold={latencyThreshold}
-                dependency={dependency}
-                dependencyLabelName={dependencyLabelName}
-                periodLength={periodLength}
+                datasourceId={datasourceId}
+                apiClient={apiClient}
+                sliState={sliState}
+                dispatch={sliDispatch}
                 hasSubmitted={hasSubmitted}
                 errors={validationErrors}
-                onChange={handleSliChange}
               />
             </EuiAccordion>
 
@@ -760,15 +591,34 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
             {/* Section 2: Set SLO */}
             <EuiAccordion
               id="slo-section-target"
-              buttonContent="Section 2 — Set Service Level Objective (SLO)"
+              buttonContent={
+                <SectionButton
+                  label="Section 2 — Set Service Level Objective (SLO)"
+                  isComplete={sectionComplete[2]}
+                  showIndicator={hasSubmitted || sectionComplete[2]}
+                />
+              }
               initialIsOpen
               paddingSize="m"
             >
+              <EuiCallOut
+                title="Setting your SLO target"
+                iconType="iInCircle"
+                size="s"
+                color="primary"
+              >
+                <p>
+                  The target defines what percentage of requests (or time periods) must be
+                  &quot;good&quot; within the measurement window. Common targets: 99.9% for
+                  user-facing APIs, 99.5% for internal services, 99.0% for batch jobs.
+                </p>
+              </EuiCallOut>
+              <EuiSpacer size="m" />
               <EuiFlexGroup gutterSize="m">
                 <EuiFlexItem>
                   <EuiFormRow
                     label="Attainment goal (%)"
-                    helpText="e.g. 99.9 for 99.9% availability"
+                    helpText="e.g. 99.9 for 99.9% availability — higher targets mean tighter error budgets"
                     isInvalid={hasSubmitted && !!validationErrors.target}
                     error={hasSubmitted ? validationErrors.target : undefined}
                   >
@@ -778,12 +628,38 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       min={90}
                       max={99.99}
                       step={0.01}
+                      aria-label="Attainment goal percentage"
                     />
                   </EuiFormRow>
+                  <EuiFlexGroup gutterSize="xs" responsive={false} style={{ marginTop: 4 }}>
+                    <EuiFlexItem grow={false}>
+                      <EuiText size="xs" color="subdued" style={{ lineHeight: '24px' }}>
+                        Quick set:
+                      </EuiText>
+                    </EuiFlexItem>
+                    {[
+                      { label: '99%', value: '99', hint: 'Batch jobs' },
+                      { label: '99.5%', value: '99.5', hint: 'Internal' },
+                      { label: '99.9%', value: '99.9', hint: 'User-facing' },
+                      { label: '99.95%', value: '99.95', hint: 'Critical' },
+                    ].map((preset) => (
+                      <EuiFlexItem key={preset.value} grow={false}>
+                        <EuiButtonEmpty
+                          size="xs"
+                          onClick={() => setTarget(preset.value)}
+                          isSelected={target === preset.value}
+                          aria-label={`Set target to ${preset.label} (${preset.hint})`}
+                        >
+                          {preset.label}
+                        </EuiButtonEmpty>
+                      </EuiFlexItem>
+                    ))}
+                  </EuiFlexGroup>
                 </EuiFlexItem>
                 <EuiFlexItem>
                   <EuiFormRow
-                    label="Warn when error budget falls below (%)"
+                    label="Budget warning threshold (%)"
+                    helpText="Alert when remaining error budget drops below this — e.g. 30 means warn at 30% remaining"
                     isInvalid={hasSubmitted && !!validationErrors.budgetWarningThreshold}
                   >
                     <EuiFieldNumber
@@ -792,6 +668,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       min={1}
                       max={99}
                       step={1}
+                      aria-label="Budget warning threshold percentage"
                     />
                   </EuiFormRow>
                 </EuiFlexItem>
@@ -802,8 +679,29 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                   options={WINDOW_DURATION_OPTIONS}
                   value={windowDuration}
                   onChange={(e) => setWindowDuration(e.target.value)}
+                  aria-label="Measurement window duration"
                 />
               </EuiFormRow>
+              {errorBudgetDisplay && (
+                <>
+                  <EuiSpacer size="m" />
+                  <EuiPanel color="subdued" paddingSize="m" hasBorder>
+                    <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                      <EuiFlexItem grow={false}>
+                        <EuiIcon type="clock" size="l" color="primary" />
+                      </EuiFlexItem>
+                      <EuiFlexItem>
+                        <EuiText size="s">
+                          <strong>{errorBudgetDisplay.formatted}</strong>
+                        </EuiText>
+                        <EuiText size="xs" color="subdued">
+                          Total allowable downtime within the measurement window
+                        </EuiText>
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                  </EuiPanel>
+                </>
+              )}
             </EuiAccordion>
 
             <EuiSpacer size="m" />
@@ -811,7 +709,13 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
             {/* Section 3: Set Name */}
             <EuiAccordion
               id="slo-section-name"
-              buttonContent="Section 3 — Set SLO Name"
+              buttonContent={
+                <SectionButton
+                  label="Section 3 — Set SLO Name"
+                  isComplete={sectionComplete[3]}
+                  showIndicator={hasSubmitted || sectionComplete[3]}
+                />
+              }
               initialIsOpen
               paddingSize="m"
             >
@@ -827,6 +731,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                     setSloName(e.target.value);
                   }}
                   placeholder="Auto-generated from service + operation"
+                  aria-label="SLO name"
                 />
               </EuiFormRow>
               {!autoName && generatedName && (
@@ -855,13 +760,20 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
             {/* Section 4: Burn Rate & Alarms */}
             <EuiAccordion
               id="slo-section-burnrate"
-              buttonContent="Section 4 — Set Expected Burn Rate and Alarms"
+              buttonContent={
+                <SectionButton
+                  label="Section 4 — Set Expected Burn Rate and Alarms"
+                  isComplete={sectionComplete[4]}
+                  showIndicator={hasSubmitted || sectionComplete[4]}
+                />
+              }
               initialIsOpen
               paddingSize="m"
             >
               <BurnRateSection
                 burnRates={burnRates}
                 alarms={alarms}
+                windowDuration={windowDuration}
                 hasSubmitted={hasSubmitted}
                 errors={validationErrors}
                 onBurnRatesChange={setBurnRates}
@@ -890,6 +802,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       placeholder="Key"
                       value={tag.key}
                       onChange={(e) => updateTag(i, 'key', e.target.value)}
+                      aria-label="Tag key"
                     />
                   </EuiFlexItem>
                   <EuiFlexItem>
@@ -898,6 +811,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       placeholder="Value"
                       value={tag.value}
                       onChange={(e) => updateTag(i, 'value', e.target.value)}
+                      aria-label="Tag value"
                     />
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>

@@ -64,7 +64,15 @@ import {
   handlePreviewSLORules,
   handleGetSLOStatuses,
 } from '../server/routes/slo_handlers';
+import {
+  handleGetMetricNames,
+  handleGetLabelNames,
+  handleGetLabelValues,
+  handleGetMetricMetadata,
+} from '../server/routes/metadata_handlers';
 import { SloService } from '../core/slo_service';
+import { PrometheusMetadataService } from '../core/prometheus_metadata_service';
+import type { PrometheusMetadataProvider } from '../core/types';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
@@ -180,6 +188,19 @@ async function initBackends(): Promise<void> {
   alertService.registerOpenSearch(osBackend);
   alertService.registerPrometheus(promBackend);
   datasourceService.setPrometheusBackend(promBackend);
+
+  // Initialize metadata service with the Prometheus backend (if it supports metadata)
+  const metadataProvider = promBackend as unknown as PrometheusMetadataProvider;
+  if (
+    metadataProvider &&
+    typeof metadataProvider.getMetricNames === 'function' &&
+    typeof metadataProvider.getLabelNames === 'function' &&
+    typeof metadataProvider.getLabelValues === 'function' &&
+    typeof metadataProvider.getMetricMetadata === 'function'
+  ) {
+    metadataService = new PrometheusMetadataService(metadataProvider, datasourceService, logger);
+    logger.info('PrometheusMetadataService initialized');
+  }
 }
 
 // Suppression service
@@ -187,6 +208,10 @@ const suppressionService = new SuppressionRuleService();
 
 // SLO service (mockMode aligns with MOCK_MODE env var)
 const sloService = new SloService(logger, MOCK_MODE);
+
+// Metadata service — initialized in initBackends() once the backend is known.
+// Declared here so routes can reference it; populated before server starts.
+let metadataService: PrometheusMetadataService | undefined;
 
 const app = express();
 app.use(express.json());
@@ -282,6 +307,51 @@ app.get('/api/datasources/:dsId/rules', async (req, res) => {
 });
 app.get('/api/datasources/:dsId/prom-alerts', async (req, res) => {
   const r = await handleGetPromAlerts(alertService, req.params.dsId);
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Prometheus Metadata Routes
+// ============================================================================
+
+app.get('/api/datasources/:dsId/metadata/metrics', async (req, res) => {
+  if (!metadataService) {
+    return res.json({ metrics: [], total: 0, truncated: false });
+  }
+  const search = req.query.search ? String(req.query.search) : undefined;
+  const r = await handleGetMetricNames(metadataService, req.params.dsId, search, logger);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/datasources/:dsId/metadata/labels', async (req, res) => {
+  if (!metadataService) {
+    return res.json({ labels: [] });
+  }
+  const metric = req.query.metric ? String(req.query.metric) : undefined;
+  const r = await handleGetLabelNames(metadataService, req.params.dsId, metric, logger);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/datasources/:dsId/metadata/label-values/:label', async (req, res) => {
+  if (!metadataService) {
+    return res.json({ values: [], total: 0, truncated: false });
+  }
+  const selector = req.query.selector ? String(req.query.selector) : undefined;
+  const r = await handleGetLabelValues(
+    metadataService,
+    req.params.dsId,
+    req.params.label,
+    selector,
+    logger
+  );
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/datasources/:dsId/metadata/metric-metadata', async (req, res) => {
+  if (!metadataService) {
+    return res.json({ metadata: [] });
+  }
+  const r = await handleGetMetricMetadata(metadataService, req.params.dsId, logger);
   res.status(r.status).json(r.body);
 });
 

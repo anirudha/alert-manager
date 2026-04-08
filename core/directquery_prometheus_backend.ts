@@ -25,6 +25,8 @@ import {
   Datasource,
   Logger,
   PrometheusBackend,
+  PrometheusMetadataProvider,
+  PrometheusMetricMetadata,
   PromAlert,
   PromAlertingRule,
   PromRecordingRule,
@@ -54,7 +56,7 @@ export interface DirectQueryConfig {
   rejectUnauthorized?: boolean;
 }
 
-export class DirectQueryPrometheusBackend implements PrometheusBackend {
+export class DirectQueryPrometheusBackend implements PrometheusBackend, PrometheusMetadataProvider {
   readonly type = 'prometheus' as const;
   private readonly http: HttpClient;
   private readonly baseUrl: string;
@@ -415,6 +417,120 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
   async getAlertmanagerStatus(): Promise<AlertmanagerStatus> {
     // Routes through DirectQuery: /_plugins/_directquery/_resources/{dsName}/alertmanager/api/v2/status
     return this.get<AlertmanagerStatus>(this.requireDefaultDs(), '/alertmanager/api/v2/status');
+  }
+
+  // =========================================================================
+  // Prometheus Metadata (PrometheusMetadataProvider)
+  // =========================================================================
+
+  async getMetricNames(ds: Datasource): Promise<string[]> {
+    try {
+      const data = await this.get<string[] | Record<string, unknown>>(
+        ds,
+        '/api/v1/label/__name__/values',
+        15_000
+      );
+      if (Array.isArray(data)) return data;
+      // Defensively handle wrapped response
+      if (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray((data as Record<string, unknown>).data)
+      ) {
+        return (data as Record<string, unknown>).data as string[];
+      }
+      return [];
+    } catch (err) {
+      this.logger.warn(`Failed to get metric names via DirectQuery: ${err}`);
+      return [];
+    }
+  }
+
+  async getLabelNames(ds: Datasource, metric?: string): Promise<string[]> {
+    try {
+      let path = '/api/v1/labels';
+      if (metric) {
+        // Validate metric name to prevent PromQL injection via selector breakout
+        if (!/^[a-zA-Z_:][a-zA-Z0-9_:]*$/.test(metric)) {
+          this.logger.warn(`Invalid metric name for getLabelNames: ${metric}`);
+          return [];
+        }
+        path = `/api/v1/labels?match[]=${encodeURIComponent(`{__name__="${metric}"}`)}`;
+      }
+      const data = await this.get<string[] | Record<string, unknown>>(ds, path, 10_000);
+      if (Array.isArray(data)) return data;
+      if (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray((data as Record<string, unknown>).data)
+      ) {
+        return (data as Record<string, unknown>).data as string[];
+      }
+      return [];
+    } catch (err) {
+      this.logger.warn(`Failed to get label names via DirectQuery: ${err}`);
+      return [];
+    }
+  }
+
+  async getLabelValues(ds: Datasource, labelName: string, selector?: string): Promise<string[]> {
+    try {
+      const enc = encodeURIComponent(labelName);
+      const path = selector
+        ? `/api/v1/label/${enc}/values?match[]=${encodeURIComponent(selector)}`
+        : `/api/v1/label/${enc}/values`;
+      const data = await this.get<string[] | Record<string, unknown>>(ds, path, 10_000);
+      if (Array.isArray(data)) return data;
+      if (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray((data as Record<string, unknown>).data)
+      ) {
+        return (data as Record<string, unknown>).data as string[];
+      }
+      return [];
+    } catch (err) {
+      this.logger.warn(`Failed to get label values for "${labelName}" via DirectQuery: ${err}`);
+      return [];
+    }
+  }
+
+  async getMetricMetadata(ds: Datasource): Promise<PrometheusMetricMetadata[]> {
+    try {
+      const raw = await this.get<Record<string, Array<{ type: string; help: string }>> | unknown>(
+        ds,
+        '/api/v1/metadata?limit=-1',
+        15_000
+      );
+      // The Prometheus /api/v1/metadata returns { metric: [{ type, help, unit }] }
+      // DirectQuery may wrap it in a `data` envelope — the get() helper already unwraps `data`.
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return [];
+      }
+      const record = raw as Record<string, Array<{ type?: string; help?: string }>>;
+      const result: PrometheusMetricMetadata[] = [];
+      for (const [metric, entries] of Object.entries(record)) {
+        if (!Array.isArray(entries) || entries.length === 0) continue;
+        const entry = entries[0];
+        const metricType = (entry?.type || 'unknown') as PrometheusMetricMetadata['type'];
+        const validTypes: PrometheusMetricMetadata['type'][] = [
+          'counter',
+          'gauge',
+          'histogram',
+          'summary',
+          'unknown',
+        ];
+        result.push({
+          metric,
+          type: validTypes.includes(metricType) ? metricType : 'unknown',
+          help: entry?.help || '',
+        });
+      }
+      return result;
+    } catch (err) {
+      this.logger.warn(`Failed to get metric metadata via DirectQuery: ${err}`);
+      return [];
+    }
   }
 
   // =========================================================================

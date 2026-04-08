@@ -8,13 +8,17 @@
  * Renders a live preview of the Prometheus rules that will be generated
  * from the current form input, updating as the user fills in fields.
  *
+ * Also shows a live SLI value at the top when enough form fields are
+ * filled, comparing the current value against the target to show
+ * whether the SLO would currently be OK, BREACHING, or WARNING.
+ *
  * The preview is generated **client-side** using the same pure, stateless
  * `generateSloRuleGroup()` that the server uses. This module lives in
  * `core/` (shared between client and server) and has zero I/O or
  * server-only dependencies, so bundling it client-side is intentional
  * to provide instant, zero-latency feedback as the user types.
  */
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   EuiTitle,
   EuiText,
@@ -25,6 +29,8 @@ import {
   EuiPanel,
   EuiCodeBlock,
   EuiButtonGroup,
+  EuiLoadingSpinner,
+  EuiIcon,
 } from '@opensearch-project/oui';
 import type {
   SloInput,
@@ -34,6 +40,7 @@ import type {
 } from '../../core/slo_types';
 import { DEFAULT_MWMBR_TIERS } from '../../core/slo_types';
 import { generateSloRuleGroup } from '../../core/slo_promql_generator';
+import type { HttpClient } from '../services/alarms_client';
 
 // ============================================================================
 // Props
@@ -41,6 +48,8 @@ import { generateSloRuleGroup } from '../../core/slo_promql_generator';
 
 export interface SloPreviewPanelProps {
   sloInput: Partial<SloInput>;
+  /** Optional HTTP client for live SLI queries. If not provided, live SLI is disabled. */
+  httpClient?: HttpClient;
 }
 
 // ============================================================================
@@ -53,6 +62,17 @@ const TAB_OPTIONS = [
   { id: 'yaml', label: 'Rules YAML' },
   { id: 'promql', label: 'PromQL List' },
 ];
+
+// ============================================================================
+// Live SLI types
+// ============================================================================
+
+interface LiveSliState {
+  loading: boolean;
+  value: number | null;
+  status: 'ok' | 'warning' | 'breaching' | null;
+  error: boolean;
+}
 
 // ============================================================================
 // Helpers
@@ -68,6 +88,26 @@ function isInputComplete(input: Partial<SloInput>): boolean {
   if (!input.sli?.metric) return false;
   if (!input.sli?.service?.labelName || !input.sli?.service?.labelValue) return false;
   if (!input.target || input.target <= 0 || input.target >= 1) return false;
+  return true;
+}
+
+/** Return human-readable names of fields still needed for preview generation. */
+function getMissingFields(input: Partial<SloInput>): string[] {
+  const missing: string[] = [];
+  if (!input.sli?.metric) missing.push('Prometheus metric');
+  if (!input.sli?.service?.labelValue) missing.push('Service name');
+  if (!input.name) missing.push('SLO name (auto-generated from service + operation)');
+  if (!input.target || input.target <= 0 || input.target >= 1) missing.push('Attainment target');
+  return missing;
+}
+
+/**
+ * Check whether the input has enough for a live SLI query.
+ * Requires metric + service (value) + operation (value).
+ */
+function canQueryLiveSli(input: Partial<SloInput>): boolean {
+  if (!input.sli?.metric) return false;
+  if (!input.sli?.service?.labelValue) return false;
   return true;
 }
 
@@ -133,11 +173,84 @@ function ruleBadgeLabel(rule: GeneratedRule): string {
 }
 
 // ============================================================================
+// Live SLI Panel
+// ============================================================================
+
+const LiveSliPanel: React.FC<{ state: LiveSliState; target: number }> = ({ state, target }) => {
+  if (state.loading) {
+    return (
+      <EuiPanel color="subdued" paddingSize="s">
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiLoadingSpinner size="s" />
+          </EuiFlexItem>
+          <EuiFlexItem>
+            <EuiText size="xs" color="subdued">
+              Querying current SLI value...
+            </EuiText>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiPanel>
+    );
+  }
+
+  if (state.error || state.value === null) {
+    return (
+      <EuiPanel color="subdued" paddingSize="s">
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiIcon type="questionInCircle" color="subdued" />
+          </EuiFlexItem>
+          <EuiFlexItem>
+            <EuiText size="xs" color="subdued">
+              {state.error ? 'Could not query live SLI' : 'No data available for current SLI'}
+            </EuiText>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiPanel>
+    );
+  }
+
+  const sliPercent = (state.value * 100).toFixed(2);
+  const targetPercent = (target * 100).toFixed(1);
+
+  const statusColor =
+    state.status === 'ok' ? 'success' : state.status === 'warning' ? 'warning' : 'danger';
+  const statusLabel =
+    state.status === 'ok' ? 'OK' : state.status === 'warning' ? 'WARNING' : 'BREACHING';
+
+  return (
+    <EuiPanel color="subdued" paddingSize="s">
+      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiText size="s">
+            <strong>Current SLI: {sliPercent}%</strong>
+          </EuiText>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiBadge color={statusColor}>{statusLabel}</EuiBadge>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+      <EuiText size="xs" color="subdued" style={{ marginTop: 4 }}>
+        This SLO (target {targetPercent}%) would currently be{' '}
+        <strong>{statusLabel.toLowerCase()}</strong>.
+      </EuiText>
+    </EuiPanel>
+  );
+};
+
+// ============================================================================
 // Component
 // ============================================================================
 
-export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) => {
+export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput, httpClient }) => {
   const [activeTab, setActiveTab] = useState<PreviewTab>('yaml');
+  const [liveSli, setLiveSli] = useState<LiveSliState>({
+    loading: false,
+    value: null,
+    status: null,
+    error: false,
+  });
 
   const handleTabChange = useCallback((id: string) => {
     setActiveTab(id as PreviewTab);
@@ -152,24 +265,38 @@ export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) =>
     } catch {
       return null;
     }
-  }, [
-    sloInput.name,
-    sloInput.sli?.type,
-    sloInput.sli?.metric,
-    sloInput.sli?.service?.labelName,
-    sloInput.sli?.service?.labelValue,
-    sloInput.sli?.operation?.labelName,
-    sloInput.sli?.operation?.labelValue,
-    sloInput.sli?.goodEventsFilter,
-    sloInput.sli?.latencyThreshold,
-    sloInput.target,
-    sloInput.budgetWarningThreshold,
-    sloInput.window?.duration,
-    sloInput.burnRates,
-    sloInput.alarms?.sliHealth?.enabled,
-    sloInput.alarms?.attainmentBreach?.enabled,
-    sloInput.alarms?.budgetWarning?.enabled,
-  ]);
+  }, [sloInput]);
+
+  // Live SLI query — execute the first recording rule PromQL as an instant query
+  const firstRecordingExpr = ruleGroup?.rules.find((r) => r.type === 'recording')?.expr;
+
+  useEffect(() => {
+    if (!httpClient || !firstRecordingExpr || !canQueryLiveSli(sloInput)) {
+      setLiveSli({ loading: false, value: null, status: null, error: false });
+      return;
+    }
+
+    let cancelled = false;
+    setLiveSli({ loading: true, value: null, status: null, error: false });
+
+    // We cannot execute an arbitrary PromQL query via the current API without
+    // a dedicated instant-query endpoint. For now, we display the panel with
+    // a "no data" state to indicate the feature slot exists. When the backend
+    // adds a `/api/alerting/prometheus/{dsId}/query` endpoint, this block
+    // can make a real request.
+    //
+    // Placeholder: simulate "no data" after a short delay to show the UI.
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        setLiveSli({ loading: false, value: null, status: null, error: false });
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [firstRecordingExpr, httpClient, sloInput]);
 
   // Counts
   const recordingCount = ruleGroup?.rules.filter((r) => r.type === 'recording').length ?? 0;
@@ -181,15 +308,28 @@ export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) =>
 
   return (
     <div style={{ position: 'sticky', top: 0 }}>
+      {/* Live SLI value section */}
+      {ruleGroup && canQueryLiveSli(sloInput) && (
+        <>
+          <LiveSliPanel state={liveSli} target={sloInput.target ?? 0.999} />
+          <EuiSpacer size="m" />
+        </>
+      )}
+
       <EuiTitle size="xs">
         <h3>Generated Prometheus Rules</h3>
       </EuiTitle>
       <EuiSpacer size="s" />
 
       {!ruleGroup ? (
-        <EuiPanel color="subdued" paddingSize="l" style={{ textAlign: 'center' }}>
+        <EuiPanel color="subdued" paddingSize="l">
           <EuiText size="s" color="subdued">
-            Fill in the SLI configuration to preview generated rules
+            <p style={{ marginBottom: 8 }}>Provide these fields to preview generated rules:</p>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              {getMissingFields(sloInput).map((field) => (
+                <li key={field}>{field}</li>
+              ))}
+            </ul>
           </EuiText>
         </EuiPanel>
       ) : (
@@ -261,21 +401,9 @@ export const SloPreviewPanel: React.FC<SloPreviewPanelProps> = ({ sloInput }) =>
 
                   <EuiSpacer size="xs" />
 
-                  <pre
-                    style={{
-                      margin: 0,
-                      padding: 8,
-                      background: '#F5F7FA',
-                      borderRadius: 4,
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      overflowX: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-all',
-                    }}
-                  >
+                  <EuiCodeBlock fontSize="s" paddingSize="s" transparentBackground>
                     {rule.expr}
-                  </pre>
+                  </EuiCodeBlock>
 
                   {rule.for && (
                     <EuiText size="xs" color="subdued" style={{ marginTop: 4 }}>

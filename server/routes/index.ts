@@ -52,6 +52,13 @@ import {
   handlePreviewSLORules,
   handleGetSLOStatuses,
 } from './slo_handlers';
+import {
+  handleGetMetricNames,
+  handleGetLabelNames,
+  handleGetLabelValues,
+  handleGetMetricMetadata,
+} from './metadata_handlers';
+import type { PrometheusMetadataService } from '../../core/prometheus_metadata_service';
 
 export function defineRoutes(
   router: IRouter,
@@ -59,7 +66,8 @@ export function defineRoutes(
   alertService: MultiBackendAlertService,
   sloService?: SloService,
   suppressionService?: SuppressionRuleService,
-  logger?: Logger
+  logger?: Logger,
+  metadataService?: PrometheusMetadataService
 ) {
   // Datasource routes
   router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
@@ -512,6 +520,83 @@ export function defineRoutes(
         return result.status === 200
           ? res.ok({ body: result.body })
           : res.notFound({ body: result.body });
+      }
+    );
+  }
+
+  // ===========================================================================
+  // Prometheus Metadata Routes
+  // ===========================================================================
+
+  if (metadataService) {
+    router.get(
+      {
+        path: '/api/alerting/prometheus/{dsId}/metadata/metrics',
+        validate: {
+          params: schema.object({ dsId: schema.string() }),
+          query: schema.object({ search: schema.maybe(schema.string()) }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleGetMetricNames(
+          metadataService,
+          req.params.dsId,
+          req.query.search || undefined,
+          logger
+        );
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.get(
+      {
+        path: '/api/alerting/prometheus/{dsId}/metadata/labels',
+        validate: {
+          params: schema.object({ dsId: schema.string() }),
+          query: schema.object({ metric: schema.maybe(schema.string()) }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleGetLabelNames(
+          metadataService,
+          req.params.dsId,
+          req.query.metric || undefined,
+          logger
+        );
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.get(
+      {
+        path: '/api/alerting/prometheus/{dsId}/metadata/label-values/{label}',
+        validate: {
+          params: schema.object({ dsId: schema.string(), label: schema.string() }),
+          query: schema.object({ selector: schema.maybe(schema.string()) }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleGetLabelValues(
+          metadataService,
+          req.params.dsId,
+          req.params.label,
+          req.query.selector || undefined,
+          logger
+        );
+        return res.ok({ body: result.body });
+      }
+    );
+
+    router.get(
+      {
+        path: '/api/alerting/prometheus/{dsId}/metadata/metric-metadata',
+        validate: {
+          params: schema.object({ dsId: schema.string() }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleGetMetricMetadata(metadataService, req.params.dsId, logger);
+        return res.ok({ body: result.body });
       }
     );
   }

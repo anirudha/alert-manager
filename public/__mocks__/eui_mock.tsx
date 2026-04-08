@@ -14,11 +14,12 @@ type Props = Record<string, unknown> & { children?: React.ReactNode; 'data-test-
 
 const stub =
   (name: string): React.FC<Props> =>
-  ({ children, 'data-test-subj': testSubj, ...rest }) => (
-    <div data-eui={name} data-test-subj={testSubj}>
-      {children}
-    </div>
-  );
+  ({ children, 'data-test-subj': testSubj, ...rest }) =>
+    (
+      <div data-eui={name} data-test-subj={testSubj}>
+        {children}
+      </div>
+    );
 
 // Specific components that need special HTML for role-based test queries
 export const EuiTab: React.FC<Props & { isSelected?: boolean; onClick?: () => void }> = ({
@@ -180,6 +181,28 @@ export const EuiFlyoutFooter = stub('EuiFlyoutFooter');
 export const EuiPopover = stub('EuiPopover');
 export const EuiContextMenuPanel = stub('EuiContextMenuPanel');
 export const EuiContextMenuItem = stub('EuiContextMenuItem');
+export const EuiCard: React.FC<
+  Props & {
+    title?: React.ReactNode;
+    icon?: React.ReactNode;
+    description?: React.ReactNode;
+    selectable?: { onClick?: () => void; isSelected?: boolean };
+    layout?: string;
+    titleSize?: string;
+    paddingSize?: string;
+  }
+> = ({ children, title, description, selectable, ...rest }) => (
+  <div data-eui="EuiCard" data-test-subj={rest['data-test-subj']}>
+    {title && <div>{title}</div>}
+    {description && <div>{description}</div>}
+    {children}
+    {selectable?.onClick && (
+      <button onClick={selectable.onClick} data-selected={selectable.isSelected}>
+        Select
+      </button>
+    )}
+  </div>
+);
 export const EuiConfirmModal: React.FC<
   Props & {
     title?: React.ReactNode;

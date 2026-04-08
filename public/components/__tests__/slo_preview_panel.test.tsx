@@ -67,9 +67,11 @@ describe('SloPreviewPanel', () => {
     expect(screen.getByText('Generated Prometheus Rules')).toBeDefined();
   });
 
-  it('shows placeholder message when input is incomplete', () => {
+  it('shows placeholder message with missing fields when input is incomplete', () => {
     render(<SloPreviewPanel sloInput={incompleteInput} />);
-    expect(screen.getByText(/Fill in the SLI configuration/)).toBeDefined();
+    expect(screen.getByText(/Provide these fields to preview/)).toBeDefined();
+    expect(screen.getByText(/Prometheus metric/)).toBeDefined();
+    expect(screen.getByText(/Service name/)).toBeDefined();
   });
 
   it('generates rules when input is complete', async () => {
@@ -116,12 +118,13 @@ describe('SloPreviewPanel', () => {
       target: 1.5, // invalid
     };
     render(<SloPreviewPanel sloInput={badInput} />);
-    expect(screen.getByText(/Fill in the SLI configuration/)).toBeDefined();
+    expect(screen.getByText(/Provide these fields to preview/)).toBeDefined();
+    expect(screen.getByText(/Attainment target/)).toBeDefined();
   });
 
   it('handles empty name gracefully', () => {
     const noName: Partial<SloInput> = { ...completeInput, name: '' };
     render(<SloPreviewPanel sloInput={noName} />);
-    expect(screen.getByText(/Fill in the SLI configuration/)).toBeDefined();
+    expect(screen.getByText(/Provide these fields to preview/)).toBeDefined();
   });
 });
