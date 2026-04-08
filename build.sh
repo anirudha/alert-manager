@@ -86,6 +86,13 @@ cat > "$BUILD_DIR/tsconfig.server.json" << TSCONF
 }
 TSCONF
 
+# Strip ignoreDeprecations if TS < 5 (option added in TS 5.0)
+TS_MAJOR=$(node -e "console.log(require('typescript').version.split('.')[0])")
+if [ "$TS_MAJOR" -lt 5 ] 2>/dev/null; then
+  sed -i.bak '/"ignoreDeprecations"/d' "$BUILD_DIR/tsconfig.server.json"
+  rm -f "$BUILD_DIR/tsconfig.server.json.bak"
+fi
+
 npx tsc --project "$BUILD_DIR/tsconfig.server.json" 2>&1 || {
   echo "Server compilation failed, trying with skipLibCheck..."
   npx tsc --project "$BUILD_DIR/tsconfig.server.json" --skipLibCheck 2>&1 || exit 1

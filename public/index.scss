@@ -1,1 +1,5 @@
-/* stylelint-disable no-empty-source */
+/* Prevent horizontal scrolling on all pages */
+.euiPage {
+  overflow-x: hidden;
+  max-width: 100%;
+}

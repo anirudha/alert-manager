@@ -1192,12 +1192,12 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   role="button"
                   style={{
                     cursor: 'pointer',
-                    outline:
+                    boxShadow:
                       severityFilter === 'all' &&
                       stateFilter === 'all' &&
                       filters.severity.length === 0 &&
                       filters.state.length === 0
-                        ? '2px solid #006BB4'
+                        ? 'inset 0 0 0 2px #006BB4'
                         : 'none',
                     backgroundColor:
                       severityFilter === 'all' &&
@@ -1237,7 +1237,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   role="button"
                   style={{
                     cursor: 'pointer',
-                    outline: stateFilter === 'active' ? '2px solid #BD271E' : 'none',
+                    boxShadow: stateFilter === 'active' ? 'inset 0 0 0 2px #BD271E' : 'none',
                     backgroundColor: stateFilter === 'active' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
@@ -1276,7 +1276,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   role="button"
                   style={{
                     cursor: 'pointer',
-                    outline: severityFilter === 'critical' ? '2px solid #BD271E' : 'none',
+                    boxShadow: severityFilter === 'critical' ? 'inset 0 0 0 2px #BD271E' : 'none',
                     backgroundColor: severityFilter === 'critical' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
@@ -1315,7 +1315,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   role="button"
                   style={{
                     cursor: 'pointer',
-                    outline: severityFilter === 'high' ? '2px solid #F5A700' : 'none',
+                    boxShadow: severityFilter === 'high' ? 'inset 0 0 0 2px #F5A700' : 'none',
                     backgroundColor: severityFilter === 'high' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}
@@ -1354,7 +1354,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                   role="button"
                   style={{
                     cursor: 'pointer',
-                    outline: severityFilter === 'medium' ? '2px solid #006BB4' : 'none',
+                    boxShadow: severityFilter === 'medium' ? 'inset 0 0 0 2px #006BB4' : 'none',
                     backgroundColor: severityFilter === 'medium' ? '#E6F0FF' : undefined,
                     borderRadius: 6,
                   }}

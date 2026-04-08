@@ -1231,8 +1231,8 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                         }}
                         style={{
                           cursor: 'pointer',
-                          outline:
-                            !statFilter || statFilter === 'all' ? '2px solid #006BB4' : 'none',
+                          boxShadow:
+                            !statFilter || statFilter === 'all' ? 'inset 0 0 0 2px #006BB4' : 'none',
                           backgroundColor:
                             !statFilter || statFilter === 'all' ? '#E6F0FF' : undefined,
                           borderRadius: 6,
@@ -1260,7 +1260,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                         }}
                         style={{
                           cursor: 'pointer',
-                          outline: statFilter === 'breached' ? '2px solid #BD271E' : 'none',
+                          boxShadow: statFilter === 'breached' ? 'inset 0 0 0 2px #BD271E' : 'none',
                           backgroundColor: statFilter === 'breached' ? '#E6F0FF' : undefined,
                           borderRadius: 6,
                         }}
@@ -1297,7 +1297,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                         }}
                         style={{
                           cursor: 'pointer',
-                          outline: statFilter === 'warning' ? '2px solid #F5A700' : 'none',
+                          boxShadow: statFilter === 'warning' ? 'inset 0 0 0 2px #F5A700' : 'none',
                           backgroundColor: statFilter === 'warning' ? '#E6F0FF' : undefined,
                           borderRadius: 6,
                         }}
@@ -1333,7 +1333,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                         }}
                         style={{
                           cursor: 'pointer',
-                          outline: statFilter === 'ok' ? '2px solid #017D73' : 'none',
+                          boxShadow: statFilter === 'ok' ? 'inset 0 0 0 2px #017D73' : 'none',
                           backgroundColor: statFilter === 'ok' ? '#E6F0FF' : undefined,
                           borderRadius: 6,
                         }}
@@ -1365,7 +1365,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                         }}
                         style={{
                           cursor: 'pointer',
-                          outline: statFilter === 'no_data' ? '2px solid #98A2B3' : 'none',
+                          boxShadow: statFilter === 'no_data' ? 'inset 0 0 0 2px #98A2B3' : 'none',
                           backgroundColor: statFilter === 'no_data' ? '#E6F0FF' : undefined,
                           borderRadius: 6,
                         }}
