@@ -21,8 +21,10 @@ import {
   SloService,
   SuppressionRuleService,
   Logger as AlarmsLogger,
+  PrometheusMetadataProvider,
 } from '../core';
 import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
+import { PrometheusMetadataService } from '../core/prometheus_metadata_service';
 import { SavedObjectSloStore } from './slo_saved_object_store';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -215,7 +217,9 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
         .then(async (discovered) => {
           if (discovered.length > 0) {
             this.logger.info(
-              `alertManager: Auto-discovered ${discovered.length} Prometheus datasource(s): ${discovered.map((d) => d.name).join(', ')}`
+              `alertManager: Auto-discovered ${
+                discovered.length
+              } Prometheus datasource(s): ${discovered.map((d) => d.name).join(', ')}`
             );
             datasourceService.seed(discovered);
             // Set first Prometheus datasource as default for Alertmanager operations
@@ -242,7 +246,26 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     }
 
     const suppressionService = new SuppressionRuleService();
-    defineRoutes(router, datasourceService, alertService, sloService, suppressionService, logger);
+
+    // Create metadata service if the Prometheus backend supports metadata discovery.
+    // Both MockPrometheusBackend and DirectQueryPrometheusBackend implement
+    // PrometheusMetadataProvider, so this will work in both mock and live modes.
+    let metadataService: PrometheusMetadataService | undefined;
+    const promBackendRef = alertService.getPrometheusBackend();
+    if (promBackendRef && isMetadataProvider(promBackendRef)) {
+      metadataService = new PrometheusMetadataService(promBackendRef, datasourceService, logger);
+      this.logger.info('alertManager: PrometheusMetadataService initialized');
+    }
+
+    defineRoutes(
+      router,
+      datasourceService,
+      alertService,
+      sloService,
+      suppressionService,
+      logger,
+      metadataService
+    );
 
     return {};
   }
@@ -278,4 +301,16 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
   }
 
   public stop() {}
+}
+
+/** Runtime check for PrometheusMetadataProvider interface. */
+function isMetadataProvider(obj: unknown): obj is PrometheusMetadataProvider {
+  if (!obj || typeof obj !== 'object') return false;
+  const candidate = obj as Record<string, unknown>;
+  return (
+    typeof candidate.getMetricNames === 'function' &&
+    typeof candidate.getLabelNames === 'function' &&
+    typeof candidate.getLabelValues === 'function' &&
+    typeof candidate.getMetricMetadata === 'function'
+  );
 }

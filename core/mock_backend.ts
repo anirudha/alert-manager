@@ -11,6 +11,8 @@ import {
   Logger,
   OpenSearchBackend,
   PrometheusBackend,
+  PrometheusMetadataProvider,
+  PrometheusMetricMetadata,
   PrometheusWorkspace,
   AlertmanagerStatus,
   OSMonitor,
@@ -20,6 +22,7 @@ import {
   PromAlertingRule,
   PromRuleGroup,
 } from './types';
+import { MOCK_METRICS, MOCK_LABEL_NAMES, MOCK_LABEL_VALUES } from './mock_data';
 
 let idCounter = 100;
 const nextId = () => `mock-${++idCounter}`;
@@ -817,7 +820,7 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
 // Mock Prometheus / AMP Backend
 // ============================================================================
 
-export class MockPrometheusBackend implements PrometheusBackend {
+export class MockPrometheusBackend implements PrometheusBackend, PrometheusMetadataProvider {
   readonly type = 'prometheus' as const;
   private ruleGroups: Map<string, PromRuleGroup[]> = new Map();
   private activeAlerts: Map<string, PromAlert[]> = new Map();
@@ -1169,6 +1172,38 @@ export class MockPrometheusBackend implements PrometheusBackend {
     this.activeAlerts.set(dsId, active);
   }
 
+  // ---- PrometheusMetadataProvider methods ----
+
+  async getMetricNames(_ds: Datasource): Promise<string[]> {
+    return [...MOCK_METRICS];
+  }
+
+  async getLabelNames(_ds: Datasource, metric?: string): Promise<string[]> {
+    // In a real backend, label names would be filtered by metric.
+    // For mock mode, return all label names but optionally filter some out
+    // if a metric is provided (simulate a smaller set).
+    if (metric) {
+      // Return a subset — the labels most likely to exist on any metric
+      return MOCK_LABEL_NAMES.filter(
+        (l) => !['cpu', 'mode', 'device', 'mountpoint', 'fstype', 'le', 'quantile'].includes(l)
+      );
+    }
+    return [...MOCK_LABEL_NAMES];
+  }
+
+  async getLabelValues(_ds: Datasource, labelName: string, _selector?: string): Promise<string[]> {
+    const values = MOCK_LABEL_VALUES[labelName];
+    return values ? [...values] : [];
+  }
+
+  async getMetricMetadata(_ds: Datasource): Promise<PrometheusMetricMetadata[]> {
+    return MOCK_METRICS.map((metric) => ({
+      metric,
+      type: inferMetricType(metric),
+      help: `Mock help text for ${metric}`,
+    }));
+  }
+
   async getAlertmanagerStatus(): Promise<AlertmanagerStatus> {
     return {
       cluster: {
@@ -1218,4 +1253,26 @@ export class MockPrometheusBackend implements PrometheusBackend {
       versionInfo: { version: '0.27.0', branch: 'HEAD', buildDate: '2024-03-15' },
     };
   }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Infer Prometheus metric type from name suffix heuristics. */
+function inferMetricType(name: string): PrometheusMetricMetadata['type'] {
+  if (name.endsWith('_total') || name.endsWith('_count')) return 'counter';
+  if (name.endsWith('_bucket')) return 'histogram';
+  if (name.endsWith('_sum')) return 'counter'; // histogram/summary sub-metric
+  if (
+    name.endsWith('_bytes') ||
+    name.endsWith('_seconds') ||
+    name.endsWith('_ratio') ||
+    name.endsWith('_percent') ||
+    name.endsWith('_info') ||
+    name === 'up'
+  )
+    return 'gauge';
+  if (name.includes('duration') || name.includes('latency')) return 'histogram';
+  return 'gauge'; // default assumption for unknown metrics
 }

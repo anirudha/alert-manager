@@ -110,8 +110,9 @@ export function validateSloFormFull(input: Partial<SloInput>): SloValidationResu
 
   // SLI type enum validation (runtime boundary check)
   if (input.sli?.type && !(VALID_SLI_TYPES as readonly string[]).includes(input.sli.type)) {
-    errors['sli.type'] =
-      `Invalid SLI type "${input.sli.type}". Must be one of: ${VALID_SLI_TYPES.join(', ')}`;
+    errors['sli.type'] = `Invalid SLI type "${
+      input.sli.type
+    }". Must be one of: ${VALID_SLI_TYPES.join(', ')}`;
   }
 
   // SLI calcMethod enum validation
@@ -119,8 +120,9 @@ export function validateSloFormFull(input: Partial<SloInput>): SloValidationResu
     input.sli?.calcMethod &&
     !(VALID_CALC_METHODS as readonly string[]).includes(input.sli.calcMethod)
   ) {
-    errors['sli.calcMethod'] =
-      `Invalid calc method "${input.sli.calcMethod}". Must be one of: ${VALID_CALC_METHODS.join(', ')}`;
+    errors['sli.calcMethod'] = `Invalid calc method "${
+      input.sli.calcMethod
+    }". Must be one of: ${VALID_CALC_METHODS.join(', ')}`;
   }
 
   // SLI sourceType enum validation
@@ -128,8 +130,9 @@ export function validateSloFormFull(input: Partial<SloInput>): SloValidationResu
     input.sli?.sourceType &&
     !(VALID_SOURCE_TYPES as readonly string[]).includes(input.sli.sourceType)
   ) {
-    errors['sli.sourceType'] =
-      `Invalid source type "${input.sli.sourceType}". Must be one of: ${VALID_SOURCE_TYPES.join(', ')}`;
+    errors['sli.sourceType'] = `Invalid source type "${
+      input.sli.sourceType
+    }". Must be one of: ${VALID_SOURCE_TYPES.join(', ')}`;
   }
 
   // SLI metric
@@ -181,6 +184,15 @@ export function validateSloFormFull(input: Partial<SloInput>): SloValidationResu
       'Label value must not contain double quotes, backslashes, or newlines';
   }
 
+  // Good events filter — prevent PromQL injection.
+  // The filter is interpolated raw into PromQL selectors via buildGoodLabelMatchers().
+  // Allow standard label matcher syntax (label_name op "value") but reject
+  // characters that could break out of the selector context.
+  if (input.sli?.goodEventsFilter && /[{}()\n\\]/.test(input.sli.goodEventsFilter)) {
+    errors['sli.goodEventsFilter'] =
+      'Good events filter must not contain curly braces, parentheses, backslashes, or newlines';
+  }
+
   // Latency threshold (for latency SLIs)
   if (
     input.sli?.type &&
@@ -199,7 +211,9 @@ export function validateSloFormFull(input: Partial<SloInput>): SloValidationResu
   ) {
     warnings['sli.latencyThreshold'] =
       'Latency threshold is in seconds (Prometheus convention). ' +
-      `A value of ${input.sli.latencyThreshold} seems high — did you mean ${input.sli.latencyThreshold / 1000}s (${input.sli.latencyThreshold}ms)?`;
+      `A value of ${input.sli.latencyThreshold} seems high — did you mean ${
+        input.sli.latencyThreshold / 1000
+      }s (${input.sli.latencyThreshold}ms)?`;
   }
 
   // Alarms (required to avoid runtime TypeError in the generator)
@@ -271,12 +285,16 @@ function validateBurnRate(
   if (tier.shortWindow && shortMs > 0 && !RECORDING_WINDOWS.includes(tier.shortWindow)) {
     warnings[`${prefix}.shortWindow`] =
       `Short window "${tier.shortWindow}" does not match a recording rule window ` +
-      `(${RECORDING_WINDOWS.join(', ')}). The generated alert will reference a non-existent recording rule.`;
+      `(${RECORDING_WINDOWS.join(
+        ', '
+      )}). The generated alert will reference a non-existent recording rule.`;
   }
   if (tier.longWindow && longMs > 0 && !RECORDING_WINDOWS.includes(tier.longWindow)) {
     warnings[`${prefix}.longWindow`] =
       `Long window "${tier.longWindow}" does not match a recording rule window ` +
-      `(${RECORDING_WINDOWS.join(', ')}). The generated alert will reference a non-existent recording rule.`;
+      `(${RECORDING_WINDOWS.join(
+        ', '
+      )}). The generated alert will reference a non-existent recording rule.`;
   }
 
   // Burn rate multiplier

@@ -397,6 +397,27 @@ export interface AlertmanagerReceiver {
 }
 
 // ============================================================================
+// Prometheus Metric Metadata
+// ============================================================================
+
+/**
+ * Metric metadata from the Prometheus `/api/v1/metadata` endpoint.
+ *
+ * Used by the SLO creation wizard to auto-detect metric types and suggest
+ * appropriate SLI configurations. When metadata is unavailable (e.g. the
+ * Prometheus instance doesn't expose metadata, or the API call fails),
+ * the system falls back to suffix-based heuristics in `detectMetricType()`.
+ */
+export interface PrometheusMetricMetadata {
+  /** Prometheus metric name (e.g. "http_requests_total"). */
+  metric: string;
+  /** Metric type as reported by the Prometheus metadata API. */
+  type: 'counter' | 'gauge' | 'histogram' | 'summary' | 'unknown';
+  /** Human-readable help string from the HELP comment in the metrics exposition. */
+  help: string;
+}
+
+// ============================================================================
 // Prometheus API response shapes (for backend parsing)
 // ============================================================================
 
@@ -667,6 +688,18 @@ export interface UnifiedFetchOptions {
   pageSize?: number;
   /** Maximum total results to return. Defaults to 5000. Prevents unbounded responses. */
   maxResults?: number;
+}
+
+// ============================================================================
+// Prometheus Metadata Provider
+// ============================================================================
+
+/** Separate interface for metadata discovery — keeps PrometheusBackend clean. */
+export interface PrometheusMetadataProvider {
+  getMetricNames(ds: Datasource): Promise<string[]>;
+  getLabelNames(ds: Datasource, metric?: string): Promise<string[]>;
+  getLabelValues(ds: Datasource, labelName: string, selector?: string): Promise<string[]>;
+  getMetricMetadata(ds: Datasource): Promise<PrometheusMetricMetadata[]>;
 }
 
 // ============================================================================

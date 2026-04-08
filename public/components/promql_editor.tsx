@@ -23,6 +23,11 @@ import {
   validatePromQL as coreValidatePromQL,
   prettifyPromQL as corePrettifyPromQL,
 } from '../../core/promql_validator';
+import {
+  MOCK_METRICS as MOCK_METRICS_READONLY,
+  MOCK_LABEL_NAMES as MOCK_LABEL_NAMES_READONLY,
+  MOCK_LABEL_VALUES as MOCK_LABEL_VALUES_READONLY,
+} from '../../core/mock_data';
 
 // ============================================================================
 // PromQL Language Data
@@ -237,95 +242,13 @@ const PROMQL_OPERATORS = [
   '^',
 ];
 
-// Mock metric names (simulating what a real Prometheus metadata API would return)
-export const MOCK_METRICS = [
-  'node_cpu_seconds_total',
-  'node_memory_MemTotal_bytes',
-  'node_memory_MemAvailable_bytes',
-  'node_memory_MemFree_bytes',
-  'node_filesystem_avail_bytes',
-  'node_filesystem_size_bytes',
-  'node_disk_read_bytes_total',
-  'node_disk_written_bytes_total',
-  'node_network_receive_bytes_total',
-  'node_network_transmit_bytes_total',
-  'node_network_receive_drop_total',
-  'node_load1',
-  'node_load5',
-  'node_load15',
-  'http_requests_total',
-  'http_request_duration_seconds_bucket',
-  'http_request_duration_seconds_sum',
-  'http_request_duration_seconds_count',
-  'http_request_size_bytes',
-  'http_response_size_bytes',
-  'up',
-  'scrape_duration_seconds',
-  'scrape_samples_scraped',
-  'process_cpu_seconds_total',
-  'process_resident_memory_bytes',
-  'process_open_fds',
-  'go_goroutines',
-  'go_gc_duration_seconds',
-  'go_memstats_alloc_bytes',
-  'kube_pod_container_status_restarts_total',
-  'kube_pod_status_phase',
-  'kube_deployment_status_replicas',
-  'kube_node_status_condition',
-  'kube_pod_container_resource_limits',
-  'kube_pod_container_resource_requests',
-  'db_connection_pool_available',
-  'db_connection_pool_total',
-  'db_query_duration_seconds',
-  'probe_ssl_earliest_cert_expiry',
-  'probe_http_duration_seconds',
-  'probe_success',
-  'container_cpu_usage_seconds_total',
-  'container_memory_usage_bytes',
-  'container_network_receive_bytes_total',
-];
-
-export const MOCK_LABEL_NAMES = [
-  'instance',
-  'job',
-  'mode',
-  'cpu',
-  'device',
-  'mountpoint',
-  'fstype',
-  'severity',
-  'alertname',
-  'team',
-  'service',
-  'environment',
-  'region',
-  'namespace',
-  'pod',
-  'container',
-  'node',
-  'le',
-  'quantile',
-  'method',
-  'status',
-  'handler',
-  'code',
-  'application',
-];
-
-export const MOCK_LABEL_VALUES: Record<string, string[]> = {
-  instance: ['i-0abc123:9100', 'i-0def456:9100', 'i-0ghi789:9100', 'api-gateway:8080'],
-  job: ['node-exporter', 'prometheus', 'api-gateway', 'kubernetes', 'blackbox-exporter'],
-  mode: ['idle', 'user', 'system', 'iowait', 'nice', 'irq', 'softirq', 'steal'],
-  severity: ['critical', 'warning', 'info'],
-  team: ['infra', 'platform', 'sre', 'security', 'data', 'network'],
-  service: ['node-exporter', 'api-gateway', 'kubernetes', 'postgres', 'blackbox-exporter'],
-  environment: ['production', 'staging', 'development'],
-  region: ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'],
-  namespace: ['production', 'staging', 'kube-system', 'monitoring'],
-  method: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  status: ['200', '201', '301', '400', '401', '403', '404', '500', '502', '503'],
-  application: ['checkout', 'platform', 'user-service', 'order-service', 'observability'],
-};
+// Re-export mock data from core/mock_data.ts (single source of truth).
+// Mutable copies are used here because existing code mutates arrays.
+export const MOCK_METRICS: string[] = [...MOCK_METRICS_READONLY];
+export const MOCK_LABEL_NAMES: string[] = [...MOCK_LABEL_NAMES_READONLY];
+export const MOCK_LABEL_VALUES: Record<string, string[]> = Object.fromEntries(
+  Object.entries(MOCK_LABEL_VALUES_READONLY).map(([k, v]) => [k, [...v]])
+);
 
 // ============================================================================
 // Syntax Highlighting
@@ -865,15 +788,15 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
                   err.severity === 'error'
                     ? 'crossInACircleFilled'
                     : err.severity === 'warning'
-                      ? 'alert'
-                      : 'iInCircle'
+                    ? 'alert'
+                    : 'iInCircle'
                 }
                 color={
                   err.severity === 'error'
                     ? 'danger'
                     : err.severity === 'warning'
-                      ? 'warning'
-                      : 'subdued'
+                    ? 'warning'
+                    : 'subdued'
                 }
                 size="s"
               />
