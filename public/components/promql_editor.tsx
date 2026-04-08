@@ -18,7 +18,7 @@ import {
   EuiIcon,
   EuiBadge,
   EuiPanel,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import {
   validatePromQL as coreValidatePromQL,
   prettifyPromQL as corePrettifyPromQL,

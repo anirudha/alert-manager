@@ -35,7 +35,7 @@ import {
   EuiHorizontalRule,
   EuiIcon,
   EuiLoadingContent,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import {
   UnifiedRule,
   UnifiedAlertSeverity,

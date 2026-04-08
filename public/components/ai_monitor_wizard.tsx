@@ -38,7 +38,7 @@ import {
   EuiSelect,
   EuiFieldText,
   EuiFormRow,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { MOCK_METRICS } from './promql_editor';
 import { UnifiedAlertSeverity } from '../../core';
 

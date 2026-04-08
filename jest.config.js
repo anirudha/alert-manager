@@ -38,7 +38,6 @@ module.exports = {
         '^.*/src/plugins/navigation/public$': '<rootDir>/public/__mocks__/osd_navigation.ts',
         // Mock EUI / OUI components
         '^@elastic/eui$': '<rootDir>/public/__mocks__/eui_mock.tsx',
-        '^@opensearch-project/oui$': '<rootDir>/public/__mocks__/eui_mock.tsx',
         // Mock moment (provided by OSD at runtime)
         '^moment$': '<rootDir>/public/__mocks__/style_mock.ts',
         // Mock style imports

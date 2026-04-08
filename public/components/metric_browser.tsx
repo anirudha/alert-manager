@@ -22,7 +22,7 @@ import {
   EuiIcon,
   EuiButtonEmpty,
   EuiAccordion,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { MOCK_METRICS, MOCK_LABEL_NAMES, MOCK_LABEL_VALUES } from './promql_editor';
 
 // ============================================================================

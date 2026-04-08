@@ -30,7 +30,7 @@ import {
   EuiIcon,
   EuiToolTip,
   EuiLink,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { UnifiedAlert, Datasource } from '../../core';
 import { AlarmsApiClient } from '../services/alarms_client';
 

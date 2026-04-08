@@ -33,14 +33,15 @@ This project uses specialized AI agents defined in `AGENTS.md` for different tas
 ## Quick Reference
 
 ```bash
-npm test                          # Run all unit tests (Jest, 30 files, 816 tests)
+npm test                          # Run all unit tests (Jest, 31 files, 864 tests)
 npm run test:coverage             # Unit tests with coverage (80%+ branches, 90%+ lines/functions/statements)
 npm run e2e                       # Cypress E2E against standalone (MOCK_MODE, port 5603), 55 tests
 ./scripts/e2e-osd.sh              # Full OSD E2E: teardown + rebuild + clean stack + Cypress
 ./scripts/e2e-osd.sh --running    # OSD E2E against already-running stack (no teardown)
 ./scripts/e2e-osd.sh --no-rebuild # OSD E2E: teardown + restart, skip plugin build
 npm run build:standalone          # Build standalone server
-./build.sh                        # Build OSD plugin zip (build/alertManager.zip)
+yarn plugin-helpers build         # Build OSD plugin zip (uses standard OSD optimizer)
+./build.sh                        # Thin wrapper: auto-detects OSD version + runs plugin-helpers build
 ```
 
 ## Local OSD Development (with Observability Stack)
@@ -73,7 +74,7 @@ yarn start --config config/opensearch_dashboards.dev.yml
 - `core/` -- Backend-agnostic services, types, and business logic
 - `server/` -- OSD plugin server (routes, saved objects, plugin lifecycle)
 - `standalone/` -- Express server with its own `package.json` and build
-- `stubs/` -- OSD type stubs for out-of-tree compilation
+- `stubs/` -- OSD type stubs for Jest test execution (not used by build pipeline)
 
 **API paths differ by mode**:
 - Standalone: `/api/slos`, `/api/alerts`, etc.
@@ -105,7 +106,7 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `core/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **30 test files, 816 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **31 test files, 864 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
@@ -173,7 +174,7 @@ OBS_STACK_REPO=https://github.com/user/fork.git OBS_STACK_BRANCH=my-branch ./scr
 - OSD caches bundles aggressively by build number -- see AGENTS.md Rio section for cache-busting
 - `standalone/components` is a **symlink** to `../public/components` -- don't break it
 - The plugin's `tsconfig.json` extends `../../tsconfig.json` (OSD monorepo root) -- CI creates a stub
-- `build.sh` does `rm -rf build/` which invalidates Docker bind mounts -- restart container after build
+- `build.sh` clears `build/` before building which invalidates Docker bind mounts -- restart container after build
 - OSD workspace IDs are random per stack instance -- `e2e-osd.sh` auto-detects via API, or set `CYPRESS_OSD_WORKSPACE_ID` manually
 - OSD HTTP client **double-encodes `?` in paths** -- never embed query strings in the URL path. Use the `{ query: {} }` option: `this.http.get(path, { query: { search } })`. See `alarms_client.ts` metadata methods for examples.
 - `EuiCard` needs an **explicit mock** in `public/__mocks__/eui_mock.tsx` for tests -- the Proxy auto-stub does not handle `selectable.onClick`. Same applies to `EuiConfirmModal` (onConfirm/onCancel) and `EuiButtonGroup` (radio role).

@@ -31,7 +31,7 @@ import {
   EuiLoadingSpinner,
   EuiCallOut,
   EuiGlobalToastList,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../core';
 import { MonitorsTable } from './monitors_table';
 import { CreateMonitor, MonitorFormState } from './create_monitor';

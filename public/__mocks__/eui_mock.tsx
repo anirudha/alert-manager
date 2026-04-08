@@ -4,8 +4,8 @@
  */
 
 /**
- * Lightweight mock of @elastic/eui and @opensearch-project/oui for unit tests.
- * Uses a Proxy to auto-stub any EUI component as a simple div/button.
+ * Lightweight mock of @elastic/eui for unit tests.
+ * Provides explicit stubs for every EUI component used in production code.
  * Named exports like EuiTab get special treatment for role-based queries.
  */
 import React from 'react';

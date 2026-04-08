@@ -292,7 +292,7 @@ When asked to review or implement code, you should:
 4. **Understand the dual-mode architecture** — `standalone/components` is a symlink to `public/components/`. All UI is shared. `AlarmsApiClient` in `public/services/alarms_client.ts` handles mode-aware paths via `ApiPaths`. SLO components use the `SloApiClient` interface (defined in `slo_listing.tsx`).
 5. **Review for correctness, then style** — bugs and type safety first, then code organization, then naming conventions.
 6. **Suggest tests** — for every change, describe what tests should be written. The project has comprehensive test infrastructure:
-   - **Unit tests (Jest):** Two projects — `server` (node) and `components` (jsdom). 30 test files, 816 tests across `core/__tests__/`, `server/**/__tests__/`, and `public/**/__tests__/`. Coverage thresholds: 80% branches, 90% functions/lines/statements.
+   - **Unit tests (Jest):** Two projects — `server` (node) and `components` (jsdom). 31 test files, 864 tests across `core/__tests__/`, `server/**/__tests__/`, and `public/**/__tests__/`. Coverage thresholds: 80% branches, 90% functions/lines/statements.
    - **E2E tests (Cypress):** 5 spec files in `cypress/e2e/` covering navigation, alerts, rules, SLOs (33 tests including wizard+template+autocomplete), and suppression. 55 total tests. Supports dual mode: `standalone` (default, port 5603) and `osd` (OSD plugin, port 5601 with login and path rewriting via `CYPRESS_MODE=osd`).
    - Large render-heavy UI components (1000+ line files) are excluded from unit coverage and validated via Cypress E2E instead.
    - **EUI mock layer**: `public/__mocks__/eui_mock.tsx` provides lightweight stubs for OUI components. When adding new OUI components to the code (especially `EuiCard`, `EuiConfirmModal`, `EuiButtonGroup`), add a corresponding mock with the props needed for test queries (onClick, selectable, role attributes).
@@ -492,7 +492,7 @@ You are **Rio**, a DevOps engineer specializing in OpenSearch Dashboards plugin 
 | Component | Value |
 |-----------|-------|
 | **Plugin source** | `/Users/ashisagr/Documents/workspace/OpenSearch-Dashboards/plugins/alertManager` |
-| **Build script** | `./build.sh` → produces `build/alertManager.zip` |
+| **Build script** | `./build.sh` → produces `build/alertManager-{version}.zip` |
 | **OSD container** | `opensearch-dashboards` (Docker) |
 | **OSD URL** | `http://localhost:5601` |
 | **Workspace** | `OKTIMo` (Observability Stack) |
@@ -617,8 +617,7 @@ The `e2e-osd` job mirrors Rio's manual deploy steps: build zip, docker-compose u
 | Build number +1 increment serves stale optimizer-cached bundle | OSD's optimizer caches bundles by build number; previously-used numbers may serve old bundles. Always use epoch-based unique numbers: `int(time.time()) % 100000 + 10000` |
 | Build number bump to certain values crashes OSD with `DEFAULT_NAV_GROUPS.observability` error | Some build numbers trigger OSD optimizer recompilation which hits the nav group import issue. Use the pre-built bundle (no raw TS sources in zip) and avoid numbers that trigger recompilation |
 | `docker cp` fails for `/tmp/alertManager.zip` | Bind-mounted from host; just rebuild — the container sees the new zip |
-| Bind mount shows stale/corrupt zip after `build.sh` | `build.sh` does `rm -rf build/` which invalidates the bind mount inode; restart the container (`docker restart opensearch-dashboards`) before plugin install so Docker re-mounts the current file |
-| `build.sh` skips copying stubs if dir exists from previous build | Fixed: `build.sh` now always copies stubs. If you hit stale type errors (e.g. "Property X does not exist on type CoreStart"), delete `/Users/ashisagr/Documents/src/` and rebuild |
+| Bind mount shows stale/corrupt zip after `build.sh` | `build.sh` clears `build/` which invalidates the bind mount inode; restart the container (`docker restart opensearch-dashboards`) before plugin install so Docker re-mounts the current file |
 | curl basic auth 401 on OSD plugin APIs | OSD security requires session cookie + `osd-xsrf` header; use Playwright |
 | Password `My_password_123!@#` breaks shell quoting | URL-encode as `My_password_123%21%40%23` in curl URLs |
 | zsh `status` is read-only | Use variable name `health` instead of `status` in shell scripts |
@@ -787,7 +786,7 @@ standalone/client.tsx                    public/components/app.tsx
 ### Testing Infrastructure
 
 ```
-Jest (unit tests) — 30 test files, 816 tests
+Jest (unit tests) — 31 test files, 864 tests
   ├─ jest.config.js — two projects: server (node) + components (jsdom)
   ├─ core/__tests__/ — 16 test files (services, validators, backends, metadata, templates)
   ├─ server/**/__tests__/ — 5 test files (handlers, metadata handlers, saved object store)
@@ -844,6 +843,6 @@ CI (.github/workflows/)
 | **SLO Wizard** | `public/components/create_slo_wizard.tsx` | Multi-step SLO creation orchestrator |
 | **Preview Panel** | `public/components/slo_preview_panel.tsx` | Rule preview + live SLI value |
 | **EUI Mocks** | `public/__mocks__/eui_mock.tsx` | OUI component test mocks (add new ones here) |
-| **Build Script** | `build.sh` | Produces `build/alertManager.zip` for OSD plugin install |
-| **Type Stubs** | `stubs/` | OSD type stubs for out-of-tree compilation |
+| **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build`; produces `build/alertManager-{version}.zip` |
+| **Type Stubs** | `stubs/` | OSD type stubs for Jest test execution |
 | **SLO Guide** | `docs/slo-sli-guide.md` | SLO/SLI implementation guide |

@@ -27,8 +27,8 @@ import {
   EuiCallOut,
   EuiLoadingSpinner,
   EuiText,
-} from '@opensearch-project/oui';
-import type { EuiComboBoxOptionOption } from '@opensearch-project/oui';
+} from '@elastic/eui';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
 import type { SliType, SliCalcMethod, SliSourceType } from '../../core/slo_types';
 import type { SloTemplate } from '../../core/slo_templates';
 import { detectMetricType } from '../../core/slo_templates';

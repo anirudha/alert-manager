@@ -30,7 +30,7 @@ import {
   EuiPopover,
   EuiContextMenuPanel,
   EuiContextMenuItem,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import { UnifiedAlert, UnifiedAlertSeverity, UnifiedAlertState, Datasource } from '../../core';
 import { filterAlerts } from '../../core/filter';

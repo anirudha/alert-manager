@@ -184,7 +184,12 @@ fi
 
 # --- Step 3: Configure plugin zip path in .env ------------------------------
 
-PLUGIN_ZIP="$ALERT_MANAGER_DIR/build/alertManager.zip"
+# plugin-helpers build produces build/alertManager-{version}.zip — use glob to find it
+PLUGIN_ZIP=$(ls -1t "$ALERT_MANAGER_DIR"/build/alertManager-*.zip 2>/dev/null | head -1)
+if [ -z "$PLUGIN_ZIP" ]; then
+  # Fallback for legacy builds that produce alertManager.zip
+  PLUGIN_ZIP="$ALERT_MANAGER_DIR/build/alertManager.zip"
+fi
 
 if [ -f "$OBS_STACK_DIR/.env" ]; then
   # Update the ALERT_MANAGER_PLUGIN_ZIP line to point at this checkout
@@ -227,11 +232,21 @@ if [ "$REBUILD" = true ]; then
   info "Building alert-manager plugin..."
   cd "$ALERT_MANAGER_DIR"
   ./build.sh
+  # Re-resolve PLUGIN_ZIP after fresh build
+  PLUGIN_ZIP=$(ls -1t "$ALERT_MANAGER_DIR"/build/alertManager-*.zip 2>/dev/null | head -1)
+  if [ -z "$PLUGIN_ZIP" ]; then
+    PLUGIN_ZIP="$ALERT_MANAGER_DIR/build/alertManager.zip"
+  fi
   if [ ! -f "$PLUGIN_ZIP" ]; then
-    fail "Build did not produce $PLUGIN_ZIP"
+    fail "Build did not produce a zip in $ALERT_MANAGER_DIR/build/"
   fi
   ZIP_SIZE=$(du -h "$PLUGIN_ZIP" | cut -f1)
-  ok "Built: alertManager.zip ($ZIP_SIZE)"
+  ok "Built: $(basename "$PLUGIN_ZIP") ($ZIP_SIZE)"
+fi
+
+# Guard: ensure plugin zip exists regardless of --no-rebuild / --rebuild path
+if [ ! -f "$PLUGIN_ZIP" ]; then
+  fail "Plugin zip not found at $PLUGIN_ZIP. Run without --no-rebuild first, or run ./build.sh manually."
 fi
 
 # --- Step 7: Start stack -----------------------------------------------------

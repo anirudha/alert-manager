@@ -16,7 +16,7 @@
  *  - Max 50 options displayed (truncated from server's 200)
  */
 import { useReducer, useEffect, useRef, useCallback } from 'react';
-import type { EuiComboBoxOptionOption } from '@opensearch-project/oui';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
 import type { AlarmsApiClient } from '../services/alarms_client';
 import type { PrometheusMetricMetadata } from '../../core/types';
 

@@ -175,33 +175,33 @@ ALERT_MANAGER_MOCK_MODE=true yarn start --config config/opensearch_dashboards.de
 
 ### OSD Plugin Zip
 
-Produces `build/alertManager.zip` -- an installable OSD plugin artifact.
+Produces `build/alertManager-{version}.zip` -- an installable OSD plugin artifact.
 
 ```bash
 cd plugins/alertManager
 ./build.sh
 ```
 
-**Output:** `build/alertManager.zip` (~4-5 MB)
+**Output:** `build/alertManager-{version}.zip` (~15 MB)
 
 **What it does:**
-1. Compiles server-side TypeScript (`core/`, `server/`, `common/`) to ES2020
-2. Bundles client-side code via webpack into a single `alertManager.plugin.js`
-3. Creates OSD stubs for out-of-tree compilation (auto-cleaned up)
+1. Delegates to `yarn plugin-helpers build` (the standard OSD plugin build pipeline)
+2. Uses `@osd/optimizer` to bundle client-side code
+3. Uses Babel to transpile server-side TypeScript (`core/`, `server/`, `common/`)
 4. Packages everything into the OSD plugin zip format
 
 **Install to a cluster:**
 ```bash
-# Install
-bin/opensearch-dashboards-plugin install file:///path/to/alertManager.zip
+# Install (substitute actual filename)
+bin/opensearch-dashboards-plugin install file:///path/to/alertManager-3.6.0.zip
 
 # Or in Docker
 docker exec opensearch-dashboards \
-  bin/opensearch-dashboards-plugin install file:///tmp/alertManager.zip
+  bin/opensearch-dashboards-plugin install file:///tmp/alertManager-3.6.0.zip
 docker restart opensearch-dashboards
 ```
 
-> **Note:** `build.sh` is designed for out-of-tree builds (CI, Docker). When the plugin is inside the OSD monorepo, it uses TypeScript stubs to avoid resolving the real `src/core/` source tree.
+> **Note:** `build.sh` requires the plugin to be inside the OSD monorepo at `plugins/alertManager/`. It auto-detects the OSD version from the root `package.json`.
 
 ### Standalone Build
 
@@ -337,10 +337,8 @@ alertManager/
 ├── build.sh                     # Build OSD plugin zip
 ├── jest.config.js               # Jest config (2 projects: server + components)
 ├── cypress.config.js            # Cypress E2E config (standalone + OSD modes)
-├── webpack.osd.config.js        # Webpack config for OSD plugin client bundle
 ├── tsconfig.json                # Main TS config (extends OSD monorepo root)
 ├── tsconfig.test.json           # Test TS config (Jest)
-├── tsconfig.osd.json            # OSD plugin build TS config
 ├── package.json                 # Root package.json (scripts, devDeps)
 │
 ├── core/                        # Platform-agnostic business logic
@@ -395,7 +393,7 @@ alertManager/
 │   ├── bin/cli.js               # npx entry point
 │   └── components/              # Symlink to ../public/components
 │
-├── stubs/                       # OSD type stubs for out-of-tree builds
+├── stubs/                       # OSD type stubs for Jest test execution
 │   ├── src/core/server/
 │   └── @osd/config-schema/
 │
@@ -501,10 +499,9 @@ The `AlarmsApiClient` abstracts path differences between modes:
 - **OUI `EuiBasicTable` pagination** uses broken `<a href>` links. The plugin uses a custom `table_pagination.tsx` wrapper instead.
 - **OSD caches bundles aggressively** by build number. After rebuilding the plugin zip, restart the OSD container.
 - **`standalone/components`** is a **symlink** to `../public/components`. Don't break it -- both modes share the same React components.
-- **The plugin `tsconfig.json`** extends `../../tsconfig.json` (OSD monorepo root). CI creates a stub when building out-of-tree.
-- **`build.sh` does `rm -rf build/`** which invalidates Docker bind mounts. Restart the container after rebuilding.
+- **The plugin `tsconfig.json`** extends `../../tsconfig.json` (OSD monorepo root). CI creates a stub for standalone Jest tests run outside the monorepo.
+- **`build.sh` clears `build/`** which invalidates Docker bind mounts. Restart the container after rebuilding.
 - **OSD workspace IDs are random** per stack instance. `e2e-osd.sh` auto-detects via API.
-- **Webpack mode must be `'none'`** in `webpack.osd.config.js`. Production mode breaks ECharts and tree-shakes away tab definitions.
 - **Node version**: OSD requires Node < 23. Use `nvm use 22` (or 20, or 18).
 - **Shell escaping**: The observability stack password `My_password_123!@#` has special chars. Use Python or single-quoted strings when `curl`-ing directly.
 

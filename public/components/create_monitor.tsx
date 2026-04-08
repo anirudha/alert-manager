@@ -35,7 +35,7 @@ import {
   EuiFlyoutBody,
   EuiFlyoutFooter,
   EuiTitle,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { PromQLEditor, validatePromQL } from './promql_editor';
 import { MetricBrowser } from './metric_browser';
 import { Datasource, UnifiedAlertSeverity } from '../../core';

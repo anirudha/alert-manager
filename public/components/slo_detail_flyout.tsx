@@ -29,7 +29,7 @@ import {
   EuiBasicTable,
   EuiToolTip,
   EuiLoadingSpinner,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import type { SloSummary, SloDefinition, BurnRateConfig } from '../../core/slo_types';
 import {
   SLO_STATUS_COLORS,
