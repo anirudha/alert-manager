@@ -28,9 +28,15 @@ npm run dev
 ### OSD Plugin Development
 
 ```bash
-# From OSD root
+# From OSD root (requires Node < 23, e.g. nvm use 22)
+# With observability stack running in Docker:
+yarn start --config config/opensearch_dashboards.dev.yml
+
+# Or without the observability stack (default OSD config):
 yarn start
 ```
+
+See [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for the full local development setup.
 
 ## Pull Request Process
 

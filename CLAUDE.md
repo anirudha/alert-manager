@@ -13,6 +13,28 @@ npm run build:standalone          # Build standalone server
 ./build.sh                        # Build OSD plugin zip (build/alertManager.zip)
 ```
 
+## Local OSD Development (with Observability Stack)
+
+To run the plugin inside OSD from source, connected to the observability stack:
+
+```bash
+# 1. Ensure Docker observability stack is running
+cd ~/Documents/workspace/observability-stack && docker compose up -d
+
+# 2. Switch to compatible Node version
+nvm use 22
+
+# 3. Start OSD from monorepo root with the dev config
+cd ~/Documents/workspace/OpenSearch-Dashboards
+yarn start --config config/opensearch_dashboards.dev.yml
+```
+
+- Local OSD runs on **port 5602** (Docker OSD stays on 5601)
+- Both share the same OpenSearch backend — workspaces, dashboards, monitors are shared
+- Login: `admin` / `My_password_123!@#`
+- The plugin reads OpenSearch credentials from the `--config` YAML file automatically
+- Live reload: server restarts on `server/` changes, webpack recompiles on `public/` changes
+
 ## Architecture
 
 **Dual-mode plugin**: runs as both a standalone Express app and an OpenSearch Dashboards (OSD) plugin.
@@ -94,6 +116,7 @@ OBS_STACK_REPO=https://github.com/user/fork.git OBS_STACK_BRANCH=my-branch ./scr
 - **OSD plugin patterns**: `public/` + `server/` directories, plugin lifecycle, saved objects
 - **Test naming**: `__tests__/<module>.test.ts(x)` co-located with source
 - **Component limit**: Files over 500 lines are candidates for extraction
+- **Git commits**: Always use `git commit -s` (DCO sign-off required). Never omit the `-s` flag.
 
 ## Key Gotchas
 

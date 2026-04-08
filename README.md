@@ -75,8 +75,8 @@ For production / cloud / SaaS deployments:
 git clone https://github.com/opensearch-project/OpenSearch-Dashboards.git
 cd OpenSearch-Dashboards
 
-# Clone this plugin
-git clone https://github.com/opensearch-project/dashboards-observability.git plugins/alert-manager
+# Place the plugin at plugins/alertManager/
+# (the plugin may already be in the repo, or clone it separately)
 
 # Install dependencies and start
 yarn osd bootstrap
@@ -84,6 +84,22 @@ yarn start
 ```
 
 Navigate to http://localhost:5601/app/alertManager
+
+#### Local development with the Observability Stack
+
+For live development against real data, run OSD from source alongside the Docker observability stack:
+
+```bash
+# Start the observability stack (Docker)
+cd ~/Documents/workspace/observability-stack && docker compose up -d
+
+# Start local OSD on port 5602 (avoids conflict with Docker OSD on 5601)
+nvm use 22
+cd ~/Documents/workspace/OpenSearch-Dashboards
+yarn start --config config/opensearch_dashboards.dev.yml
+```
+
+Open http://localhost:5602, log in with `admin` / `My_password_123!@#`. Both OSD instances share the same OpenSearch backend, so all workspaces, dashboards, and monitors are available. See [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for full details.
 
 ### 2. Standalone Mode (npx)
 

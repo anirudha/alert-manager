@@ -24,6 +24,54 @@ import {
 } from '../core';
 import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
 import { SavedObjectSloStore } from './slo_saved_object_store';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import yaml from 'js-yaml';
+
+/**
+ * Read OpenSearch credentials from the OSD config file (--config argument).
+ * Returns { url, username, password } if found, undefined otherwise.
+ */
+function readOsdConfigCredentials(
+  logger: Logger
+): { url?: string; username: string; password: string } | undefined {
+  try {
+    // Find --config arg in process.argv
+    const args = process.argv;
+    let configPath: string | undefined;
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '--config' && args[i + 1]) {
+        configPath = args[i + 1];
+        break;
+      }
+      if (args[i].startsWith('--config=')) {
+        configPath = args[i].split('=')[1];
+        break;
+      }
+    }
+    if (!configPath) {
+      logger.debug(`alertManager: No --config arg found in argv`);
+      return undefined;
+    }
+
+    const absPath = resolve(process.cwd(), configPath);
+    logger.debug(`alertManager: Reading config from ${absPath}`);
+    const raw = readFileSync(absPath, 'utf-8');
+    const cfg = yaml.load(raw) as Record<string, any>;
+    // OSD YAML uses flat dotted keys (e.g. "opensearch.username") not nested objects
+    const user = cfg?.['opensearch.username'] ?? cfg?.opensearch?.username;
+    const pass = cfg?.['opensearch.password'] ?? cfg?.opensearch?.password;
+    if (user && pass) {
+      const hosts = cfg['opensearch.hosts'] ?? cfg?.opensearch?.hosts;
+      const url = Array.isArray(hosts) && hosts.length > 0 ? hosts[0] : undefined;
+      logger.info(`alertManager: Read OpenSearch credentials from config file: ${absPath}`);
+      return { url, username: user, password: pass };
+    }
+  } catch (err: any) {
+    logger.debug(`alertManager: Could not read config file: ${err.message}`);
+  }
+  return undefined;
+}
 
 export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart> {
   private readonly logger: Logger;
@@ -115,11 +163,26 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     } else {
       this.logger.info('alertManager: Running in LIVE mode — register backends via API');
 
-      const osUrl = process.env.OPENSEARCH_URL || 'https://localhost:9200';
-      const osAuth = {
-        username: process.env.OPENSEARCH_USER || 'admin',
-        password: process.env.OPENSEARCH_PASSWORD || 'admin',
-      };
+      // Resolve OpenSearch credentials. Priority:
+      //  1. Env vars OPENSEARCH_USER / OPENSEARCH_PASSWORD (Docker, CI)
+      //  2. OSD config file via --config arg (local dev with `yarn start`)
+      //  3. Fallback to admin/admin
+      const envUser = process.env.OPENSEARCH_USER;
+      const envPass = process.env.OPENSEARCH_PASSWORD;
+
+      let osUrl: string;
+      let osAuth: { username: string; password: string };
+
+      if (envUser && envPass) {
+        osUrl = process.env.OPENSEARCH_URL || 'https://localhost:9200';
+        osAuth = { username: envUser, password: envPass };
+      } else {
+        const configCreds = readOsdConfigCredentials(this.logger);
+        osUrl = process.env.OPENSEARCH_URL || configCreds?.url || 'https://localhost:9200';
+        osAuth = configCreds
+          ? { username: configCreds.username, password: configCreds.password }
+          : { username: 'admin', password: 'admin' };
+      }
 
       const osBackend = new HttpOpenSearchBackend(logger);
       const promBackend = new DirectQueryPrometheusBackend(logger, {
@@ -130,13 +193,18 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       alertService.registerOpenSearch(osBackend);
       alertService.registerPrometheus(promBackend);
 
-      // Auto-seed an OpenSearch datasource so the unified view works out of the box
+      // Auto-seed an OpenSearch datasource with auth so HttpOpenSearchBackend
+      // can call alerting APIs without relying on env vars
       datasourceService.seed([
         {
           name: 'OpenSearch Cluster',
           type: 'opensearch',
           url: osUrl,
           enabled: true,
+          auth: {
+            type: 'basic' as const,
+            credentials: { username: osAuth.username, password: osAuth.password },
+          },
         },
       ]);
 

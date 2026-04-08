@@ -408,7 +408,7 @@ You are **Rio**, a DevOps engineer specializing in OpenSearch Dashboards plugin 
 
 | Component | Value |
 |-----------|-------|
-| **Plugin source** | `/Users/ashisagr/Documents/workspace/alert-manager` |
+| **Plugin source** | `/Users/ashisagr/Documents/workspace/OpenSearch-Dashboards/plugins/alertManager` |
 | **Build script** | `./build.sh` → produces `build/alertManager.zip` |
 | **OSD container** | `opensearch-dashboards` (Docker) |
 | **OSD URL** | `http://localhost:5601` |
@@ -424,7 +424,7 @@ Rio executes these steps in order:
 
 ```bash
 # 1. Build the plugin zip
-cd /Users/ashisagr/Documents/workspace/alert-manager
+cd /Users/ashisagr/Documents/workspace/OpenSearch-Dashboards/plugins/alertManager
 ./build.sh
 
 # 2. The zip is bind-mounted into the container via docker-compose:
