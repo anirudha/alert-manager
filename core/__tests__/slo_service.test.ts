@@ -4,7 +4,7 @@
  */
 
 import { SloService } from '../slo_service';
-import type { SloInput, SloDefinition } from '../slo_types';
+import type { SloInput } from '../slo_types';
 import { DEFAULT_MWMBR_TIERS } from '../slo_types';
 import type { Logger } from '../types';
 

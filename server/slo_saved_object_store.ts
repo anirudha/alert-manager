@@ -40,7 +40,7 @@ export class SavedObjectSloStore implements ISloStore {
 
     // Paginate through all results to avoid the 1000-object cap
     while (true) {
-      const findOpts: Record<string, unknown> = { type: SO_TYPE, perPage, page };
+      const findOpts: { type: string; perPage: number; page: number; filter?: string } = { type: SO_TYPE, perPage, page };
       if (datasourceId) {
         // Escape quotes in datasourceId to prevent KQL injection
         const escaped = datasourceId.replace(/"/g, '\\"');

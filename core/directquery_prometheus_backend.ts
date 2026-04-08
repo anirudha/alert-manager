@@ -63,7 +63,7 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend {
 
   constructor(
     private readonly logger: Logger,
-    private readonly config: DirectQueryConfig
+    config: DirectQueryConfig
   ) {
     this.http = new HttpClient(logger);
     this.baseUrl = config.opensearchUrl.replace(/\/+$/, '');

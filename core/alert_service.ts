@@ -523,15 +523,16 @@ export class MultiBackendAlertService {
       const { alerts } = await this.osBackend.getAlerts(ds);
       const alert = alerts.find((a) => a.id === alertId);
       if (!alert) return null;
-      const summary = osAlertToUnified(alert, ds.id);
+      const summary = osAlertToUnified(alert, ds!.id);
       return { ...summary, raw: alert };
     } else if (ds.type === 'prometheus' && this.promBackend) {
       const promAlerts = await this.promBackend.getAlerts(ds);
+      const dsId = ds!.id;
       const alert = promAlerts.find(
-        (a) => `${ds.id}-${a.labels.alertname}-${a.labels.instance || ''}` === alertId
+        (a) => `${dsId}-${a.labels.alertname}-${a.labels.instance || ''}` === alertId
       );
       if (!alert) return null;
-      const summary = promAlertToUnified(alert, ds.id);
+      const summary = promAlertToUnified(alert, dsId);
       return { ...summary, raw: alert };
     }
     return null;
