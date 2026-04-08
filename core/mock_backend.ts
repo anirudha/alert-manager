@@ -15,14 +15,10 @@ import {
   AlertmanagerStatus,
   OSMonitor,
   OSAlert,
-  OSAlertState,
   OSDestination,
-  OSTrigger,
   PromAlert,
-  PromAlertState,
   PromAlertingRule,
   PromRuleGroup,
-  PromRuleHealth,
 } from './types';
 
 let idCounter = 100;
@@ -37,8 +33,11 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
   private monitors: Map<string, Map<string, OSMonitor>> = new Map(); // dsId -> monitorId -> monitor
   private alerts: Map<string, OSAlert[]> = new Map(); // dsId -> alerts
   private destinations: Map<string, Map<string, OSDestination>> = new Map();
+  private readonly logger: Logger;
 
-  constructor(private readonly logger: Logger) {}
+  constructor(logger: Logger) {
+    this.logger = logger;
+  }
 
   // --- Monitors ---
 
@@ -824,7 +823,7 @@ export class MockPrometheusBackend implements PrometheusBackend {
   private activeAlerts: Map<string, PromAlert[]> = new Map();
   private workspaces: Map<string, PrometheusWorkspace[]> = new Map();
 
-  constructor(private readonly logger: Logger) {}
+  constructor(_logger: Logger) {}
 
   async getRuleGroups(ds: Datasource): Promise<PromRuleGroup[]> {
     // If workspace-scoped, filter by workspace
@@ -854,8 +853,7 @@ export class MockPrometheusBackend implements PrometheusBackend {
     const now = new Date().toISOString();
     const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
     const tenMinAgo = new Date(Date.now() - 10 * 60_000).toISOString();
-    const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    // Timestamps available for future use: oneHourAgo, oneDayAgo
 
     // Create workspaces for this Prometheus datasource
     const wsProduction: PrometheusWorkspace = {
@@ -881,7 +879,6 @@ export class MockPrometheusBackend implements PrometheusBackend {
     };
     this.workspaces.set(dsId, [wsProduction, wsStaging, wsDev]);
 
-    const states: PromAlertState[] = ['firing', 'pending', 'inactive'];
     const severities = ['critical', 'warning', 'info'];
     const teams = ['infra', 'platform', 'sre', 'data', 'security', 'network'];
     const services = [

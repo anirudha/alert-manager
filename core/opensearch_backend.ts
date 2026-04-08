@@ -33,7 +33,7 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
   readonly type = 'opensearch' as const;
   private readonly http: HttpClient;
 
-  constructor(private readonly logger: Logger) {
+  constructor(logger: Logger) {
     this.http = new HttpClient(logger);
   }
 

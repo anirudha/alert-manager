@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { HttpClient, buildAuthFromDatasource, HttpRequestOptions } from '../http_client';
+import { HttpClient, buildAuthFromDatasource } from '../http_client';
 import { Datasource, Logger } from '../types';
 
 // ---------------------------------------------------------------------------

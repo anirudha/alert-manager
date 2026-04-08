@@ -19,7 +19,7 @@
  * @see https://sre.google/workbook/alerting-on-slos/
  */
 
-import type { SloDefinition, GeneratedRuleGroup, GeneratedRule, BurnRateConfig } from './slo_types';
+import type { SloDefinition, GeneratedRuleGroup, GeneratedRule } from './slo_types';
 
 // ============================================================================
 // Constants

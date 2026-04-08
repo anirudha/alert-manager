@@ -184,7 +184,7 @@ describe('SuppressionRuleService', () => {
 
     it('handles recurring rules that match the current day', () => {
       // Pin to a known time: Wednesday 2025-06-11T14:30:00Z (day=3)
-      jest.useFakeTimers();
+      jest.useFakeTimers({ doNotFake: ['performance'] });
       jest.setSystemTime(new Date('2025-06-11T14:30:00Z'));
 
       service.create({
@@ -207,7 +207,7 @@ describe('SuppressionRuleService', () => {
 
     it('excludes recurring rules that do not match current day', () => {
       // Pin to Wednesday (day=3), rule is for Saturday (day=6)
-      jest.useFakeTimers();
+      jest.useFakeTimers({ doNotFake: ['performance'] });
       jest.setSystemTime(new Date('2025-06-11T14:30:00Z'));
 
       service.create({
