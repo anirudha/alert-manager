@@ -16,7 +16,7 @@ import {
   EuiPopover,
   EuiContextMenuPanel,
   EuiContextMenuItem,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import {
   PAGINATION_CSS,
   PAGINATION_BUTTON_STYLE,

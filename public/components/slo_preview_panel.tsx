@@ -31,7 +31,7 @@ import {
   EuiButtonGroup,
   EuiLoadingSpinner,
   EuiIcon,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import type {
   SloInput,
   SloDefinition,

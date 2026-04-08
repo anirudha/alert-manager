@@ -37,7 +37,7 @@ import {
   EuiResizableContainer,
   EuiContextMenuPanel,
   EuiContextMenuItem,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import {
   UnifiedRule,

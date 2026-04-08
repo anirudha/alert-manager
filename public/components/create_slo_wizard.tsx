@@ -36,7 +36,7 @@ import {
   EuiCheckbox,
   EuiIcon,
   EuiBadge,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import type {
   SloInput,
   BurnRateConfig,

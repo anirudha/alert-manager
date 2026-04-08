@@ -1,0 +1,9 @@
+{
+  "serverSourcePatterns": [
+    "yarn.lock",
+    "package.json",
+    "tsconfig.json",
+    "index.{js,ts}",
+    "{common,core,server,translations}/**/*"
+  ]
+}

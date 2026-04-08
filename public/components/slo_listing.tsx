@@ -45,7 +45,7 @@ import {
   EuiButtonEmpty,
   EuiStat,
   EuiTitle,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import {
   SLO_STATUS_COLORS,
