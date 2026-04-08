@@ -11,6 +11,7 @@ import {
   errorBudgetColor,
   attainmentColor,
   formatLatency,
+  PAGINATION_BUTTON_STYLE,
 } from '../shared_constants';
 
 // ============================================================================
@@ -188,5 +189,23 @@ describe('formatLatency', () => {
   it('formats multi-second values in seconds', () => {
     expect(formatLatency(2.5)).toBe('2.50s');
     expect(formatLatency(10)).toBe('10.00s');
+  });
+});
+
+describe('PAGINATION_BUTTON_STYLE', () => {
+  it('returns active styles when isActive is true', () => {
+    const style = PAGINATION_BUTTON_STYLE(true);
+    expect(style.background).toBe('#006BB4');
+    expect(style.color).toBe('#fff');
+    expect(style.cursor).toBe('default');
+    expect(style.fontWeight).toBe(700);
+  });
+
+  it('returns inactive styles when isActive is false', () => {
+    const style = PAGINATION_BUTTON_STYLE(false);
+    expect(style.background).toBe('transparent');
+    expect(style.color).toBe('#006BB4');
+    expect(style.cursor).toBe('pointer');
+    expect(style.fontWeight).toBe(400);
   });
 });

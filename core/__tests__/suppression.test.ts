@@ -303,6 +303,21 @@ describe('SuppressionRuleService', () => {
       expect(service.detectConflicts(candidate)).toHaveLength(0);
     });
 
+    it('excludes self when detecting conflicts', () => {
+      const rule = service.create({
+        name: 'Rule 1',
+        description: '',
+        matchers: { service: 'api' },
+        scheduleType: 'one_time',
+        startTime: '2024-06-01T00:00:00Z',
+        endTime: '2024-06-01T12:00:00Z',
+        createdBy: 'admin',
+      });
+
+      // Pass the same rule back — should not conflict with itself
+      expect(service.detectConflicts(rule)).toHaveLength(0);
+    });
+
     it('returns empty for different matchers', () => {
       service.create({
         name: 'Rule 1',
