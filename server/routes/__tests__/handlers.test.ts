@@ -23,6 +23,7 @@ import {
   handleGetUnifiedRules,
   handleGetRuleDetail,
   handleGetAlertDetail,
+  handleListWorkspaces,
 } from '../handlers';
 import { InMemoryDatasourceService, MultiBackendAlertService, Logger } from '../../../core';
 
@@ -569,5 +570,27 @@ describe('handleGetAlertDetail', () => {
     const result = await handleGetAlertDetail(alertSvc, 'ds-1', 'alert-1');
     expect(result.status).toBe(400);
     expect(result.body.error).toBe('An internal error occurred');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Workspace Discovery
+// ---------------------------------------------------------------------------
+
+describe('handleListWorkspaces', () => {
+  it('returns 200 with workspaces', async () => {
+    const svc = createDatasourceService();
+    await svc.create({ name: 'Prom', type: 'prometheus', url: 'http://prom:9090', enabled: true });
+    const result = await handleListWorkspaces(svc, 'ds-1');
+    expect(result.status).toBe(200);
+    expect(result.body.workspaces).toBeDefined();
+  });
+
+  it('returns 500 when service throws', async () => {
+    const svc = createDatasourceService();
+    jest.spyOn(svc, 'listWorkspaces').mockRejectedValueOnce(new Error('fail'));
+    const result = await handleListWorkspaces(svc, 'ds-1');
+    expect(result.status).toBe(500);
+    expect(result.body.error).toBeDefined();
   });
 });
