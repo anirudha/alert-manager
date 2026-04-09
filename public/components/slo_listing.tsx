@@ -42,7 +42,7 @@ import {
   EuiResizableContainer,
   EuiButtonEmpty,
   EuiTitle,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import {
   SLI_TYPE_LABELS,
@@ -145,7 +145,7 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
       try {
         const data = await apiClient.getSlo(sloId);
         if (cancelled) return;
-        const { generateSloRuleGroup } = await import('../../core/slo_promql_generator');
+        const { generateSloRuleGroup } = await import('../../common/slo_promql_generator');
         const ruleGroup = generateSloRuleGroup(data);
         setRules(ruleGroup.rules);
       } catch (err: unknown) {

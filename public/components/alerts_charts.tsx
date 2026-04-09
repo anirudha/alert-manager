@@ -15,7 +15,7 @@
  *  - AlertsByGroup: generic label-based grouping mini-chart
  */
 import React, { useMemo } from 'react';
-import { EuiText } from '@opensearch-project/oui';
+import { EuiText } from '@elastic/eui';
 import { EchartsRender } from './echarts_render';
 import { escapeHtml, countBy } from './shared_constants';
 import { UnifiedAlert, UnifiedAlertSeverity, UnifiedAlertState } from '../../common';

@@ -16,8 +16,18 @@ import {
   EuiPopover,
   EuiContextMenuPanel,
   EuiContextMenuItem,
-} from '@opensearch-project/oui';
-import './table_pagination.css';
+} from '@elastic/eui';
+/**
+ * Pagination button styles. Injected as a <style> tag because OSD's optimizer
+ * does not support .css file imports. Colors are OUI light-theme values;
+ * dark-mode would require OUI theme token integration.
+ */
+const PAGINATION_CSS = `
+.alertMgr-pageBtn { min-width:32px; height:32px; border:none; border-radius:4px; font-size:14px; cursor:pointer; background:transparent; color:#006BB4; font-weight:400; }
+.alertMgr-pageBtn:disabled, .alertMgr-pageBtn--active { background:#006BB4; color:#fff; font-weight:700; cursor:default; }
+.alertMgr-pageBtn:not(:disabled):hover { background-color:#E6F0FF; }
+.alertMgr-pageBtn:focus-visible { outline:2px solid #006BB4; outline-offset:2px; }
+`;
 
 interface TablePaginationProps {
   pageIndex: number;
@@ -49,6 +59,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
 
   return (
     <>
+      <style>{PAGINATION_CSS}</style>
       <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
         <EuiFlexItem grow={false}>
           <EuiPopover

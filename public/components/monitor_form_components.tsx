@@ -26,7 +26,7 @@ import {
   EuiText,
   EuiBadge,
   EuiToolTip,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { Datasource } from '../../common';
 
 // ============================================================================

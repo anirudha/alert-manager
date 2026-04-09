@@ -33,7 +33,7 @@ import {
   EuiListGroupItem,
   EuiButtonIcon,
   EuiResizableContainer,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import {
   UnifiedRule,

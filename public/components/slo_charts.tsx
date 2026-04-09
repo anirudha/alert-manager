@@ -13,7 +13,7 @@
  *  - SlosByService: horizontal bar chart grouping SLOs by service name
  */
 import React, { useMemo } from 'react';
-import { EuiText } from '@opensearch-project/oui';
+import { EuiText } from '@elastic/eui';
 import { EchartsRender } from './echarts_render';
 import { SLI_TYPE_LABELS, escapeHtml } from './shared_constants';
 import type { SloSummary } from '../../common/slo_types';

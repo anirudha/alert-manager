@@ -8,7 +8,7 @@
  * Each card is clickable to filter alerts by severity or state.
  */
 import React from 'react';
-import { EuiFlexGroup, EuiFlexItem, EuiPanel, EuiStat, EuiText } from '@opensearch-project/oui';
+import { EuiFlexGroup, EuiFlexItem, EuiPanel, EuiStat, EuiText } from '@elastic/eui';
 
 // ============================================================================
 // Types

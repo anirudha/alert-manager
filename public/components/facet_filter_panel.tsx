@@ -19,7 +19,7 @@ import {
   EuiBadge,
   EuiCheckbox,
   EuiHealth,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 
 // ============================================================================
 // Types

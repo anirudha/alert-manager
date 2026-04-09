@@ -34,7 +34,7 @@ import {
   EuiToolTip,
   EuiFieldNumber,
   EuiDatePicker,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import moment, { Moment } from 'moment';
 import { AlarmsApiClient } from '../services/alarms_client';
 

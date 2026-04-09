@@ -15,8 +15,8 @@
  * and support `onCreateOption` for manual entry of values not in the dropdown.
  */
 import React, { useCallback } from 'react';
-import { EuiComboBox, EuiBadge } from '@opensearch-project/oui';
-import type { EuiComboBoxOptionOption } from '@opensearch-project/oui';
+import { EuiComboBox, EuiBadge } from '@elastic/eui';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
 import { GOOD_EVENTS_FILTER_PRESETS } from '../../common/slo_templates';
 import type { InferredMetricType } from '../../common/slo_templates';
 

@@ -25,7 +25,7 @@ import {
   EuiText,
   EuiTitle,
   EuiToolTip,
-} from '@opensearch-project/oui';
+} from '@elastic/eui';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 // ---------------------------------------------------------------------------
