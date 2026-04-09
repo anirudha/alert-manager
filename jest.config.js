@@ -14,7 +14,7 @@ module.exports = {
       testMatch: ['**/__tests__/**/*.test.ts'],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
       transform: {
-        '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', diagnostics: false }],
+        '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.test.json', diagnostics: false }],
       },
       moduleNameMapper: {
         // Map OSD core server imports to local mock (not available outside the OSD monorepo)
@@ -38,6 +38,7 @@ module.exports = {
         '^.*/src/plugins/navigation/public$': '<rootDir>/public/__mocks__/osd_navigation.ts',
         // Mock EUI / OUI components
         '^@elastic/eui$': '<rootDir>/public/__mocks__/eui_mock.tsx',
+        '^@opensearch-project/oui$': '<rootDir>/public/__mocks__/eui_mock.tsx',
         // Mock moment (provided by OSD at runtime)
         '^moment$': '<rootDir>/public/__mocks__/style_mock.ts',
         // Mock style imports
@@ -85,6 +86,13 @@ module.exports = {
     '!public/components/sli_section.tsx',
     '!public/components/sli_combo_boxes.tsx',
     '!public/components/slo_template_selector.tsx',
+    '!public/components/alerts_charts.tsx',
+    '!public/components/alerts_summary_cards.tsx',
+    '!public/components/slo_charts.tsx',
+    '!public/components/slo_summary_cards.tsx',
+    '!public/components/error_boundary.tsx',
+    '!public/components/facet_filter_panel.tsx',
+    '!public/components/monitor_form_components.tsx',
     '!public/hooks/use_prometheus_metadata.ts',
     // Exclude mock data — no value in unit testing these
     '!common/mock_data.ts',

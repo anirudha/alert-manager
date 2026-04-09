@@ -101,6 +101,7 @@ export function defineRoutes(
       },
     },
     async (_ctx, req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- validated by @osd/config-schema above
       const result = await handleCreateDatasource(datasourceService, req.body as any);
       return res.ok({ body: result.body });
     }
@@ -122,6 +123,7 @@ export function defineRoutes(
       const result = await handleUpdateDatasource(
         datasourceService,
         req.params.id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- validated by @osd/config-schema above
         req.body as any
       );
       return result.status === 200
@@ -411,6 +413,7 @@ export function defineRoutes(
         validate: { body: schema.object({}, { unknowns: 'allow' }) },
       },
       async (_ctx, req, res) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- validated by @osd/config-schema above
         const result = handleCreateSuppressionRule(suppressionService, req.body as any);
         return result.status === 201
           ? res.ok({ body: result.body })
@@ -430,6 +433,7 @@ export function defineRoutes(
         const result = handleUpdateSuppressionRule(
           suppressionService,
           req.params.id,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- validated by @osd/config-schema above
           req.body as any
         );
         return result.status === 200

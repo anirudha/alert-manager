@@ -42,16 +42,40 @@ Cypress.Commands.add('waitForPageReady', () => {
     // once the React app mounts. Wait up to 60s for slow CI environments.
     cy.get('body', { timeout: 60000 }).should('not.contain.text', 'Loading OpenSearch Dashboards');
 
-    // Ensure no error page is displayed
-    cy.get('body').then(($body) => {
-      if (
-        $body.text().includes('Something went wrong') ||
-        $body.text().includes('workspace_fatal_error')
-      ) {
-        // Error page — trigger recovery via ensureLoaded
-        cy.visit(Cypress.env('osdBasePath') + '/');
-      }
-    });
+    // Ensure no error page is displayed.
+    // OSD's workspace plugin can crash on first load in headless Chrome with
+    // "OpenSearch Dashboards did not load properly" or "Something went wrong".
+    // Retry up to 2 times with increasing waits to let OSD's server-side
+    // bundle caching warm up.
+    const maxRetries = 2;
+    const checkAndRecover = (attempt: number) => {
+      cy.get('body').then(($body) => {
+        const text = $body.text();
+        const hasError =
+          text.includes('Something went wrong') ||
+          text.includes('workspace_fatal_error') ||
+          text.includes('did not load properly');
+        if (hasError && attempt < maxRetries) {
+          cy.wait(3000);
+          cy.visit(Cypress.env('osdBasePath') + '/');
+          cy.get('body', { timeout: 60000 }).should(
+            'not.contain.text',
+            'Loading OpenSearch Dashboards'
+          );
+          checkAndRecover(attempt + 1);
+        } else if (hasError) {
+          // Last resort: visit OSD root first to initialize core, then navigate
+          cy.visit('/');
+          cy.wait(5000);
+          cy.visit(Cypress.env('osdBasePath') + '/');
+          cy.get('body', { timeout: 60000 }).should(
+            'not.contain.text',
+            'Loading OpenSearch Dashboards'
+          );
+        }
+      });
+    };
+    checkAndRecover(0);
   }
 
   // Final check: the Alert Manager heading must be visible

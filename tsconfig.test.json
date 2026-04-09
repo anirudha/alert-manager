@@ -11,7 +11,13 @@
     "outDir": "./dist-test",
     "rootDir": ".",
     "resolveJsonModule": true,
-    "declaration": false
+    "declaration": false,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "opensearch-dashboards/server": ["./server/__mocks__/osd_server.ts"],
+      "opensearch-dashboards/public": ["./public/__mocks__/osd_core.ts"]
+    }
   },
   "include": [
     "common/**/*.ts",

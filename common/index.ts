@@ -43,3 +43,12 @@ export {
 } from './slo_promql_generator';
 export { validateSloForm, validateSloFormFull, isSloFormValid } from './slo_validators';
 export type { SloValidationResult } from './slo_validators';
+
+export type { AlertManagerError, NotFoundError, ValidationError, InternalError } from './errors';
+export {
+  createNotFoundError,
+  createValidationError,
+  createInternalError,
+  isAlertManagerError,
+  errorToStatus,
+} from './errors';

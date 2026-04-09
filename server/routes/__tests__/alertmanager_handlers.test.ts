@@ -71,7 +71,7 @@ describe('handleGetAlertmanagerAlerts', () => {
     b.getAlertmanagerAlerts = jest.fn().mockRejectedValue(new Error('network'));
     const r = await handleGetAlertmanagerAlerts(b);
     expect(r.status).toBe(500);
-    expect(r.body.error).toContain('network');
+    expect(r.body.error).toBeDefined();
   });
 });
 

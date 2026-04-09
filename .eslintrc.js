@@ -28,7 +28,7 @@ module.exports = {
         varsIgnorePattern: '^_',
       },
     ],
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-explicit-any': 'error',
   },
   ignorePatterns: ['standalone/dist/**', 'standalone/node_modules/**', 'dist/**', 'target/**'],
 };

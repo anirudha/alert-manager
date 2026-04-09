@@ -4,6 +4,7 @@
  */
 
 import { AlarmsApiClient, HttpClient } from '../alarms_client';
+import type { SloInput } from '../../../common/slo_types';
 
 // ---------------------------------------------------------------------------
 // Mock HttpClient
@@ -237,7 +238,7 @@ describe('AlarmsApiClient', () => {
     it('creates SLO', async () => {
       const http = createMockHttp();
       const client = new AlarmsApiClient(http, 'standalone');
-      await client.createSlo({ name: 'New SLO' } as any);
+      await client.createSlo({ name: 'New SLO' } as unknown as SloInput);
       expect(http.post).toHaveBeenCalledWith('/api/slos', { name: 'New SLO' });
     });
 
@@ -331,7 +332,7 @@ describe('AlarmsApiClient', () => {
 
     it('deduplicates concurrent in-flight requests', async () => {
       const http = createMockHttp();
-      let resolveGet: (v: any) => void;
+      let resolveGet: (v: unknown) => void;
       http.get.mockImplementation(
         () =>
           new Promise((resolve) => {

@@ -118,32 +118,28 @@ const mockSlos = [
 
 function createMockApiClient(slos = mockSlos): SloApiClient {
   return {
-    listSlos: jest
-      .fn()
-      .mockResolvedValue({
-        results: slos,
-        total: slos.length,
-        page: 1,
-        pageSize: slos.length,
-        hasMore: false,
-      }),
-    getSlo: jest
-      .fn()
-      .mockResolvedValue({
-        id: 'slo-1',
-        name: 'Test',
-        sli: {
-          type: 'availability',
-          calcMethod: 'good_requests',
-          sourceType: 'service_operation',
-          metric: 'http_requests_total',
-          service: { labelName: 'service', labelValue: 'frontend' },
-          operation: { labelName: 'endpoint', labelValue: '/' },
-        },
-        target: 0.999,
-        burnRates: [],
-        generatedRuleNames: ['rule1'],
-      } as any),
+    listSlos: jest.fn().mockResolvedValue({
+      results: slos,
+      total: slos.length,
+      page: 1,
+      pageSize: slos.length,
+      hasMore: false,
+    }),
+    getSlo: jest.fn().mockResolvedValue({
+      id: 'slo-1',
+      name: 'Test',
+      sli: {
+        type: 'availability',
+        calcMethod: 'good_requests',
+        sourceType: 'service_operation',
+        metric: 'http_requests_total',
+        service: { labelName: 'service', labelValue: 'frontend' },
+        operation: { labelName: 'endpoint', labelValue: '/' },
+      },
+      target: 0.999,
+      burnRates: [],
+      generatedRuleNames: ['rule1'],
+    } as any),
     createSlo: jest.fn().mockResolvedValue({ id: 'slo-new' } as any),
     deleteSlo: jest.fn().mockResolvedValue({ deleted: true, generatedRuleNames: [] }),
   };

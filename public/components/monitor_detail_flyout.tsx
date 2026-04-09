@@ -24,7 +24,6 @@ import {
   EuiFlexItem,
   EuiButton,
   EuiButtonEmpty,
-  EuiButtonIcon,
   EuiPanel,
   EuiDescriptionList,
   EuiBasicTable,
@@ -32,20 +31,18 @@ import {
   EuiToolTip,
   EuiConfirmModal,
   EuiCodeBlock,
-  EuiHorizontalRule,
   EuiIcon,
   EuiLoadingContent,
 } from '@elastic/eui';
 import {
   UnifiedRule,
   UnifiedAlertSeverity,
-  MonitorStatus,
   AlertHistoryEntry,
   NotificationRouting,
   SuppressionRule,
   OSMonitor,
   OSMonitorInput,
-} from '../../common/types';
+} from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 // ============================================================================
@@ -86,17 +83,9 @@ const ConditionPreviewGraph: React.FC<{
   data: Array<{ timestamp: number; value: number }>;
   threshold?: { operator: string; value: number; unit?: string };
 }> = ({ data, threshold }) => {
-  if (!data || data.length === 0)
-    return (
-      <EuiText size="s" color="subdued">
-        <em>
-          No recent evaluation data available. The condition preview populates after the monitor
-          executes and records metric data.
-        </em>
-      </EuiText>
-    );
+  const spec = useMemo((): EChartsOption | null => {
+    if (!data || data.length === 0) return null;
 
-  const spec = useMemo((): EChartsOption => {
     const timestamps = data.map((d) =>
       new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     );
@@ -156,6 +145,16 @@ const ConditionPreviewGraph: React.FC<{
     };
   }, [data, threshold]);
 
+  if (!spec)
+    return (
+      <EuiText size="s" color="subdued">
+        <em>
+          No recent evaluation data available. The condition preview populates after the monitor
+          executes and records metric data.
+        </em>
+      </EuiText>
+    );
+
   return <EchartsRender spec={spec} height={180} />;
 };
 
@@ -196,10 +195,10 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
     const ruleId = monitor.id;
     apiClient
       .getRuleDetail(dsId, ruleId)
-      .then((data: any) => {
+      .then((data: UnifiedRule) => {
         if (!cancelled && data) setDetail(data);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error('Failed to load monitor details:', err);
       })
       .finally(() => {
@@ -212,12 +211,12 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
 
   // Use detail data when available, fall back to summary props
   const full = detail || monitor;
-  const alertHistory = (full as UnifiedRule).alertHistory ?? [];
-  const conditionPreviewData = (full as UnifiedRule).conditionPreviewData ?? [];
-  const notificationRouting = (full as UnifiedRule).notificationRouting ?? [];
-  const suppressionRules = (full as UnifiedRule).suppressionRules ?? [];
-  const description = (full as UnifiedRule).description ?? '';
-  const aiSummary = (full as UnifiedRule).aiSummary ?? '';
+  const alertHistory = full.alertHistory ?? [];
+  const conditionPreviewData = full.conditionPreviewData ?? [];
+  const notificationRouting = full.notificationRouting ?? [];
+  const suppressionRules = full.suppressionRules ?? [];
+  const description = full.description ?? '';
+  const aiSummary = full.aiSummary ?? '';
   const evaluationInterval = full.evaluationInterval ?? '—';
   const pendingPeriod = full.pendingPeriod ?? '—';
 
@@ -501,7 +500,9 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
                       ? [
                           {
                             title: 'Threshold',
-                            description: `${monitor.threshold.operator} ${monitor.threshold.value}${monitor.threshold.unit || ''}`,
+                            description: `${monitor.threshold.operator} ${monitor.threshold.value}${
+                              monitor.threshold.unit || ''
+                            }`,
                           },
                         ]
                       : []),

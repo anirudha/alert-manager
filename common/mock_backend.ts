@@ -428,6 +428,7 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
                 },
               ],
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock doc_level_input shape
           } as any,
         ],
         triggers: [
@@ -469,6 +470,7 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
               url: '',
               clusters: [],
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock cluster metrics URI input
           } as any,
         ],
         triggers: [
@@ -525,6 +527,7 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
               url: '',
               clusters: [],
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock nodes stats URI input
           } as any,
         ],
         triggers: [
@@ -653,6 +656,7 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
                 },
               ],
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock doc_level_input shape
           } as any,
         ],
         triggers: [

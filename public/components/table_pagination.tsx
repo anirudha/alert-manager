@@ -17,11 +17,17 @@ import {
   EuiContextMenuPanel,
   EuiContextMenuItem,
 } from '@elastic/eui';
-import {
-  PAGINATION_CSS,
-  PAGINATION_BUTTON_STYLE,
-  PAGINATION_BUTTON_HOVER_CLASS,
-} from './shared_constants';
+/**
+ * Pagination button styles. Injected as a <style> tag because OSD's optimizer
+ * does not support .css file imports. Colors are OUI light-theme values;
+ * dark-mode would require OUI theme token integration.
+ */
+const PAGINATION_CSS = `
+.alertMgr-pageBtn { min-width:32px; height:32px; border:none; border-radius:4px; font-size:14px; cursor:pointer; background:transparent; color:#006BB4; font-weight:400; }
+.alertMgr-pageBtn:disabled, .alertMgr-pageBtn--active { background:#006BB4; color:#fff; font-weight:700; cursor:default; }
+.alertMgr-pageBtn:not(:disabled):hover { background-color:#E6F0FF; }
+.alertMgr-pageBtn:focus-visible { outline:2px solid #006BB4; outline-offset:2px; }
+`;
 
 interface TablePaginationProps {
   pageIndex: number;
@@ -64,6 +70,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                 iconType="arrowDown"
                 iconSide="right"
                 onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+                data-test-subj="alertManager-pagination-rowsPerPage"
               >
                 Rows per page: {pageSize}
               </EuiButtonEmpty>
@@ -100,6 +107,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                 isDisabled={pageIndex === 0}
                 size="s"
                 color="text"
+                data-test-subj="alertManager-pagination-prev"
               />
             </EuiFlexItem>
             {pages.map((p) => (
@@ -109,8 +117,10 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                   disabled={p === pageIndex}
                   aria-label={`Page ${p + 1} of ${pageCount}`}
                   aria-current={p === pageIndex ? 'page' : undefined}
-                  className={PAGINATION_BUTTON_HOVER_CLASS}
-                  style={PAGINATION_BUTTON_STYLE(p === pageIndex)}
+                  className={`alertMgr-pageBtn${
+                    p === pageIndex ? ' alertMgr-pageBtn--active' : ''
+                  }`}
+                  data-test-subj={`alertManager-pagination-page-${p + 1}`}
                 >
                   {p + 1}
                 </button>
@@ -124,6 +134,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                 isDisabled={pageIndex >= pageCount - 1}
                 size="s"
                 color="text"
+                data-test-subj="alertManager-pagination-next"
               />
             </EuiFlexItem>
           </EuiFlexGroup>

@@ -85,6 +85,7 @@ export const MetricComboBox: React.FC<MetricComboBoxProps> = ({
       isInvalid={isInvalid}
       aria-label="Prometheus metric name"
       fullWidth
+      data-test-subj="alertManager-sliSection-metricCombo"
     />
   );
 };
@@ -119,6 +120,7 @@ export interface LabelValueComboBoxProps {
   isInvalid?: boolean;
   error?: string;
   ariaLabel: string;
+  testSubj?: string;
 }
 
 /**
@@ -135,6 +137,7 @@ export const LabelValueComboBox: React.FC<LabelValueComboBoxProps> = ({
   placeholder,
   isInvalid,
   ariaLabel,
+  testSubj,
 }) => {
   const selectedOptions = selectedValue ? [{ label: selectedValue }] : [];
 
@@ -165,6 +168,7 @@ export const LabelValueComboBox: React.FC<LabelValueComboBoxProps> = ({
       isInvalid={isInvalid}
       aria-label={ariaLabel}
       fullWidth
+      data-test-subj={testSubj || 'alertManager-sliSection-labelValueCombo'}
     />
   );
 };
@@ -230,6 +234,7 @@ export const GoodEventsFilterCombo: React.FC<GoodEventsFilterComboProps> = ({
       onCreateOption={handleCreate}
       aria-label="Good events filter"
       fullWidth
+      data-test-subj="alertManager-sliSection-goodEventsFilterCombo"
     />
   );
 };

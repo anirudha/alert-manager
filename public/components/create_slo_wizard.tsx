@@ -156,7 +156,12 @@ const BurnRateSection: React.FC<{
           </EuiText>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EuiButtonEmpty size="s" onClick={useRecommended} iconType="sparkles">
+          <EuiButtonEmpty
+            size="s"
+            onClick={useRecommended}
+            iconType="sparkles"
+            data-test-subj="alertManager-sloWizard-useRecommended"
+          >
             Use recommended defaults
           </EuiButtonEmpty>
         </EuiFlexItem>
@@ -189,6 +194,7 @@ const BurnRateSection: React.FC<{
                   compressed
                   value={tier.shortWindow}
                   onChange={(e) => updateBurnRate(i, 'shortWindow', e.target.value)}
+                  data-test-subj={`alertManager-sloWizard-burnRate-${i}-shortWindow`}
                 />
               </EuiFormRow>
             </EuiFlexItem>
@@ -201,6 +207,7 @@ const BurnRateSection: React.FC<{
                   compressed
                   value={tier.longWindow}
                   onChange={(e) => updateBurnRate(i, 'longWindow', e.target.value)}
+                  data-test-subj={`alertManager-sloWizard-burnRate-${i}-longWindow`}
                 />
               </EuiFormRow>
             </EuiFlexItem>
@@ -217,6 +224,7 @@ const BurnRateSection: React.FC<{
                   }
                   min={0}
                   step={0.1}
+                  data-test-subj={`alertManager-sloWizard-burnRate-${i}-multiplier`}
                 />
               </EuiFormRow>
             </EuiFlexItem>
@@ -233,6 +241,7 @@ const BurnRateSection: React.FC<{
                   ]}
                   value={tier.severity}
                   onChange={(e) => updateBurnRate(i, 'severity', e.target.value)}
+                  data-test-subj={`alertManager-sloWizard-burnRate-${i}-severity`}
                 />
               </EuiFormRow>
             </EuiFlexItem>
@@ -245,6 +254,7 @@ const BurnRateSection: React.FC<{
                   compressed
                   value={tier.forDuration}
                   onChange={(e) => updateBurnRate(i, 'forDuration', e.target.value)}
+                  data-test-subj={`alertManager-sloWizard-burnRate-${i}-forDuration`}
                 />
               </EuiFormRow>
             </EuiFlexItem>
@@ -255,6 +265,7 @@ const BurnRateSection: React.FC<{
                 color="danger"
                 onClick={() => removeBurnRate(i)}
                 aria-label="Remove tier"
+                data-test-subj={`alertManager-sloWizard-burnRate-${i}-remove`}
               />
             </EuiFlexItem>
           </EuiFlexGroup>
@@ -267,7 +278,12 @@ const BurnRateSection: React.FC<{
         </EuiPanel>
       ))}
 
-      <EuiButtonEmpty size="s" onClick={addBurnRate} iconType="plusInCircle">
+      <EuiButtonEmpty
+        size="s"
+        onClick={addBurnRate}
+        iconType="plusInCircle"
+        data-test-subj="alertManager-sloWizard-addBurnRate"
+      >
         Add burn rate tier
       </EuiButtonEmpty>
 
@@ -289,6 +305,7 @@ const BurnRateSection: React.FC<{
             sliHealth: { ...alarms.sliHealth, enabled: !alarms.sliHealth.enabled },
           })
         }
+        data-test-subj="alertManager-sloWizard-alarm-sliHealth"
       />
       <EuiText size="xs" color="subdued" style={{ marginLeft: 24, marginBottom: 8 }}>
         Fires when the instantaneous error ratio exceeds the budget rate over a 5-minute window.
@@ -307,6 +324,7 @@ const BurnRateSection: React.FC<{
             },
           })
         }
+        data-test-subj="alertManager-sloWizard-alarm-attainmentBreach"
       />
       <EuiText size="xs" color="subdued" style={{ marginLeft: 24, marginBottom: 8 }}>
         Fires when cumulative attainment drops below your target (e.g. 99.9%). Indicates the SLO has
@@ -322,6 +340,7 @@ const BurnRateSection: React.FC<{
             budgetWarning: { ...alarms.budgetWarning, enabled: !alarms.budgetWarning.enabled },
           })
         }
+        data-test-subj="alertManager-sloWizard-alarm-budgetWarning"
       />
       <EuiText size="xs" color="subdued" style={{ marginLeft: 24 }}>
         Fires when remaining error budget drops below the warning threshold you set in Section 2.
@@ -526,7 +545,14 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
   };
 
   return (
-    <EuiFlyout onClose={onClose} ownFocus size="l" aria-labelledby="createSloTitle" maxWidth={1100}>
+    <EuiFlyout
+      onClose={onClose}
+      ownFocus
+      size="l"
+      aria-labelledby="createSloTitle"
+      maxWidth={1100}
+      data-test-subj="alertManager-sloWizard"
+    >
       <EuiFlyoutHeader hasBorder>
         <EuiTitle size="m">
           <h2 id="createSloTitle">Create Service Level Objective (SLO)</h2>
@@ -575,6 +601,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
               }
               initialIsOpen
               paddingSize="m"
+              data-test-subj="alertManager-sloWizard-section1"
             >
               <SliSection
                 datasourceId={datasourceId}
@@ -600,6 +627,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
               }
               initialIsOpen
               paddingSize="m"
+              data-test-subj="alertManager-sloWizard-section2"
             >
               <EuiCallOut
                 title="Setting your SLO target"
@@ -629,6 +657,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       max={99.99}
                       step={0.01}
                       aria-label="Attainment goal percentage"
+                      data-test-subj="alertManager-sloWizard-target"
                     />
                   </EuiFormRow>
                   <EuiFlexGroup gutterSize="xs" responsive={false} style={{ marginTop: 4 }}>
@@ -669,6 +698,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       max={99}
                       step={1}
                       aria-label="Budget warning threshold percentage"
+                      data-test-subj="alertManager-sloWizard-budgetWarning"
                     />
                   </EuiFormRow>
                 </EuiFlexItem>
@@ -680,6 +710,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                   value={windowDuration}
                   onChange={(e) => setWindowDuration(e.target.value)}
                   aria-label="Measurement window duration"
+                  data-test-subj="alertManager-sloWizard-windowDuration"
                 />
               </EuiFormRow>
               {errorBudgetDisplay && (
@@ -718,6 +749,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
               }
               initialIsOpen
               paddingSize="m"
+              data-test-subj="alertManager-sloWizard-section3"
             >
               <EuiFormRow
                 label="SLO name"
@@ -732,6 +764,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                   }}
                   placeholder="Auto-generated from service + operation"
                   aria-label="SLO name"
+                  data-test-subj="alertManager-sloWizard-name"
                 />
               </EuiFormRow>
               {!autoName && generatedName && (
@@ -769,6 +802,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
               }
               initialIsOpen
               paddingSize="m"
+              data-test-subj="alertManager-sloWizard-section4"
             >
               <BurnRateSection
                 burnRates={burnRates}
@@ -788,6 +822,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
               id="slo-section-tags"
               buttonContent="Section 5 — Add Tags (optional)"
               paddingSize="m"
+              data-test-subj="alertManager-sloWizard-section5"
             >
               {tags.map((tag, i) => (
                 <EuiFlexGroup
@@ -803,6 +838,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       value={tag.key}
                       onChange={(e) => updateTag(i, 'key', e.target.value)}
                       aria-label="Tag key"
+                      data-test-subj={`alertManager-sloWizard-tag-${i}-key`}
                     />
                   </EuiFlexItem>
                   <EuiFlexItem>
@@ -812,6 +848,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       value={tag.value}
                       onChange={(e) => updateTag(i, 'value', e.target.value)}
                       aria-label="Tag value"
+                      data-test-subj={`alertManager-sloWizard-tag-${i}-value`}
                     />
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>
@@ -820,11 +857,17 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
                       color="danger"
                       onClick={() => removeTag(i)}
                       aria-label="Remove tag"
+                      data-test-subj={`alertManager-sloWizard-tag-${i}-remove`}
                     />
                   </EuiFlexItem>
                 </EuiFlexGroup>
               ))}
-              <EuiButtonEmpty size="s" onClick={addTag} iconType="plusInCircle">
+              <EuiButtonEmpty
+                size="s"
+                onClick={addTag}
+                iconType="plusInCircle"
+                data-test-subj="alertManager-sloWizard-addTag"
+              >
                 Add tag
               </EuiButtonEmpty>
               <EuiSpacer size="s" />
@@ -844,7 +887,9 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
       <EuiFlyoutFooter>
         <EuiFlexGroup justifyContent="spaceBetween">
           <EuiFlexItem grow={false}>
-            <EuiButtonEmpty onClick={onClose}>Cancel</EuiButtonEmpty>
+            <EuiButtonEmpty onClick={onClose} data-test-subj="alertManager-sloWizard-cancel">
+              Cancel
+            </EuiButtonEmpty>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiButton
@@ -852,6 +897,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
               onClick={handleSubmit}
               isLoading={submitting}
               isDisabled={hasSubmitted && !isFormValid}
+              data-test-subj="alertManager-sloWizard-submit"
             >
               Create SLO
             </EuiButton>

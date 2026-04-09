@@ -1,4 +1,7 @@
-/* Copyright OpenSearch Contributors, SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * SLO Listing -- follows the same EuiResizableContainer + EuiBasicTable
@@ -33,34 +36,25 @@ import {
   EuiFieldSearch,
   EuiEmptyPrompt,
   EuiButton,
-  EuiCheckbox,
   EuiLoadingSpinner,
   EuiCallOut,
-  EuiPopover,
-  EuiContextMenuPanel,
-  EuiContextMenuItem,
   EuiHealth,
-  EuiIcon,
   EuiResizableContainer,
   EuiButtonEmpty,
-  EuiStat,
   EuiTitle,
 } from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import {
-  SLO_STATUS_COLORS,
   SLI_TYPE_LABELS,
   formatPercentage,
   formatErrorBudget,
   errorBudgetColor,
   attainmentColor,
-  PAGINATION_BUTTON_STYLE,
-  PAGINATION_BUTTON_HOVER_CLASS,
-  PAGINATION_CSS,
 } from './shared_constants';
 import type {
   SloSummary,
   SloDefinition,
+  SloInput,
   SloStatus,
   SliType,
   SloLiveStatus,
@@ -68,7 +62,9 @@ import type {
 } from '../../common/slo_types';
 import { CreateSloWizard } from './create_slo_wizard';
 import { SloDetailFlyout } from './slo_detail_flyout';
-import { EchartsRender } from './echarts_render';
+import { ErrorBudgetBurndown, SloStatusDonut, SlosBySliType, SlosByService } from './slo_charts';
+import { SloSummaryCards } from './slo_summary_cards';
+import { FacetFilterGroup, useFacetCollapse } from './facet_filter_panel';
 
 // ============================================================================
 // Types
@@ -84,7 +80,7 @@ export interface SloApiClient {
     hasMore: boolean;
   }>;
   getSlo: (id: string) => Promise<SloDefinition>;
-  createSlo: (data: any) => Promise<SloDefinition>;
+  createSlo: (data: SloInput) => Promise<SloDefinition>;
   deleteSlo: (id: string) => Promise<{ deleted: boolean; generatedRuleNames: string[] }>;
 }
 
@@ -110,22 +106,6 @@ const SLO_TABLE_CSS = `
 `;
 
 // ============================================================================
-// Color constants (from shared_constants.ts — explicit hex values for charts)
-// ============================================================================
-
-const CHART_COLORS = {
-  breached: '#BD271E',
-  warning: '#F5A700',
-  ok: '#017D73',
-  noData: '#98A2B3',
-  primary: '#006BB4',
-  textDark: '#343741',
-  textLight: '#69707D',
-  textSubdued: '#98A2B3',
-  gridLine: '#EDF0F5',
-} as const;
-
-// ============================================================================
 // Status display map (mirrors STATUS_COLORS / HEALTH_COLORS in monitors_table)
 // ============================================================================
 
@@ -133,13 +113,6 @@ const STATUS_HEALTH_COLORS: Record<string, string> = {
   breached: 'danger',
   warning: 'warning',
   ok: 'success',
-  no_data: 'subdued',
-};
-
-const STATUS_STAT_TITLE_COLORS: Record<string, string> = {
-  breached: 'danger',
-  warning: 'default',
-  ok: 'default',
   no_data: 'subdued',
 };
 
@@ -166,7 +139,7 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
         const data = await apiClient.getSlo(sloId);
         if (cancelled) return;
         const { generateSloRuleGroup } = await import('../../common/slo_promql_generator');
-        const ruleGroup = generateSloRuleGroup(data as any);
+        const ruleGroup = generateSloRuleGroup(data);
         setRules(ruleGroup.rules);
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load rules');
@@ -262,7 +235,7 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
             </tr>
           </thead>
           <tbody>
-            {rules.map((rule, idx) => (
+            {rules.map((rule) => (
               <tr key={`${rule.type}-${rule.name}`} style={{ borderBottom: '1px solid #EDF0F5' }}>
                 <td style={{ padding: '4px 8px' }}>
                   <EuiBadge
@@ -299,374 +272,12 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
 };
 
 // ============================================================================
-// Error Budget Burndown — horizontal bar chart (full width, THE key SLO chart)
-// ============================================================================
-
-const ErrorBudgetBurndown: React.FC<{ slos: SloSummary[] }> = ({ slos }) => {
-  const spec = useMemo(() => {
-    if (slos.length === 0) return null;
-
-    // Sort by error budget ascending so the most critical are at the top visually
-    const sorted = [...slos]
-      .filter((s) => s.status && s.status.status !== 'no_data')
-      .sort((a, b) => a.status.errorBudgetRemaining - b.status.errorBudgetRemaining);
-
-    // Limit to top 15 SLOs for readability
-    const display = sorted.slice(0, 15);
-    if (display.length === 0) return null;
-
-    // Reversed so top item in chart = most critical (ECharts y-axis bottom->top)
-    const names = display.map((s) => s.name).reverse();
-    const values = display.map((s) => Math.round(s.status.errorBudgetRemaining * 100)).reverse();
-
-    const barColors = display
-      .map((s) => {
-        const budget = s.status.errorBudgetRemaining;
-        if (budget <= 0) return CHART_COLORS.breached;
-        if (budget < 0.3) return CHART_COLORS.warning;
-        return CHART_COLORS.ok;
-      })
-      .reverse();
-
-    // Auto-scale x-axis: pad 15% beyond the data range, always include 0% and warning line
-    const minVal = Math.min(...values, 0);
-    const maxVal = Math.max(...values, 30); // at least show warning threshold
-    const range = maxVal - minVal || 100;
-    const xMin = Math.min(minVal - range * 0.15, -10);
-    const xMax = Math.min(Math.max(maxVal + range * 0.2, 40), 110); // cap at 110
-
-    return {
-      tooltip: {
-        trigger: 'axis' as const,
-        axisPointer: { type: 'shadow' as const },
-        formatter: (params: any) => {
-          const p = Array.isArray(params) ? params[0] : params;
-          const sloData = display[display.length - 1 - (p.dataIndex ?? 0)];
-          const target = sloData ? `${(sloData.target * 100).toFixed(2)}%` : '';
-          return `<b>${p.name}</b><br/>Error Budget Remaining: <b>${p.value}%</b>${target ? `<br/>Target: ${target}` : ''}`;
-        },
-      },
-      grid: {
-        top: 8,
-        right: 50,
-        bottom: 25,
-        left: 180,
-      },
-      xAxis: {
-        type: 'value' as const,
-        min: Math.round(xMin),
-        max: Math.round(xMax),
-        axisLabel: {
-          fontSize: 10,
-          color: CHART_COLORS.textLight,
-          formatter: '{value}%',
-        },
-        splitLine: { lineStyle: { color: CHART_COLORS.gridLine, type: 'dashed' as const } },
-        axisLine: { lineStyle: { color: CHART_COLORS.gridLine } },
-      },
-      yAxis: {
-        type: 'category' as const,
-        data: names,
-        axisLabel: {
-          fontSize: 11,
-          color: CHART_COLORS.textDark,
-          width: 170,
-          overflow: 'truncate' as const,
-        },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
-      series: [
-        {
-          type: 'bar' as const,
-          data: values.map((v, i) => ({
-            value: v,
-            itemStyle: {
-              color: barColors[i],
-              borderRadius: [0, 3, 3, 0],
-            },
-          })),
-          barMaxWidth: 18,
-          barMinWidth: 8,
-          label: {
-            show: true,
-            position: 'right' as const,
-            fontSize: 11,
-            fontWeight: 'bold' as const,
-            color: CHART_COLORS.textDark,
-            formatter: '{c}%',
-          },
-        },
-        // Reference lines (invisible series)
-        {
-          type: 'bar' as const,
-          data: [] as number[],
-          markLine: {
-            silent: true,
-            symbol: 'none' as const,
-            data: [
-              {
-                xAxis: 0,
-                lineStyle: { color: CHART_COLORS.breached, width: 2, type: 'dashed' as const },
-                label: { show: false },
-              },
-              ...(xMax >= 30
-                ? [
-                    {
-                      xAxis: 30,
-                      lineStyle: { color: CHART_COLORS.warning, width: 1, type: 'dashed' as const },
-                      label: { show: false },
-                    },
-                  ]
-                : []),
-            ],
-          },
-        },
-      ],
-    };
-  }, [slos]);
-
-  if (!spec) {
-    return (
-      <EuiText size="s" color="subdued" textAlign="center">
-        No error budget data available
-      </EuiText>
-    );
-  }
-
-  const barCount = slos.filter((s) => s.status && s.status.status !== 'no_data').length;
-  const displayCount = Math.min(barCount, 15);
-  return <EchartsRender spec={spec} height={Math.max(120, displayCount * 32 + 50)} />;
-};
-
-// ============================================================================
-// SLO Status Donut — pie/donut chart (matches SeverityDonut pattern)
-// ============================================================================
-
-const SloStatusDonut: React.FC<{ slos: SloSummary[] }> = ({ slos }) => {
-  const spec = useMemo(() => {
-    const total = slos.length;
-    if (total === 0) return null;
-
-    const counts: Record<string, number> = { breached: 0, warning: 0, ok: 0, no_data: 0 };
-    for (const s of slos) {
-      counts[s.status.status] = (counts[s.status.status] || 0) + 1;
-    }
-
-    const statusOrder: Array<{ key: string; label: string; color: string }> = [
-      { key: 'breached', label: 'Breached', color: CHART_COLORS.breached },
-      { key: 'warning', label: 'Warning', color: CHART_COLORS.warning },
-      { key: 'ok', label: 'Ok', color: CHART_COLORS.ok },
-      { key: 'no_data', label: 'No data', color: CHART_COLORS.noData },
-    ];
-
-    return {
-      tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
-      legend: { bottom: 0, left: 'center', textStyle: { fontSize: 11 } },
-      series: [
-        {
-          type: 'pie' as const,
-          radius: ['45%', '70%'],
-          center: ['50%', '45%'],
-          data: statusOrder
-            .filter((s) => (counts[s.key] || 0) > 0)
-            .map((s) => ({
-              value: counts[s.key] || 0,
-              name: s.label,
-              itemStyle: { color: s.color },
-            })),
-          label: { show: false },
-          emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' as const } },
-        },
-      ],
-      graphic: [
-        {
-          type: 'text' as const,
-          left: 'center',
-          top: '40%',
-          style: {
-            text: total.toString(),
-            fontSize: 24,
-            fontWeight: 'bold' as const,
-            fill: CHART_COLORS.textDark,
-            textAlign: 'center' as const,
-          },
-        },
-        {
-          type: 'text' as const,
-          left: 'center',
-          top: '52%',
-          style: {
-            text: 'SLOs',
-            fontSize: 11,
-            fill: CHART_COLORS.textSubdued,
-            textAlign: 'center' as const,
-          },
-        },
-      ],
-    };
-  }, [slos]);
-
-  if (slos.length === 0) {
-    return (
-      <EuiText size="s" color="subdued" textAlign="center">
-        No SLOs
-      </EuiText>
-    );
-  }
-
-  return <EchartsRender spec={spec!} height={180} />;
-};
-
-// ============================================================================
-// SLOs by SLI Type — horizontal bar chart (matches AlertsByDatasource)
-// ============================================================================
-
-const SlosBySliType: React.FC<{ slos: SloSummary[] }> = ({ slos }) => {
-  const spec = useMemo(() => {
-    const groups: Record<string, number> = {};
-    for (const s of slos) {
-      const label = SLI_TYPE_LABELS[s.sliType] || s.sliType;
-      groups[label] = (groups[label] || 0) + 1;
-    }
-    const sorted = Object.entries(groups)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-    if (sorted.length === 0) return null;
-
-    const names = [...sorted].map(([name]) => name).reverse();
-    const values = [...sorted].map(([, count]) => count).reverse();
-
-    return {
-      tooltip: {
-        trigger: 'axis' as const,
-        axisPointer: { type: 'shadow' as const },
-      },
-      grid: { top: 4, right: 40, bottom: 4, left: 130 },
-      xAxis: {
-        type: 'value' as const,
-        show: false,
-      },
-      yAxis: {
-        type: 'category' as const,
-        data: names,
-        axisLabel: {
-          fontSize: 11,
-          color: CHART_COLORS.textDark,
-          width: 120,
-          overflow: 'truncate' as const,
-        },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
-      series: [
-        {
-          type: 'bar' as const,
-          data: values,
-          itemStyle: { color: CHART_COLORS.primary, borderRadius: [0, 4, 4, 0] },
-          barMaxWidth: 12,
-          label: {
-            show: true,
-            position: 'right' as const,
-            fontSize: 11,
-            fontWeight: 'bold' as const,
-            color: CHART_COLORS.textDark,
-          },
-        },
-      ],
-    };
-  }, [slos]);
-
-  if (!spec) {
-    return (
-      <EuiText size="s" color="subdued">
-        No data
-      </EuiText>
-    );
-  }
-
-  const barCount = spec.yAxis.data.length;
-  return <EchartsRender spec={spec} height={Math.max(80, barCount * 28 + 16)} />;
-};
-
-// ============================================================================
-// SLOs by Service — horizontal bar chart (matches AlertsByMonitor)
-// ============================================================================
-
-const SlosByService: React.FC<{ slos: SloSummary[] }> = ({ slos }) => {
-  const spec = useMemo(() => {
-    const groups: Record<string, number> = {};
-    for (const s of slos) {
-      groups[s.serviceName] = (groups[s.serviceName] || 0) + 1;
-    }
-    const sorted = Object.entries(groups)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-    if (sorted.length === 0) return null;
-
-    const names = [...sorted].map(([name]) => name).reverse();
-    const values = [...sorted].map(([, count]) => count).reverse();
-
-    return {
-      tooltip: {
-        trigger: 'axis' as const,
-        axisPointer: { type: 'shadow' as const },
-      },
-      grid: { top: 4, right: 40, bottom: 4, left: 130 },
-      xAxis: {
-        type: 'value' as const,
-        show: false,
-      },
-      yAxis: {
-        type: 'category' as const,
-        data: names,
-        axisLabel: {
-          fontSize: 11,
-          color: CHART_COLORS.textDark,
-          width: 120,
-          overflow: 'truncate' as const,
-        },
-        axisTick: { show: false },
-        axisLine: { show: false },
-      },
-      series: [
-        {
-          type: 'bar' as const,
-          data: values,
-          itemStyle: { color: CHART_COLORS.primary, borderRadius: [0, 4, 4, 0] },
-          barMaxWidth: 12,
-          label: {
-            show: true,
-            position: 'right' as const,
-            fontSize: 11,
-            fontWeight: 'bold' as const,
-            color: CHART_COLORS.textDark,
-          },
-        },
-      ],
-    };
-  }, [slos]);
-
-  if (!spec) {
-    return (
-      <EuiText size="s" color="subdued">
-        No data
-      </EuiText>
-    );
-  }
-
-  const barCount = spec.yAxis.data.length;
-  return <EchartsRender spec={spec} height={Math.max(80, barCount * 28 + 16)} />;
-};
-
-// ============================================================================
 // SloListing -- main component
 // ============================================================================
 
 const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
   // State
   const [slos, setSlos] = useState<SloSummary[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -681,18 +292,9 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [selectedSloId, setSelectedSloId] = useState<string | null>(null);
-  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
 
-  // Collapsible facet sections state (same pattern as monitors_table)
-  const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
-  const toggleFacetCollapse = (id: string) => {
-    setCollapsedFacets((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  // Collapsible facet sections state (shared hook)
+  const { toggleFacetCollapse, isCollapsed: isFacetCollapsed } = useFacetCollapse();
 
   // Stat card filter
   const [statFilter, setStatFilter] = useState<string | null>(null);
@@ -704,9 +306,8 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
     try {
       const resp: SloApiResponse = await apiClient.listSlos();
       setSlos(resp.results || []);
-      setTotal(resp.total || 0);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load SLOs');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load SLOs');
       setSlos([]);
     } finally {
       setLoading(false);
@@ -994,7 +595,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
     [expandedRowIds]
   );
 
-  // ---- Filter panel facet group renderer (mirrors monitors_table exactly) ----
+  // ---- Filter panel facet group renderer (delegates to shared component) ----
   const renderFacetGroup = (
     id: string,
     label: string,
@@ -1004,82 +605,21 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
     counts: Record<string, number>,
     displayMap?: Record<string, string>,
     colorMap?: Record<string, string>
-  ) => {
-    const isCollapsed = collapsedFacets.has(id);
-    const activeCount = selected.length;
-    return (
-      <div key={id} style={{ marginBottom: 12 }}>
-        <EuiFlexGroup
-          gutterSize="xs"
-          alignItems="center"
-          responsive={false}
-          style={{ cursor: 'pointer', marginBottom: 4 }}
-          onClick={() => toggleFacetCollapse(id)}
-        >
-          <EuiFlexItem grow={false}>
-            <EuiIcon type={isCollapsed ? 'arrowRight' : 'arrowDown'} size="s" />
-          </EuiFlexItem>
-          <EuiFlexItem>
-            <EuiText size="xs">
-              <strong>{label}</strong>
-            </EuiText>
-          </EuiFlexItem>
-          {activeCount > 0 && (
-            <EuiFlexItem grow={false}>
-              <EuiBadge color="primary">{activeCount}</EuiBadge>
-            </EuiFlexItem>
-          )}
-        </EuiFlexGroup>
-        {!isCollapsed && (
-          <div style={{ paddingLeft: 4 }}>
-            {options.map((opt) => {
-              const isActive = selected.includes(opt);
-              const count = counts[opt] || 0;
-              const displayLabel = displayMap?.[opt] || opt;
-              const checkboxId = `${id}-${opt}`;
-
-              const labelContent = (
-                <span
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    width: '100%',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
-                    {colorMap && (
-                      <EuiHealth color={colorMap[opt] || 'subdued'} style={{ marginRight: 0 }} />
-                    )}
-                    <span style={{ fontSize: '12px', lineHeight: '18px' }}>{displayLabel}</span>
-                  </span>
-                  <span style={{ fontSize: '12px', lineHeight: '18px', color: '#69707D' }}>
-                    ({count})
-                  </span>
-                </span>
-              );
-
-              return (
-                <div key={opt} style={{ marginBottom: 2 }}>
-                  <EuiCheckbox
-                    id={checkboxId}
-                    label={labelContent}
-                    checked={isActive}
-                    onChange={() => {
-                      if (isActive) onChange(selected.filter((s) => s !== opt));
-                      else onChange([...selected, opt]);
-                    }}
-                    compressed
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
+  ) => (
+    <FacetFilterGroup
+      key={id}
+      id={id}
+      label={label}
+      options={options}
+      selected={selected}
+      onChange={onChange}
+      counts={counts}
+      displayMap={displayMap}
+      colorMap={colorMap}
+      isCollapsed={isFacetCollapsed(id)}
+      onToggleCollapse={toggleFacetCollapse}
+    />
+  );
 
   // ---- Render ----
   return (
@@ -1104,7 +644,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
               initialSize={20}
               minSize="200px"
               mode={['collapsible', { position: 'top' }]}
-              onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+              onToggleCollapsed={() => {}}
               paddingSize="none"
               style={{ overflow: 'auto', paddingRight: '4px' }}
             >
@@ -1209,183 +749,16 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                     </EuiFlexItem>
                   </EuiFlexGroup>
 
-                  {/* Status stat cards (inside the main panel, like Alerts tab) */}
-                  {/* Helper: keyboard activation for stat card panels (WCAG 2.1 role="button") */}
-                  <EuiFlexGroup gutterSize="m" responsive={true}>
-                    {/* Total */}
-                    <EuiFlexItem>
-                      <EuiPanel
-                        paddingSize="m"
-                        hasBorder
-                        onClick={() => {
-                          setStatFilter(statFilter === 'all' ? null : 'all');
-                          setSelectedStatuses([]);
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        onKeyDown={(e: React.KeyboardEvent) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).click();
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          boxShadow:
-                            !statFilter || statFilter === 'all'
-                              ? 'inset 0 0 0 2px #006BB4'
-                              : 'none',
-                          backgroundColor:
-                            !statFilter || statFilter === 'all' ? '#E6F0FF' : undefined,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <EuiStat title={slos.length} description="Total SLOs" titleSize="m" />
-                      </EuiPanel>
-                    </EuiFlexItem>
-                    {/* Breached */}
-                    <EuiFlexItem>
-                      <EuiPanel
-                        paddingSize="m"
-                        hasBorder
-                        onClick={() => {
-                          setStatFilter(statFilter === 'breached' ? null : 'breached');
-                          setSelectedStatuses([]);
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        onKeyDown={(e: React.KeyboardEvent) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).click();
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          boxShadow: statFilter === 'breached' ? 'inset 0 0 0 2px #BD271E' : 'none',
-                          backgroundColor: statFilter === 'breached' ? '#E6F0FF' : undefined,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <EuiStat
-                          title={statusCounts.breached || 0}
-                          description="Breached"
-                          titleColor="danger"
-                          titleSize="m"
-                        />
-                        {statFilter === 'breached' && (
-                          <EuiText size="xs" color="subdued">
-                            <em>Filtered</em>
-                          </EuiText>
-                        )}
-                      </EuiPanel>
-                    </EuiFlexItem>
-                    {/* Warning */}
-                    <EuiFlexItem>
-                      <EuiPanel
-                        paddingSize="m"
-                        hasBorder
-                        onClick={() => {
-                          setStatFilter(statFilter === 'warning' ? null : 'warning');
-                          setSelectedStatuses([]);
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        onKeyDown={(e: React.KeyboardEvent) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).click();
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          boxShadow: statFilter === 'warning' ? 'inset 0 0 0 2px #F5A700' : 'none',
-                          backgroundColor: statFilter === 'warning' ? '#E6F0FF' : undefined,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <EuiStat
-                          title={statusCounts.warning || 0}
-                          description="Warning"
-                          titleSize="m"
-                        />
-                        {statFilter === 'warning' && (
-                          <EuiText size="xs" color="subdued">
-                            <em>Filtered</em>
-                          </EuiText>
-                        )}
-                      </EuiPanel>
-                    </EuiFlexItem>
-                    {/* Ok */}
-                    <EuiFlexItem>
-                      <EuiPanel
-                        paddingSize="m"
-                        hasBorder
-                        onClick={() => {
-                          setStatFilter(statFilter === 'ok' ? null : 'ok');
-                          setSelectedStatuses([]);
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        onKeyDown={(e: React.KeyboardEvent) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).click();
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          boxShadow: statFilter === 'ok' ? 'inset 0 0 0 2px #017D73' : 'none',
-                          backgroundColor: statFilter === 'ok' ? '#E6F0FF' : undefined,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <EuiStat title={statusCounts.ok || 0} description="Ok" titleSize="m" />
-                        {statFilter === 'ok' && (
-                          <EuiText size="xs" color="subdued">
-                            <em>Filtered</em>
-                          </EuiText>
-                        )}
-                      </EuiPanel>
-                    </EuiFlexItem>
-                    {/* No Data */}
-                    <EuiFlexItem>
-                      <EuiPanel
-                        paddingSize="m"
-                        hasBorder
-                        onClick={() => {
-                          setStatFilter(statFilter === 'no_data' ? null : 'no_data');
-                          setSelectedStatuses([]);
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        onKeyDown={(e: React.KeyboardEvent) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).click();
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          boxShadow: statFilter === 'no_data' ? 'inset 0 0 0 2px #98A2B3' : 'none',
-                          backgroundColor: statFilter === 'no_data' ? '#E6F0FF' : undefined,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <EuiStat
-                          title={statusCounts.no_data || 0}
-                          description="No Data"
-                          titleColor="subdued"
-                          titleSize="m"
-                        />
-                        {statFilter === 'no_data' && (
-                          <EuiText size="xs" color="subdued">
-                            <em>Filtered</em>
-                          </EuiText>
-                        )}
-                      </EuiPanel>
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
+                  {/* Status stat cards (extracted component) */}
+                  <SloSummaryCards
+                    totalCount={slos.length}
+                    statusCounts={statusCounts}
+                    statFilter={statFilter}
+                    onStatFilterChange={(filter) => {
+                      setStatFilter(filter);
+                      setSelectedStatuses([]);
+                    }}
+                  />
 
                   <EuiSpacer size="m" />
 

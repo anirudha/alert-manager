@@ -17,6 +17,21 @@ import type { SavedObjectsClientContract } from 'opensearch-dashboards/server';
 
 const SO_TYPE = 'slo-definition';
 
+/** Type guard for OSD saved-object 404 errors (which have varying shapes). */
+function isSavedObjectNotFound(err: unknown): boolean {
+  const e = err as Record<string, unknown> | undefined;
+  return (
+    (e as { output?: { statusCode?: number } })?.output?.statusCode === 404 ||
+    (e as { statusCode?: number })?.statusCode === 404
+  );
+}
+
+/** Shape of saved objects returned by the OSD client. */
+interface SavedObjectEnvelope {
+  id: string;
+  attributes: Record<string, unknown>;
+}
+
 export class SavedObjectSloStore implements ISloStore {
   constructor(private readonly client: SavedObjectsClientContract) {}
 
@@ -24,9 +39,9 @@ export class SavedObjectSloStore implements ISloStore {
     try {
       const obj = await this.client.get(SO_TYPE, id);
       return this.toSloDefinition(obj);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 404 → not found
-      if (err?.output?.statusCode === 404 || err?.statusCode === 404) {
+      if (isSavedObjectNotFound(err)) {
         return null;
       }
       throw err;
@@ -47,11 +62,13 @@ export class SavedObjectSloStore implements ISloStore {
       };
       if (datasourceId) {
         // Escape quotes in datasourceId to prevent KQL injection
-        const escaped = datasourceId.replace(/"/g, '\\"');
+        const escaped = datasourceId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         findOpts.filter = `${SO_TYPE}.attributes.datasourceId: "${escaped}"`;
       }
       const response = await this.client.find(findOpts);
-      results.push(...response.saved_objects.map((obj: any) => this.toSloDefinition(obj)));
+      results.push(
+        ...response.saved_objects.map((obj: SavedObjectEnvelope) => this.toSloDefinition(obj))
+      );
       if (response.saved_objects.length === 0 || results.length >= response.total) break;
       page++;
     }
@@ -67,8 +84,8 @@ export class SavedObjectSloStore implements ISloStore {
     try {
       await this.client.delete(SO_TYPE, id);
       return true;
-    } catch (err: any) {
-      if (err?.output?.statusCode === 404 || err?.statusCode === 404) {
+    } catch (err: unknown) {
+      if (isSavedObjectNotFound(err)) {
         return false;
       }
       throw err;
@@ -76,7 +93,7 @@ export class SavedObjectSloStore implements ISloStore {
   }
 
   /** Reconstruct SloDefinition from a saved object envelope. */
-  private toSloDefinition(obj: any): SloDefinition {
+  private toSloDefinition(obj: SavedObjectEnvelope): SloDefinition {
     return {
       id: obj.id,
       ...obj.attributes,

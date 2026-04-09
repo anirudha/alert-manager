@@ -11,8 +11,7 @@
 
 import type { PrometheusMetadataService } from '../../common/prometheus_metadata_service';
 import type { Logger } from '../../common/types';
-
-type Result = { status: number; body: unknown };
+import type { HandlerResult } from './route_utils';
 
 const MAX_RESULTS = 200;
 
@@ -25,7 +24,7 @@ export async function handleGetMetricNames(
   dsId: string,
   search?: string,
   logger?: Logger
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     const names = await service.getMetricNames(dsId, search);
     // Sort alphabetically and limit to MAX_RESULTS
@@ -35,7 +34,7 @@ export async function handleGetMetricNames(
       status: 200,
       body: { metrics: limited, total: names.length, truncated: names.length > MAX_RESULTS },
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (logger) logger.warn(`handleGetMetricNames failed for ds=${dsId}: ${msg}`);
     return { status: 200, body: { metrics: [], total: 0, truncated: false } };
@@ -51,12 +50,12 @@ export async function handleGetLabelNames(
   dsId: string,
   metric?: string,
   logger?: Logger
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     const names = await service.getLabelNames(dsId, metric);
     const sorted = [...names].sort();
     return { status: 200, body: { labels: sorted } };
-  } catch (err) {
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (logger) logger.warn(`handleGetLabelNames failed for ds=${dsId}: ${msg}`);
     return { status: 200, body: { labels: [] } };
@@ -73,7 +72,7 @@ export async function handleGetLabelValues(
   labelName: string,
   selector?: string,
   logger?: Logger
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     const values = await service.getLabelValues(dsId, labelName, selector);
     const sorted = [...values].sort();
@@ -82,7 +81,7 @@ export async function handleGetLabelValues(
       status: 200,
       body: { values: limited, total: values.length, truncated: values.length > MAX_RESULTS },
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (logger)
       logger.warn(`handleGetLabelValues failed for ds=${dsId}, label=${labelName}: ${msg}`);
@@ -98,11 +97,11 @@ export async function handleGetMetricMetadata(
   service: PrometheusMetadataService,
   dsId: string,
   logger?: Logger
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     const metadata = await service.getMetricMetadata(dsId);
     return { status: 200, body: { metadata } };
-  } catch (err) {
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (logger) logger.warn(`handleGetMetricMetadata failed for ds=${dsId}: ${msg}`);
     return { status: 200, body: { metadata: [] } };

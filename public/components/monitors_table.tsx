@@ -20,23 +20,14 @@ import {
   EuiButton,
   EuiButtonEmpty,
   EuiPopover,
-  EuiFilterGroup,
-  EuiFilterButton,
   EuiCheckboxGroup,
-  EuiCheckbox,
   EuiEmptyPrompt,
   EuiConfirmModal,
-  EuiIcon,
   EuiToolTip,
-  EuiComboBox,
   EuiText,
   EuiPanel,
-  EuiListGroup,
-  EuiListGroupItem,
   EuiButtonIcon,
   EuiResizableContainer,
-  EuiContextMenuPanel,
-  EuiContextMenuItem,
 } from '@elastic/eui';
 import { TablePagination } from './table_pagination';
 import {
@@ -46,18 +37,11 @@ import {
   MonitorStatus,
   MonitorHealthStatus,
   Datasource,
-} from '../../common/types';
+} from '../../common';
 import { serializeMonitors } from '../../common/serializer';
 import { MonitorDetailFlyout } from './monitor_detail_flyout';
-import {
-  SEVERITY_COLORS,
-  STATUS_COLORS,
-  HEALTH_COLORS,
-  TYPE_LABELS,
-  PAGINATION_BUTTON_STYLE,
-  PAGINATION_BUTTON_HOVER_CLASS,
-  PAGINATION_CSS,
-} from './shared_constants';
+import { FacetFilterGroup, useFacetCollapse } from './facet_filter_panel';
+import { SEVERITY_COLORS, STATUS_COLORS, HEALTH_COLORS, TYPE_LABELS } from './shared_constants';
 
 // ============================================================================
 // Constants
@@ -119,7 +103,7 @@ interface MonitorsTableProps {
   onDelete: (ids: string[]) => void;
   onClone?: (monitor: UnifiedRule) => void;
   onSilence?: (id: string) => void;
-  onImport?: (configs: any[]) => void;
+  onImport?: (configs: unknown[]) => void;
   onCreateMonitor?: () => void;
   /** Workspace-scoped entries for Prometheus datasources */
   workspaceOptions: Datasource[];
@@ -142,7 +126,7 @@ function buildSuggestions(rules: UnifiedRule[]): string[] {
       set.add(`${k}:${v}`);
       set.add(v);
     }
-    for (const [k, v] of Object.entries(r.annotations)) {
+    for (const v of Object.values(r.annotations)) {
       if (v.length < 80) set.add(v);
     }
   }
@@ -228,59 +212,6 @@ function collectLabelValues(rules: UnifiedRule[], key: string): string[] {
   }
   return Array.from(set).sort();
 }
-
-// ============================================================================
-// Filter Dropdown Component
-// ============================================================================
-const FilterDropdown: React.FC<{
-  label: string;
-  options: string[];
-  selected: string[];
-  onChange: (selected: string[]) => void;
-  displayMap?: Record<string, string>;
-}> = ({ label, options, selected, onChange, displayMap }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const toggle = (opt: string) => {
-    if (selected.includes(opt)) onChange(selected.filter((s) => s !== opt));
-    else onChange([...selected, opt]);
-  };
-
-  const checkboxes = options.map((opt) => ({
-    id: opt,
-    label: displayMap?.[opt] || opt,
-  }));
-
-  const selectedMap: Record<string, boolean> = {};
-  for (const s of selected) selectedMap[s] = true;
-
-  return (
-    <EuiPopover
-      button={
-        <EuiFilterButton
-          iconType="arrowDown"
-          onClick={() => setIsOpen(!isOpen)}
-          isSelected={isOpen}
-          hasActiveFilters={selected.length > 0}
-          numActiveFilters={selected.length}
-        >
-          {label}
-        </EuiFilterButton>
-      }
-      isOpen={isOpen}
-      closePopover={() => setIsOpen(false)}
-      panelPaddingSize="s"
-    >
-      <div style={{ width: 200, maxHeight: 300, overflow: 'auto' }}>
-        <EuiCheckboxGroup
-          options={checkboxes}
-          idToSelectedMap={selectedMap}
-          onChange={(id) => toggle(id)}
-        />
-      </div>
-    </EuiPopover>
-  );
-};
 
 // ============================================================================
 // Column Definitions
@@ -478,7 +409,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [showSavedSearches, setShowSavedSearches] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
@@ -486,7 +416,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
   const [showSaveSearchInput, setShowSaveSearchInput] = useState(false);
   const [saveSearchName, setSaveSearchName] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
@@ -555,8 +484,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const filtered = useMemo(() => {
     let result = rules.filter((r) => matchesSearch(r, searchQuery) && matchesFilters(r, filters));
     result.sort((a, b) => {
-      let aVal: any = (a as any)[sortField] ?? '';
-      let bVal: any = (b as any)[sortField] ?? '';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic sort field access on union type
+      let aVal: string | number = ((a as Record<string, any>)[sortField] as string) ?? '';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic sort field access on union type
+      let bVal: string | number = ((b as Record<string, any>)[sortField] as string) ?? '';
       // Handle label columns
       if (sortField.startsWith('label:')) {
         const key = sortField.replace('label:', '');
@@ -623,7 +554,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const loadSavedSearch = (ss: SavedSearch) => {
     setSearchQuery(ss.query);
     setFilters(ss.filters);
-    setShowSavedSearches(false);
   };
   const deleteSavedSearch = (id: string) => {
     setSavedSearches((prev) => prev.filter((s) => s.id !== id));
@@ -646,8 +576,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.onchange = (e: any) => {
-      const file = e.target?.files?.[0];
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement)?.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
@@ -675,7 +605,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const tableColumns = useMemo(() => {
     const w = (id: string) => `${columnWidths[id] || DEFAULT_WIDTHS[id] || 120}px`;
 
-    const cols: any[] = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable column type is complex
+    const cols: Array<Record<string, any>> = [
       {
         field: '_select',
         name: (
@@ -687,7 +618,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
           />
         ),
         width: '32px',
-        render: (_: any, item: UnifiedRule) => (
+        render: (_: unknown, item: UnifiedRule) => (
           <input
             type="checkbox"
             checked={selectedIds.has(item.id)}
@@ -876,8 +807,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   }, [visibleColumns, selectedIds, filtered, dsNameMap, columnWidths]);
 
   // Attach DOM-based resize handles to table header cells
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RefObject<HTMLDivElement | null> vs RefObject<HTMLDivElement>
   useResizableColumns(tableWrapperRef as any, columnWidths, setColumnWidths, visibleColumns);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable onChange criteria shape
   const onTableChange = ({ sort }: any) => {
     if (sort) {
       setSortField(sort.field);
@@ -965,18 +898,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     return { counts, labelCounts };
   }, [rules, searchQuery, labelKeys]);
 
-  // Collapsible facet sections state
-  const [collapsedFacets, setCollapsedFacets] = useState<Set<string>>(new Set());
-  const toggleFacetCollapse = (id: string) => {
-    setCollapsedFacets((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  // Collapsible facet sections state (shared hook)
+  const { toggleFacetCollapse, isCollapsed: isFacetCollapsed } = useFacetCollapse();
 
-  // Render a single facet group
+  // Render a single facet group (delegates to shared component)
   const renderFacetGroup = (
     id: string,
     label: string,
@@ -986,86 +911,25 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     counts: Record<string, number>,
     displayMap?: Record<string, string>,
     colorMap?: Record<string, string>
-  ) => {
-    const isCollapsed = collapsedFacets.has(id);
-    const activeCount = selected.length;
-    return (
-      <div key={id} style={{ marginBottom: 12 }}>
-        <EuiFlexGroup
-          gutterSize="xs"
-          alignItems="center"
-          responsive={false}
-          style={{ cursor: 'pointer', marginBottom: 4 }}
-          onClick={() => toggleFacetCollapse(id)}
-        >
-          <EuiFlexItem grow={false}>
-            <EuiIcon type={isCollapsed ? 'arrowRight' : 'arrowDown'} size="s" />
-          </EuiFlexItem>
-          <EuiFlexItem>
-            <EuiText size="xs">
-              <strong>{label}</strong>
-            </EuiText>
-          </EuiFlexItem>
-          {activeCount > 0 && (
-            <EuiFlexItem grow={false}>
-              <EuiBadge color="primary">{activeCount}</EuiBadge>
-            </EuiFlexItem>
-          )}
-        </EuiFlexGroup>
-        {!isCollapsed && (
-          <div style={{ paddingLeft: 4 }}>
-            {options.map((opt) => {
-              const isActive = selected.includes(opt);
-              const count = counts[opt] || 0;
-              const displayLabel = displayMap?.[opt] || opt;
-              const checkboxId = `${id}-${opt}`;
-
-              const labelContent = (
-                <span
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    width: '100%',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
-                    {colorMap && (
-                      <EuiHealth color={colorMap[opt] || 'subdued'} style={{ marginRight: 0 }} />
-                    )}
-                    <span style={{ fontSize: '12px', lineHeight: '18px' }}>{displayLabel}</span>
-                  </span>
-                  <span style={{ fontSize: '12px', lineHeight: '18px', color: '#69707D' }}>
-                    ({count})
-                  </span>
-                </span>
-              );
-
-              return (
-                <div key={opt} style={{ marginBottom: 2 }}>
-                  <EuiCheckbox
-                    id={checkboxId}
-                    label={labelContent}
-                    checked={isActive}
-                    onChange={() => {
-                      if (isActive) onChange(selected.filter((s) => s !== opt));
-                      else onChange([...selected, opt]);
-                    }}
-                    compressed
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
+  ) => (
+    <FacetFilterGroup
+      key={id}
+      id={id}
+      label={label}
+      options={options}
+      selected={selected}
+      onChange={onChange}
+      counts={counts}
+      displayMap={displayMap}
+      colorMap={colorMap}
+      isCollapsed={isFacetCollapsed(id)}
+      onToggleCollapse={toggleFacetCollapse}
+    />
+  );
 
   return (
     <EuiResizableContainer style={{ height: 'calc(100vh - 180px)' }}>
-      {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
+      {(EuiResizablePanel, EuiResizableButton) => {
         return (
           <>
             <EuiResizablePanel
@@ -1073,7 +937,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
               initialSize={20}
               minSize="200px"
               mode={['collapsible', { position: 'top' }]}
-              onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+              onToggleCollapsed={() => {}}
               paddingSize="none"
               style={{ overflow: 'auto', paddingRight: '4px' }}
             >
@@ -1259,6 +1123,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                           value={saveSearchName}
                           onChange={(e) => setSaveSearchName(e.target.value)}
                           compressed
+                          aria-label="Saved search name"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && saveSearchName.trim()) {
                               setSavedSearches((prev) => [
@@ -1548,8 +1413,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                         columns={tableColumns}
                         loading={loading}
                         sorting={{
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable sort field type
                           sort: { field: sortField as any, direction: sortDirection },
                         }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable onChange criteria shape
                         onChange={(criteria: any) => {
                           onTableChange(criteria);
                         }}

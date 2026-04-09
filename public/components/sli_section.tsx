@@ -211,7 +211,8 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
     label: string,
     ph: string,
     opts: EuiComboBoxOptionOption[] | undefined,
-    loading: boolean
+    loading: boolean,
+    testSubj?: string
   ) =>
     useFallback ? (
       <EuiFieldText
@@ -229,6 +230,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
         placeholder={ph}
         isInvalid={hasSubmitted && !!errors[`sli.${field}`]}
         ariaLabel={label}
+        testSubj={testSubj}
       />
     );
 
@@ -263,6 +265,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
           options={SRC_RADIOS}
           idSelected={s.sourceType}
           onChange={(id) => dispatch({ type: 'SET_SOURCE_TYPE', value: id as SliSourceType })}
+          data-test-subj="alertManager-sliSection-sourceType"
         />
       </EuiFormRow>
       <EuiSpacer size="m" />
@@ -280,6 +283,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
             value={s.metric}
             onChange={(e) => set('metric', e.target.value)}
             aria-label="Prometheus metric name"
+            data-test-subj="alertManager-sliSection-metricText"
           />
         ) : (
           <MetricComboBox
@@ -322,6 +326,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               value={s.calcMethod}
               onChange={(e) => set('calcMethod', e.target.value)}
               aria-label="Calculation method"
+              data-test-subj="alertManager-sliSection-calcMethod"
             />
           </EuiFormRow>
         </EuiFlexItem>
@@ -332,6 +337,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               value={s.sliType}
               onChange={(e) => dispatch({ type: 'SET_SLI_TYPE', value: e.target.value as SliType })}
               aria-label="SLI type"
+              data-test-subj="alertManager-sliSection-sliType"
             />
           </EuiFormRow>
         </EuiFlexItem>
@@ -359,6 +365,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               value={s.periodLength}
               onChange={(e) => set('periodLength', e.target.value)}
               aria-label="Period length"
+              data-test-subj="alertManager-sliSection-periodLength"
             />
           </EuiFormRow>
           <EuiSpacer size="s" />
@@ -386,7 +393,8 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               'Service name',
               'Select or type, e.g. pet-clinic-frontend',
               md.labelValues[s.serviceLabelName],
-              md.labelValuesLoading[s.serviceLabelName] ?? false
+              md.labelValuesLoading[s.serviceLabelName] ?? false,
+              'alertManager-sliSection-serviceValueCombo'
             )}
           </EuiFormRow>
         </EuiFlexItem>
@@ -397,6 +405,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               value={s.serviceLabelName}
               onChange={(e) => set('serviceLabelName', e.target.value)}
               aria-label="Service label name"
+              data-test-subj="alertManager-sliSection-serviceLabelName"
             />
           </EuiFormRow>
         </EuiFlexItem>
@@ -416,7 +425,8 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               'Operation name',
               'Select or type, e.g. POST /api/owners',
               md.labelValues[s.operationLabelName],
-              md.labelValuesLoading[s.operationLabelName] ?? false
+              md.labelValuesLoading[s.operationLabelName] ?? false,
+              'alertManager-sliSection-operationValueCombo'
             )}
           </EuiFormRow>
         </EuiFlexItem>
@@ -427,6 +437,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               value={s.operationLabelName}
               onChange={(e) => set('operationLabelName', e.target.value)}
               aria-label="Operation label name"
+              data-test-subj="alertManager-sliSection-operationLabelName"
             />
           </EuiFormRow>
         </EuiFlexItem>
@@ -443,7 +454,8 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
                 'Dependency name',
                 'Select or type, e.g. payment-api',
                 md.labelValues[s.dependencyLabelName],
-                md.labelValuesLoading[s.dependencyLabelName] ?? false
+                md.labelValuesLoading[s.dependencyLabelName] ?? false,
+                'alertManager-sliSection-dependencyValueCombo'
               )}
             </EuiFormRow>
           </EuiFlexItem>
@@ -456,6 +468,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
                 value={s.dependencyLabelName}
                 onChange={(e) => set('dependencyLabelName', e.target.value)}
                 aria-label="Dependency label name"
+                data-test-subj="alertManager-sliSection-dependencyLabelName"
               />
             </EuiFormRow>
           </EuiFlexItem>
@@ -474,6 +487,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
               value={s.goodEventsFilter}
               onChange={(e) => set('goodEventsFilter', e.target.value)}
               aria-label="Good events filter"
+              data-test-subj="alertManager-sliSection-goodEventsFilterText"
             />
           ) : (
             <GoodEventsFilterCombo
@@ -496,6 +510,7 @@ const SliSectionInner: React.FC<SliSectionProps> = ({
             step={0.01}
             min={0}
             aria-label="Latency threshold in seconds"
+            data-test-subj="alertManager-sliSection-latencyThreshold"
           />
         </EuiFormRow>
       )}
