@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, waitFor, configure, fireEvent } from '@testing-library/react';
 import { SloPreviewPanel } from '../slo_preview_panel';
-import type { SloInput } from '../../../core/slo_types';
+import type { SloInput } from '../../../common/slo_types';
 
 configure({ testIdAttribute: 'data-test-subj' });
 

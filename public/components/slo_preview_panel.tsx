@@ -14,7 +14,7 @@
  *
  * The preview is generated **client-side** using the same pure, stateless
  * `generateSloRuleGroup()` that the server uses. This module lives in
- * `core/` (shared between client and server) and has zero I/O or
+ * `common/` (shared between client and server) and has zero I/O or
  * server-only dependencies, so bundling it client-side is intentional
  * to provide instant, zero-latency feedback as the user types.
  */
@@ -37,9 +37,9 @@ import type {
   SloDefinition,
   GeneratedRuleGroup,
   GeneratedRule,
-} from '../../core/slo_types';
-import { DEFAULT_MWMBR_TIERS } from '../../core/slo_types';
-import { generateSloRuleGroup } from '../../core/slo_promql_generator';
+} from '../../common/slo_types';
+import { DEFAULT_MWMBR_TIERS } from '../../common/slo_types';
+import { generateSloRuleGroup } from '../../common/slo_promql_generator';
 import type { HttpClient } from '../services/alarms_client';
 
 // ============================================================================

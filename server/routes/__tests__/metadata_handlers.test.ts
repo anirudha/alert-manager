@@ -9,8 +9,8 @@ import {
   handleGetLabelValues,
   handleGetMetricMetadata,
 } from '../metadata_handlers';
-import type { PrometheusMetadataService } from '../../../core/prometheus_metadata_service';
-import type { Logger, PrometheusMetricMetadata } from '../../../core/types';
+import type { PrometheusMetadataService } from '../../../common/prometheus_metadata_service';
+import type { Logger, PrometheusMetricMetadata } from '../../../common/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

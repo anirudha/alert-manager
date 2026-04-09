@@ -12,9 +12,9 @@ import {
   handlePreviewSLORules,
   handleGetSLOStatuses,
 } from '../slo_handlers';
-import { SloService } from '../../../core/slo_service';
-import type { SloInput, SloUpdateInput } from '../../../core/slo_types';
-import type { Logger } from '../../../core/types';
+import { SloService } from '../../../common/slo_service';
+import type { SloInput, SloUpdateInput } from '../../../common/slo_types';
+import type { Logger } from '../../../common/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

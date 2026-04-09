@@ -71,28 +71,28 @@ yarn start --config config/opensearch_dashboards.dev.yml
 **Dual-mode plugin**: runs as both a standalone Express app and an OpenSearch Dashboards (OSD) plugin.
 
 - `public/components/` -- Shared React UI (symlinked into standalone via `standalone/components`)
-- `core/` -- Backend-agnostic services, types, and business logic
+- `common/` -- Backend-agnostic services, types, and business logic
 - `server/` -- OSD plugin server (routes, saved objects, plugin lifecycle)
 - `standalone/` -- Express server with its own `package.json` and build
-- `stubs/` -- OSD type stubs for Jest test execution (not used by build pipeline)
+- `server/__mocks__/` -- OSD server mock for Jest (mirrors `public/__mocks__/osd_core.ts` pattern)
 
 **API paths differ by mode**:
 - Standalone: `/api/slos`, `/api/alerts`, etc.
 - OSD plugin: `/api/alerting/slos`, `/api/alerting/unified/alerts`, etc.
 - `AlarmsApiClient` in `public/services/alarms_client.ts` handles this via `ApiPaths`
 
-**SLO storage**: `ISloStore` interface (`core/slo_types.ts`) with two implementations:
+**SLO storage**: `ISloStore` interface (`common/slo_types.ts`) with two implementations:
 - `InMemorySloStore` (standalone default)
 - `SavedObjectSloStore` (OSD plugin, persists to OpenSearch)
 
-**Prometheus metadata**: `PrometheusMetadataProvider` interface (`core/types.ts`) for metric/label discovery:
+**Prometheus metadata**: `PrometheusMetadataProvider` interface (`common/types.ts`) for metric/label discovery:
 - Implemented by `DirectQueryPrometheusBackend` (live) and `MockBackend` (MOCK_MODE)
-- Wrapped by `PrometheusMetadataService` (`core/prometheus_metadata_service.ts`) with stale-while-revalidate caching
+- Wrapped by `PrometheusMetadataService` (`common/prometheus_metadata_service.ts`) with stale-while-revalidate caching
 - 4 API routes: metric names, label names, label values, metric metadata
 - `server/plugin.ts` uses `isMetadataProvider()` runtime type guard to conditionally wire routes
 - Frontend: `usePrometheusMetadata` hook provides cascading autocomplete with graceful degradation
 
-**SLO templates**: `core/slo_templates.ts` provides template-based SLO creation:
+**SLO templates**: `common/slo_templates.ts` provides template-based SLO creation:
 - 5 templates: HTTP Availability, HTTP Latency P99, gRPC Availability, gRPC Latency P99, Custom
 - `detectMetricType()` uses metadata API type field with suffix-heuristic fallback
 - `formatErrorBudget()` for human-readable error budget display
@@ -103,7 +103,7 @@ yarn start --config config/opensearch_dashboards.dev.yml
 ### Unit Tests (Jest)
 
 Two projects in `jest.config.js`:
-- `server` -- Node environment, tests in `core/__tests__/` and `server/**/__tests__/`
+- `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
 Current: **31 test files, 864 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
@@ -180,7 +180,7 @@ OBS_STACK_REPO=https://github.com/user/fork.git OBS_STACK_BRANCH=my-branch ./scr
 - `EuiCard` needs an **explicit mock** in `public/__mocks__/eui_mock.tsx` for tests -- the Proxy auto-stub does not handle `selectable.onClick`. Same applies to `EuiConfirmModal` (onConfirm/onCancel) and `EuiButtonGroup` (radio role).
 - **Runtime type guards** for optional interfaces: Use `isMetadataProvider()` pattern (see `server/plugin.ts:307`) rather than `instanceof` -- works across module boundaries and with mocks.
 - **Cache-busting workflow** for OSD: bump build number to epoch-based unique value (not +1), clear optimizer cache, use fresh browser context. See AGENTS.md Rio section for full steps.
-- **core/ must not import from public/** -- mock data lives in `core/mock_data.ts`, not in UI components. The `promql_editor.tsx` imports from `core/mock_data.ts`.
+- **common/ must not import from public/** -- mock data lives in `common/mock_data.ts`, not in UI components. The `promql_editor.tsx` imports from `common/mock_data.ts`.
 
 ## CI Workflows (`.github/workflows/`)
 

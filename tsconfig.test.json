@@ -14,11 +14,10 @@
     "declaration": false
   },
   "include": [
-    "core/**/*.ts",
+    "common/**/*.ts",
     "server/**/*.ts",
     "public/**/*.ts",
-    "public/**/*.tsx",
-    "common/**/*.ts"
+    "public/**/*.tsx"
   ],
   "exclude": ["node_modules", "dist", "target", "standalone/dist"]
 }

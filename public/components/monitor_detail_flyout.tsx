@@ -45,7 +45,7 @@ import {
   SuppressionRule,
   OSMonitor,
   OSMonitorInput,
-} from '../../core';
+} from '../../common/types';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 // ============================================================================

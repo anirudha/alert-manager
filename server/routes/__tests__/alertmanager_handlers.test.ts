@@ -14,7 +14,7 @@ import {
   handleGetAlertmanagerConfig,
   extractReceiverIntegrations,
 } from '../alertmanager_handlers';
-import { PrometheusBackend } from '../../../core';
+import { PrometheusBackend } from '../../../common';
 
 // ---------------------------------------------------------------------------
 // Helpers

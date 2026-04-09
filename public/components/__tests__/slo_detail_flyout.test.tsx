@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, waitFor, configure, fireEvent } from '@testing-library/react';
 import { SloDetailFlyout } from '../slo_detail_flyout';
-import type { SloSummary, SloDefinition } from '../../../core/slo_types';
+import type { SloSummary, SloDefinition } from '../../../common/slo_types';
 
 configure({ testIdAttribute: 'data-test-subj' });
 

@@ -13,7 +13,7 @@ import {
   MultiBackendAlertService,
   Logger,
   OSMonitor,
-} from '../../core';
+} from '../../common';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Result = { status: number; body: any };

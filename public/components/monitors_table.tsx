@@ -46,8 +46,8 @@ import {
   MonitorStatus,
   MonitorHealthStatus,
   Datasource,
-} from '../../core';
-import { serializeMonitors } from '../../core/serializer';
+} from '../../common/types';
+import { serializeMonitors } from '../../common/serializer';
 import { MonitorDetailFlyout } from './monitor_detail_flyout';
 import {
   SEVERITY_COLORS,

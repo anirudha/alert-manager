@@ -4,6 +4,6 @@
     "package.json",
     "tsconfig.json",
     "index.{js,ts}",
-    "{common,core,server,translations}/**/*"
+    "{common,server,translations}/**/*"
   ]
 }

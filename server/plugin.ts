@@ -9,7 +9,7 @@ import {
   CoreStart,
   Plugin,
   Logger,
-} from '../../../src/core/server';
+} from 'opensearch-dashboards/server';
 
 import { AlarmsPluginSetup, AlarmsPluginStart } from './types';
 import { defineRoutes } from './routes';
@@ -22,9 +22,9 @@ import {
   SuppressionRuleService,
   Logger as AlarmsLogger,
   PrometheusMetadataProvider,
-} from '../core';
-import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
-import { PrometheusMetadataService } from '../core/prometheus_metadata_service';
+} from '../common';
+import { MockOpenSearchBackend, MockPrometheusBackend } from '../common/testing';
+import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
 import { SavedObjectSloStore } from './slo_saved_object_store';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';

@@ -5,7 +5,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { AppMountParameters, CoreStart } from '../../../src/core/public';
+import { AppMountParameters, CoreStart } from 'opensearch-dashboards/public';
 import { AppPluginStartDependencies } from './types';
 import { AlarmsApp } from './components/app';
 

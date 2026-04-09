@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, waitFor, configure, fireEvent } from '@testing-library/react';
 import { MonitorsTable } from '../monitors_table';
-import type { Datasource, UnifiedRule } from '../../../core';
+import type { Datasource, UnifiedRule } from '../../../common/types';
 
 configure({ testIdAttribute: 'data-test-subj' });
 
@@ -20,7 +20,7 @@ jest.mock('../table_pagination', () => ({
 jest.mock('../monitor_detail_flyout', () => ({
   MonitorDetailFlyout: () => null,
 }));
-jest.mock('../../../core/serializer', () => ({
+jest.mock('../../../common/serializer', () => ({
   serializeMonitors: jest.fn().mockReturnValue([]),
 }));
 

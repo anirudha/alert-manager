@@ -31,7 +31,7 @@ import {
   EuiToolTip,
   EuiLink,
 } from '@elastic/eui';
-import { UnifiedAlert, Datasource } from '../../core';
+import { UnifiedAlert, Datasource } from '../../common/types';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 const SEVERITY_COLORS: Record<string, string> = {

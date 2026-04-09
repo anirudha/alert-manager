@@ -17,8 +17,8 @@
 import React, { useCallback } from 'react';
 import { EuiComboBox, EuiBadge } from '@elastic/eui';
 import type { EuiComboBoxOptionOption } from '@elastic/eui';
-import { GOOD_EVENTS_FILTER_PRESETS } from '../../core/slo_templates';
-import type { InferredMetricType } from '../../core/slo_templates';
+import { GOOD_EVENTS_FILTER_PRESETS } from '../../common/slo_templates';
+import type { InferredMetricType } from '../../common/slo_templates';
 
 interface FilterOptionValue {
   value: string;

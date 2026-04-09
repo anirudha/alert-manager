@@ -32,7 +32,7 @@ import {
   EuiCallOut,
   EuiGlobalToastList,
 } from '@elastic/eui';
-import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../core';
+import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../common/types';
 import { MonitorsTable } from './monitors_table';
 import { CreateMonitor, MonitorFormState } from './create_monitor';
 import { AlertsDashboard } from './alerts_dashboard';

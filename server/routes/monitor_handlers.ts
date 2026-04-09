@@ -11,8 +11,8 @@ import {
   SuppressionRuleService,
   SuppressionRuleConfig,
   OSMonitor,
-} from '../../core';
-import { serializeMonitors, deserializeMonitor, MonitorConfig } from '../../core/serializer';
+} from '../../common';
+import { serializeMonitors, deserializeMonitor, MonitorConfig } from '../../common/serializer';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Result = { status: number; body: any };

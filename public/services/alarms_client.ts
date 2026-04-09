@@ -12,9 +12,9 @@
  *  - Request deduplication for concurrent calls
  *  - Full CRUD: monitors, suppression rules, alert actions, SLOs
  */
-import { Datasource } from '../../core';
-import type { PrometheusMetricMetadata } from '../../core/types';
-import type { SloDefinition, SloInput, SloSummary } from '../../core/slo_types';
+import { Datasource } from '../../common/types';
+import type { PrometheusMetricMetadata } from '../../common/types';
+import type { SloDefinition, SloInput, SloSummary } from '../../common/slo_types';
 
 // ---------------------------------------------------------------------------
 // HttpClient interface — implemented by OSD's http service adapter or fetch()

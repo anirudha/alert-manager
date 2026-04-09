@@ -5,20 +5,20 @@
 
 module.exports = {
   projects: [
-    // Server-side and core tests (node environment)
+    // Server-side and common tests (node environment)
     {
       displayName: 'server',
       preset: 'ts-jest',
       testEnvironment: 'node',
-      roots: ['<rootDir>/core', '<rootDir>/server'],
+      roots: ['<rootDir>/common', '<rootDir>/server'],
       testMatch: ['**/__tests__/**/*.test.ts'],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
       transform: {
         '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', diagnostics: false }],
       },
       moduleNameMapper: {
-        // Map OSD core server types to local stubs (not available outside the OSD monorepo)
-        '^.*/src/core/server$': '<rootDir>/stubs/src/core/server/stub.js',
+        // Map OSD core server imports to local mock (not available outside the OSD monorepo)
+        '^opensearch-dashboards/server$': '<rootDir>/server/__mocks__/osd_server.ts',
       },
     },
     // React component tests (jsdom environment)
@@ -34,7 +34,7 @@ module.exports = {
       },
       moduleNameMapper: {
         // Mock OSD core imports that aren't available outside the OSD tree
-        '^.*/src/core/public$': '<rootDir>/public/__mocks__/osd_core.ts',
+        '^opensearch-dashboards/public$': '<rootDir>/public/__mocks__/osd_core.ts',
         '^.*/src/plugins/navigation/public$': '<rootDir>/public/__mocks__/osd_navigation.ts',
         // Mock EUI / OUI components
         '^@elastic/eui$': '<rootDir>/public/__mocks__/eui_mock.tsx',
@@ -48,16 +48,16 @@ module.exports = {
     },
   ],
   collectCoverageFrom: [
-    'core/**/*.ts',
+    'common/**/*.ts',
     'server/**/*.ts',
     'public/**/*.{ts,tsx}',
     // Exclude test utilities and mock data — no value in unit testing these
-    '!core/mock_backend.ts',
-    '!core/mock_enrichment.ts',
-    '!core/testing.ts',
+    '!common/mock_backend.ts',
+    '!common/mock_enrichment.ts',
+    '!common/testing.ts',
     // Exclude integration-only modules — need real backend
-    '!core/directquery_prometheus_backend.ts',
-    '!core/opensearch_backend.ts',
+    '!common/directquery_prometheus_backend.ts',
+    '!common/opensearch_backend.ts',
     // Exclude OSD plugin shell — depends on OSD core
     '!public/plugin.ts',
     '!public/application.tsx',
@@ -87,7 +87,7 @@ module.exports = {
     '!public/components/slo_template_selector.tsx',
     '!public/hooks/use_prometheus_metadata.ts',
     // Exclude mock data — no value in unit testing these
-    '!core/mock_data.ts',
+    '!common/mock_data.ts',
     '!**/index.ts',
     '!**/__tests__/**',
     '!**/__mocks__/**',

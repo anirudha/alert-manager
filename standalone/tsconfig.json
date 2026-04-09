@@ -15,12 +15,12 @@
   "include": [
     "./**/*.ts",
     "./**/*.tsx",
-    "../core/**/*.ts"
+    "../common/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "../core/__tests__/**",
+    "../common/__tests__/**",
     "../server/**/__tests__/**"
   ]
 }

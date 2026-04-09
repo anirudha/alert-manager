@@ -4,7 +4,7 @@
  */
 
 import { SavedObjectSloStore } from '../slo_saved_object_store';
-import type { SloDefinition } from '../../core/slo_types';
+import type { SloDefinition } from '../../common/slo_types';
 
 // ---------------------------------------------------------------------------
 // Mock SavedObjectsClientContract

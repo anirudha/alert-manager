@@ -9,8 +9,8 @@
  * Follows the same pattern as server/routes/slo_handlers.ts.
  */
 
-import type { PrometheusMetadataService } from '../../core/prometheus_metadata_service';
-import type { Logger } from '../../core/types';
+import type { PrometheusMetadataService } from '../../common/prometheus_metadata_service';
+import type { Logger } from '../../common/types';
 
 type Result = { status: number; body: unknown };
 

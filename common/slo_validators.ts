@@ -7,7 +7,7 @@
  * Validation for SLO form inputs.
  *
  * Returns an error map (field → message). Empty map means valid.
- * Follows the same pattern as core/validators.ts (validateMonitorForm).
+ * Follows the same pattern as common/validators.ts (validateMonitorForm).
  *
  * Additionally returns a warnings map for non-blocking advisories
  * (e.g. latency threshold unit check, non-standard burn-rate windows).

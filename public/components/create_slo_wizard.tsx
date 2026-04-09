@@ -42,11 +42,11 @@ import type {
   BurnRateConfig,
   SloAlarmConfig,
   ExclusionWindow,
-} from '../../core/slo_types';
-import { DEFAULT_MWMBR_TIERS } from '../../core/slo_types';
-import { validateSloFormFull } from '../../core/slo_validators';
-import { formatErrorBudget } from '../../core/slo_templates';
-import { parseDurationToMs } from '../../core/slo_promql_generator';
+} from '../../common/slo_types';
+import { DEFAULT_MWMBR_TIERS } from '../../common/slo_types';
+import { validateSloFormFull } from '../../common/slo_validators';
+import { formatErrorBudget } from '../../common/slo_templates';
+import { parseDurationToMs } from '../../common/slo_promql_generator';
 import type { AlarmsApiClient } from '../services/alarms_client';
 import { SliSection, sliFormReducer, initialSliState } from './sli_section';
 import { SloPreviewPanel } from './slo_preview_panel';
@@ -414,10 +414,10 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
       sliState.sliType === 'availability'
         ? 'Availability'
         : sliState.sliType === 'latency_p99'
-        ? 'p99 Latency'
-        : sliState.sliType === 'latency_p90'
-        ? 'p90 Latency'
-        : 'p50 Latency';
+          ? 'p99 Latency'
+          : sliState.sliType === 'latency_p90'
+            ? 'p90 Latency'
+            : 'p50 Latency';
     const parts = [sliState.service, sliState.operation, typeName].filter(Boolean);
     return parts.length >= 2 ? parts.join(' — ') : '';
   }, [sliState.service, sliState.operation, sliState.sliType]);

@@ -25,8 +25,8 @@ import {
   EuiTitle,
   EuiSpacer,
 } from '@elastic/eui';
-import { SLO_TEMPLATES } from '../../core/slo_templates';
-import type { SloTemplate } from '../../core/slo_templates';
+import { SLO_TEMPLATES } from '../../common/slo_templates';
+import type { SloTemplate } from '../../common/slo_templates';
 
 // ============================================================================
 // Props

@@ -32,8 +32,13 @@ import {
   EuiContextMenuItem,
 } from '@elastic/eui';
 import { TablePagination } from './table_pagination';
-import { UnifiedAlert, UnifiedAlertSeverity, UnifiedAlertState, Datasource } from '../../core';
-import { filterAlerts } from '../../core/filter';
+import {
+  UnifiedAlert,
+  UnifiedAlertSeverity,
+  UnifiedAlertState,
+  Datasource,
+} from '../../common/types';
+import { filterAlerts } from '../../common/filter';
 import { EchartsRender } from './echarts_render';
 
 // ============================================================================

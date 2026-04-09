@@ -7,7 +7,6 @@
   "include": [
     "index.ts",
     "common/**/*.ts",
-    "core/**/*.ts",
     "public/**/*.ts",
     "public/**/*.tsx",
     "server/**/*.ts",
