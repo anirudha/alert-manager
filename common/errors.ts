@@ -46,7 +46,9 @@ export function isAlertManagerError(value: unknown): value is AlertManagerError 
     value !== null &&
     'kind' in value &&
     typeof (value as AlertManagerError).kind === 'string' &&
-    ['not_found', 'validation', 'internal'].includes((value as AlertManagerError).kind)
+    ['not_found', 'validation', 'internal'].includes((value as AlertManagerError).kind) &&
+    'message' in value &&
+    typeof (value as AlertManagerError).message === 'string'
   );
 }
 
@@ -61,5 +63,9 @@ export function errorToStatus(error: AlertManagerError): number {
       return 400;
     case 'internal':
       return 500;
+    default: {
+      const _exhaustive: never = error;
+      return 500;
+    }
   }
 }

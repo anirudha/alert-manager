@@ -222,6 +222,12 @@ export async function handleGetAlertmanagerConfig(
       },
     };
   } catch (e: unknown) {
-    return { status: 200, body: { available: false, error: String(e) } };
+    return {
+      status: 200,
+      body: {
+        available: false,
+        error: e instanceof Error ? e.message : 'Failed to fetch Alertmanager config',
+      },
+    };
   }
 }

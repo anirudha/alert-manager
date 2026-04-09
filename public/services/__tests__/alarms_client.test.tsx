@@ -4,7 +4,7 @@
  */
 
 import { AlarmsApiClient, HttpClient } from '../alarms_client';
-import type { SloInput } from '../../../core/slo_types';
+import type { SloInput } from '../../../common/slo_types';
 
 // ---------------------------------------------------------------------------
 // Mock HttpClient

@@ -20,17 +20,12 @@ import {
   EuiButton,
   EuiButtonEmpty,
   EuiPopover,
-  EuiFilterGroup,
-  EuiFilterButton,
   EuiCheckboxGroup,
   EuiEmptyPrompt,
   EuiConfirmModal,
-  EuiIcon,
   EuiToolTip,
   EuiText,
   EuiPanel,
-  EuiListGroup,
-  EuiListGroupItem,
   EuiButtonIcon,
   EuiResizableContainer,
 } from '@elastic/eui';
@@ -131,7 +126,7 @@ function buildSuggestions(rules: UnifiedRule[]): string[] {
       set.add(`${k}:${v}`);
       set.add(v);
     }
-    for (const [k, v] of Object.entries(r.annotations)) {
+    for (const v of Object.values(r.annotations)) {
       if (v.length < 80) set.add(v);
     }
   }
@@ -217,59 +212,6 @@ function collectLabelValues(rules: UnifiedRule[], key: string): string[] {
   }
   return Array.from(set).sort();
 }
-
-// ============================================================================
-// Filter Dropdown Component
-// ============================================================================
-const FilterDropdown: React.FC<{
-  label: string;
-  options: string[];
-  selected: string[];
-  onChange: (selected: string[]) => void;
-  displayMap?: Record<string, string>;
-}> = ({ label, options, selected, onChange, displayMap }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const toggle = (opt: string) => {
-    if (selected.includes(opt)) onChange(selected.filter((s) => s !== opt));
-    else onChange([...selected, opt]);
-  };
-
-  const checkboxes = options.map((opt) => ({
-    id: opt,
-    label: displayMap?.[opt] || opt,
-  }));
-
-  const selectedMap: Record<string, boolean> = {};
-  for (const s of selected) selectedMap[s] = true;
-
-  return (
-    <EuiPopover
-      button={
-        <EuiFilterButton
-          iconType="arrowDown"
-          onClick={() => setIsOpen(!isOpen)}
-          isSelected={isOpen}
-          hasActiveFilters={selected.length > 0}
-          numActiveFilters={selected.length}
-        >
-          {label}
-        </EuiFilterButton>
-      }
-      isOpen={isOpen}
-      closePopover={() => setIsOpen(false)}
-      panelPaddingSize="s"
-    >
-      <div style={{ width: 200, maxHeight: 300, overflow: 'auto' }}>
-        <EuiCheckboxGroup
-          options={checkboxes}
-          idToSelectedMap={selectedMap}
-          onChange={(id) => toggle(id)}
-        />
-      </div>
-    </EuiPopover>
-  );
-};
 
 // ============================================================================
 // Column Definitions
@@ -467,7 +409,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [showSavedSearches, setShowSavedSearches] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
@@ -475,7 +416,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const [selectedMonitor, setSelectedMonitor] = useState<UnifiedRule | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
   const [showSaveSearchInput, setShowSaveSearchInput] = useState(false);
   const [saveSearchName, setSaveSearchName] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
@@ -614,7 +554,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const loadSavedSearch = (ss: SavedSearch) => {
     setSearchQuery(ss.query);
     setFilters(ss.filters);
-    setShowSavedSearches(false);
   };
   const deleteSavedSearch = (id: string) => {
     setSavedSearches((prev) => prev.filter((s) => s.id !== id));
@@ -990,7 +929,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
 
   return (
     <EuiResizableContainer style={{ height: 'calc(100vh - 180px)' }}>
-      {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
+      {(EuiResizablePanel, EuiResizableButton) => {
         return (
           <>
             <EuiResizablePanel
@@ -998,7 +937,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
               initialSize={20}
               minSize="200px"
               mode={['collapsible', { position: 'top' }]}
-              onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+              onToggleCollapsed={() => {}}
               paddingSize="none"
               style={{ overflow: 'auto', paddingRight: '4px' }}
             >

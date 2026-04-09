@@ -26,7 +26,6 @@ import {
   EuiDescriptionList,
   EuiAccordion,
   EuiCodeBlock,
-  EuiHorizontalRule,
   EuiIcon,
   EuiToolTip,
   EuiLink,

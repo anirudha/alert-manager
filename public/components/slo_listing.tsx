@@ -116,13 +116,6 @@ const STATUS_HEALTH_COLORS: Record<string, string> = {
   no_data: 'subdued',
 };
 
-const STATUS_STAT_TITLE_COLORS: Record<string, string> = {
-  breached: 'danger',
-  warning: 'default',
-  ok: 'default',
-  no_data: 'subdued',
-};
-
 // ============================================================================
 // Custom Pagination (same pattern as monitors_table / alerts_dashboard)
 // ============================================================================
@@ -242,7 +235,7 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
             </tr>
           </thead>
           <tbody>
-            {rules.map((rule, idx) => (
+            {rules.map((rule) => (
               <tr key={`${rule.type}-${rule.name}`} style={{ borderBottom: '1px solid #EDF0F5' }}>
                 <td style={{ padding: '4px 8px' }}>
                   <EuiBadge
@@ -285,7 +278,6 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
 const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
   // State
   const [slos, setSlos] = useState<SloSummary[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -300,7 +292,6 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [selectedSloId, setSelectedSloId] = useState<string | null>(null);
-  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
 
   // Collapsible facet sections state (shared hook)
   const { toggleFacetCollapse, isCollapsed: isFacetCollapsed } = useFacetCollapse();
@@ -315,7 +306,6 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
     try {
       const resp: SloApiResponse = await apiClient.listSlos();
       setSlos(resp.results || []);
-      setTotal(resp.total || 0);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load SLOs');
       setSlos([]);
@@ -654,7 +644,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
               initialSize={20}
               minSize="200px"
               mode={['collapsible', { position: 'top' }]}
-              onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+              onToggleCollapsed={() => {}}
               paddingSize="none"
               style={{ overflow: 'auto', paddingRight: '4px' }}
             >

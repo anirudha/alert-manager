@@ -164,8 +164,12 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       ]);
 
       // Seed SLO mock data for Prometheus datasource
-      sloService.seed('ds-2').catch((err) => {
-        this.logger.warn(`alertManager: Failed to seed SLO mock data: ${err.message}`);
+      sloService.seed('ds-2').catch((err: unknown) => {
+        this.logger.warn(
+          `alertManager: Failed to seed SLO mock data: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
       });
     } else {
       this.logger.info('alertManager: Running in LIVE mode — register backends via API');
@@ -243,9 +247,11 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
             );
           }
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           this.logger.warn(
-            `alertManager: Failed to auto-discover Prometheus datasources: ${err.message}`
+            `alertManager: Failed to auto-discover Prometheus datasources: ${
+              err instanceof Error ? err.message : String(err)
+            }`
           );
         });
     }
@@ -289,9 +295,11 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
         // Re-seed if in mock mode — InMemory data was lost during the store swap
         const mockMode = process.env.ALERT_MANAGER_MOCK_MODE === 'true';
         if (mockMode) {
-          this.sloService.seed('ds-2').catch((err) => {
+          this.sloService.seed('ds-2').catch((err: unknown) => {
             this.logger.warn(
-              `alertManager: Failed to re-seed SLO data after store upgrade: ${err.message}`
+              `alertManager: Failed to re-seed SLO data after store upgrade: ${
+                err instanceof Error ? err.message : String(err)
+              }`
             );
           });
         }

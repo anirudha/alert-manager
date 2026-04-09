@@ -62,7 +62,7 @@ export async function handleListSLOs(
 
     const result = await svc.getPaginated(filters);
     return { status: 200, body: result };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }
@@ -82,7 +82,7 @@ export async function handleCreateSLO(
   try {
     const slo = await svc.create(input);
     return { status: 201, body: slo };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }
@@ -102,7 +102,7 @@ export async function handleGetSLO(
 
     const status = await svc.getStatus(id);
     return { status: 200, body: { ...slo, liveStatus: status } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }
@@ -120,7 +120,7 @@ export async function handleUpdateSLO(
   try {
     const slo = await svc.update(id, input);
     return { status: 200, body: slo };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }
@@ -138,7 +138,7 @@ export async function handleDeleteSLO(
     const result = await svc.delete(id);
     if (!result.deleted) return { status: 404, body: { error: 'SLO not found' } };
     return { status: 200, body: { deleted: true, generatedRuleNames: result.generatedRuleNames } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }
@@ -158,7 +158,7 @@ export async function handlePreviewSLORules(
   try {
     const ruleGroup = svc.previewRules(input);
     return { status: 200, body: ruleGroup };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }
@@ -178,7 +178,7 @@ export async function handleGetSLOStatuses(
   try {
     const statuses = await svc.getStatuses(ids);
     return { status: 200, body: { statuses } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e, logger);
   }
 }

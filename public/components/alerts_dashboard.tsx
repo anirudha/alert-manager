@@ -7,7 +7,7 @@
  * Alerts Dashboard — visualization-first view of alert history
  * with summary stats, charts, and drill-down table.
  */
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   EuiFlexGroup,
   EuiFlexItem,
@@ -25,7 +25,7 @@ import {
   EuiResizableContainer,
 } from '@elastic/eui';
 import { TablePagination } from './table_pagination';
-import { UnifiedAlert, UnifiedAlertSeverity, UnifiedAlertState, Datasource } from '../../common';
+import { UnifiedAlert, Datasource } from '../../common';
 import { filterAlerts } from '../../common/filter';
 import {
   SeverityDonut,
@@ -55,6 +55,7 @@ const STATE_COLORS: Record<string, string> = {
   acknowledged: '#006BB4',
   resolved: '#017D73',
   error: '#BD271E',
+  silenced: '#98A2B3',
 };
 const STATE_HEALTH: Record<string, string> = {
   active: 'danger',
@@ -62,6 +63,7 @@ const STATE_HEALTH: Record<string, string> = {
   acknowledged: 'primary',
   resolved: 'success',
   error: 'danger',
+  silenced: 'default',
 };
 
 // ============================================================================
@@ -80,6 +82,14 @@ function formatDuration(startTime: string | number): string {
   if (ms < 86400000) return Math.floor(ms / 3600000) + 'h ' + (Math.floor(ms / 60000) % 60) + 'm';
   return Math.floor(ms / 86400000) + 'd ' + (Math.floor(ms / 3600000) % 24) + 'h';
 }
+
+const SEVERITY_SORT_ORDER: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
 
 /** Internal label keys to hide from the filter panel */
 const INTERNAL_LABEL_KEYS = new Set([
@@ -193,9 +203,6 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState<AlertFilterState>(emptyAlertFilters());
   const { toggleFacetCollapse, isCollapsed: isFacetCollapsed } = useFacetCollapse();
-  const [isFilterPanelCollapsed, setIsFilterPanelCollapsed] = useState(false);
-
-  const dsNameMap = useMemo(() => new Map(datasources.map((d) => [d.id, d.name])), [datasources]);
 
   // Build selectable datasource entries for the filter facet
   const datasourceEntries = useMemo(() => {
@@ -310,8 +317,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
         cmp = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
       else if (sortField === 'name') cmp = a.name.localeCompare(b.name);
       else if (sortField === 'severity') {
-        const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-        cmp = (order[a.severity] ?? 5) - (order[b.severity] ?? 5);
+        cmp = (SEVERITY_SORT_ORDER[a.severity] ?? 5) - (SEVERITY_SORT_ORDER[b.severity] ?? 5);
       }
       return sortDirection === 'desc' ? -cmp : cmp;
     });
@@ -540,7 +546,7 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
             initialSize={15}
             minSize="180px"
             mode={['collapsible', { position: 'top' }]}
-            onToggleCollapsed={() => setIsFilterPanelCollapsed(!isFilterPanelCollapsed)}
+            onToggleCollapsed={() => {}}
             paddingSize="none"
             style={{ overflow: 'auto', paddingRight: '4px' }}
           >

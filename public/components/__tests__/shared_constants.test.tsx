@@ -220,8 +220,12 @@ describe('escapeHtml', () => {
     expect(escapeHtml('')).toBe('');
   });
 
+  it('escapes single quotes', () => {
+    expect(escapeHtml("it's")).toBe('it&#39;s');
+  });
+
   it('escapes multiple special characters in sequence', () => {
-    expect(escapeHtml('&<>"')).toBe('&amp;&lt;&gt;&quot;');
+    expect(escapeHtml('&<>"\'')).toBe('&amp;&lt;&gt;&quot;&#39;');
   });
 });
 

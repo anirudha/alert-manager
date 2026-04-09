@@ -16,7 +16,10 @@ export type HandlerResult = { status: number; body: Record<string, any> };
  */
 export function toHandlerResult(e: unknown, logger?: Logger): HandlerResult {
   if (isAlertManagerError(e)) {
-    return { status: errorToStatus(e), body: { error: e.message } };
+    if (logger) logger.error(e.message);
+    const body =
+      e.kind === 'internal' ? { error: 'An internal error occurred' } : { error: e.message };
+    return { status: errorToStatus(e), body };
   }
   // Guard against null/undefined being thrown — String(null) → "null" is unhelpful
   if (e == null) {

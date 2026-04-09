@@ -22,9 +22,21 @@ import { AlertManagerErrorBoundary } from './components/error_boundary';
 
 /** Simple fetch-based HTTP client for standalone mode */
 const standaloneHttp: HttpClient = {
-  get: async <T extends unknown>(path: string): Promise<T> => {
-    const res = await fetch(path);
-    if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  get: async <T extends unknown>(
+    path: string,
+    opts?: { query?: Record<string, string | undefined> }
+  ): Promise<T> => {
+    let url = path;
+    if (opts?.query) {
+      const params = new URLSearchParams();
+      Object.entries(opts.query).forEach(([k, v]) => {
+        if (v !== undefined) params.set(k, v);
+      });
+      const qs = params.toString();
+      if (qs) url = `${path}?${qs}`;
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
     return res.json();
   },
   post: async <T extends unknown>(path: string, body?: unknown): Promise<T> => {
@@ -43,15 +55,6 @@ const standaloneHttp: HttpClient = {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
-    return res.json();
-  },
-  patch: async <T extends unknown>(path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(path, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) throw new Error(`PATCH ${path} failed: ${res.status}`);
     return res.json();
   },
   delete: async <T extends unknown>(path: string): Promise<T> => {

@@ -24,15 +24,12 @@ import {
   EuiFlyoutFooter,
   EuiFlyoutHeader,
   EuiFormRow,
-  EuiHealth,
   EuiSelect,
   EuiSpacer,
-  EuiSwitch,
   EuiText,
   EuiTextArea,
   EuiTitle,
   EuiToolTip,
-  EuiFieldNumber,
   EuiDatePicker,
 } from '@elastic/eui';
 import moment, { Moment } from 'moment';
@@ -58,6 +55,12 @@ interface SuppressionRuleItem {
 export interface SuppressionRulesPanelProps {
   apiClient: AlarmsApiClient;
 }
+
+const STATUS_COLORS: Record<string, string> = {
+  active: 'success',
+  scheduled: 'primary',
+  expired: 'subdued',
+};
 
 export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ apiClient }) => {
   const [rules, setRules] = useState<SuppressionRuleItem[]>([]);
@@ -248,12 +251,6 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
     const tomorrow9am = moment().add(1, 'day').startOf('day').add(9, 'hours');
     setFormStartMoment(start);
     setFormEndMoment(tomorrow9am);
-  };
-
-  const STATUS_COLORS: Record<string, string> = {
-    active: 'success',
-    scheduled: 'primary',
-    expired: 'subdued',
   };
 
   const columns = [

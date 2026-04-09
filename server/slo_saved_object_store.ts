@@ -62,7 +62,7 @@ export class SavedObjectSloStore implements ISloStore {
       };
       if (datasourceId) {
         // Escape quotes in datasourceId to prevent KQL injection
-        const escaped = datasourceId.replace(/"/g, '\\"');
+        const escaped = datasourceId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         findOpts.filter = `${SO_TYPE}.attributes.datasourceId: "${escaped}"`;
       }
       const response = await this.client.find(findOpts);

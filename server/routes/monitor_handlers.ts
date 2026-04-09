@@ -39,7 +39,7 @@ export async function handleCreateMonitor(
       body as unknown as Omit<OSMonitor, 'id'>
     );
     return { status: 201, body: monitor };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -60,7 +60,7 @@ export async function handleUpdateMonitor(
     );
     if (!monitor) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: monitor };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -77,7 +77,7 @@ export async function handleDeleteMonitor(
     const ok = await alertSvc.deleteOSMonitor(dsId, id);
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -127,7 +127,7 @@ export async function handleImportMonitors(
           config as unknown as Omit<OSMonitor, 'id'>
         );
         importResults.push({ index, success: true, id: created.id });
-      } catch (e) {
+      } catch (e: unknown) {
         const errMsg = isAlertManagerError(e)
           ? e.message
           : e instanceof Error
@@ -161,7 +161,7 @@ export async function handleExportMonitors(
     const response = await alertSvc.getUnifiedRules();
     const configs = serializeMonitors(response.results);
     return { status: 200, body: { monitors: configs } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -224,7 +224,7 @@ export async function handleAcknowledgeAlert(
   try {
     const result = await alertSvc.acknowledgeOSAlerts(dsId, monitorId, [alertId]);
     return { status: 200, body: { id: alertId, state: 'acknowledged', result } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }

@@ -17,13 +17,6 @@ import {
   EuiSpacer,
   EuiTab,
   EuiTabs,
-  EuiFlexGroup,
-  EuiFlexItem,
-  EuiText,
-  EuiPanel,
-  EuiIcon,
-  EuiComboBox,
-  EuiLoadingSpinner,
   EuiCallOut,
   EuiGlobalToastList,
 } from '@elastic/eui';
@@ -39,125 +32,6 @@ import { AlarmsApiClient, HttpClient } from '../services/alarms_client';
 
 // Re-export for components that import from this file
 export { AlarmsApiClient, HttpClient };
-
-// ============================================================================
-// Datasource Selector Component
-// ============================================================================
-
-const DatasourceSelector: React.FC<{
-  datasources: Datasource[];
-  selectedIds: string[];
-  onSelectionChange: (ids: string[]) => void;
-  loading: boolean;
-  workspaceOptions: Datasource[];
-  loadingWorkspaces: boolean;
-}> = ({
-  datasources,
-  selectedIds,
-  onSelectionChange,
-  loading,
-  workspaceOptions,
-  loadingWorkspaces,
-}) => {
-  // Build combo box options: non-prometheus datasources + prometheus workspace entries
-  // EuiComboBox uses `label` as the key, so we build a label->id map
-  const { options, labelToId, idToLabel } = useMemo(() => {
-    const lToId: Record<string, string> = {};
-    const iToL: Record<string, string> = {};
-    const opts: Array<{ label: string; options?: Array<{ label: string }> }> = [];
-
-    // Non-prometheus datasources as direct options
-    const nonProm = datasources.filter((d) => d.type !== 'prometheus');
-    if (nonProm.length > 0) {
-      opts.push({
-        label: 'OpenSearch',
-        options: nonProm.map((d) => {
-          lToId[d.name] = d.id;
-          iToL[d.id] = d.name;
-          return { label: d.name };
-        }),
-      });
-    }
-
-    // Prometheus workspaces grouped under their parent
-    const promDs = datasources.filter((d) => d.type === 'prometheus');
-    for (const pds of promDs) {
-      const wsForDs = workspaceOptions.filter((w) => w.parentDatasourceId === pds.id);
-      if (wsForDs.length > 0) {
-        opts.push({
-          label: pds.name,
-          options: wsForDs.map((w) => {
-            const displayLabel = `${pds.name} / ${w.workspaceName || w.name}`;
-            lToId[displayLabel] = w.id;
-            iToL[w.id] = displayLabel;
-            return { label: displayLabel };
-          }),
-        });
-      } else if (loadingWorkspaces) {
-        opts.push({ label: `${pds.name} (loading workspaces...)`, options: [] });
-      } else {
-        // Fallback: show the raw prometheus datasource
-        lToId[pds.name] = pds.id;
-        iToL[pds.id] = pds.name;
-        opts.push({
-          label: 'Prometheus',
-          options: [{ label: pds.name }],
-        });
-      }
-    }
-    return { options: opts, labelToId: lToId, idToLabel: iToL };
-  }, [datasources, workspaceOptions, loadingWorkspaces]);
-
-  const selectedOptions = useMemo(() => {
-    const all: Array<{ label: string }> = [];
-    for (const id of selectedIds) {
-      const label = idToLabel[id];
-      if (label) all.push({ label });
-    }
-    return all;
-  }, [selectedIds, idToLabel]);
-
-  return (
-    <EuiPanel paddingSize="s" hasBorder style={{ marginBottom: 12 }}>
-      <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
-        <EuiFlexItem grow={false}>
-          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-            <EuiFlexItem grow={false}>
-              <EuiIcon type="database" size="s" />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <EuiText size="xs">
-                <strong>Datasource(s)</strong>
-              </EuiText>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiComboBox
-            placeholder="Select a datasource to view rules and alerts..."
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiComboBox grouped options type mismatch
-            options={options as any}
-            selectedOptions={selectedOptions}
-            onChange={(selected: Array<{ label: string }>) => {
-              const ids = selected.map((s) => labelToId[s.label]).filter(Boolean);
-              onSelectionChange(ids);
-            }}
-            isLoading={loading || loadingWorkspaces}
-            isClearable
-            compressed
-            aria-label="Select datasource"
-            data-test-subj="alertManager-datasource-combo"
-          />
-        </EuiFlexItem>
-        {loadingWorkspaces && (
-          <EuiFlexItem grow={false}>
-            <EuiLoadingSpinner size="s" />
-          </EuiFlexItem>
-        )}
-      </EuiFlexGroup>
-    </EuiPanel>
-  );
-};
 
 // ============================================================================
 // Main Page Component
@@ -180,7 +54,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [workspaceOptions, setWorkspaceOptions] = useState<Datasource[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
   const [selectedDsIds, setSelectedDsIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<Array<{ datasourceName: string; error: string }>>([]);
@@ -189,14 +62,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [alerts, setAlerts] = useState<UnifiedAlert[]>([]);
   const [alertsTotal, setAlertsTotal] = useState(0);
   const [alertsPage, setAlertsPage] = useState(1);
-  const [alertsPageSize, setAlertsPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [alertsHasMore, setAlertsHasMore] = useState(false);
+  const [alertsPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const [rules, setRules] = useState<UnifiedRule[]>([]);
   const [rulesTotal, setRulesTotal] = useState(-1); // -1 = not yet loaded
   const [rulesPage, setRulesPage] = useState(1);
-  const [rulesPageSize, setRulesPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [rulesHasMore, setRulesHasMore] = useState(false);
+  const [rulesPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const [deletedRuleIds, setDeletedRuleIds] = useState<Set<string>>(new Set());
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
@@ -234,7 +105,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
       try {
         const ds = await apiClient.listDatasources();
         setDatasources(ds || []);
@@ -273,8 +143,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         }
       } catch (e: unknown) {
         console.error('Failed to load datasources', e);
-      } finally {
-        setLoading(false);
       }
     })();
   }, [apiClient]);
@@ -286,7 +154,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       if (dsIds.length === 0) {
         setAlerts([]);
         setAlertsTotal(0);
-        setAlertsHasMore(false);
         return;
       }
       setDataLoading(true);
@@ -296,7 +163,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         const res = await apiClient.listAlertsPaginated(dsIds, page, pageSize);
         setAlerts(res.results || []);
         setAlertsTotal(res.total || 0);
-        setAlertsHasMore(res.hasMore || false);
         if (res.warnings && res.warnings.length > 0) {
           setWarnings(
             res.warnings.map((w: DatasourceWarning) => ({
@@ -319,7 +185,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       if (dsIds.length === 0) {
         setRules([]);
         setRulesTotal(0);
-        setRulesHasMore(false);
         return;
       }
       setDataLoading(true);
@@ -329,7 +194,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         const res = await apiClient.listRulesPaginated(dsIds, page, pageSize);
         setRules(res.results || []);
         setRulesTotal(res.total || 0);
-        setRulesHasMore(res.hasMore || false);
         if (res.warnings && res.warnings.length > 0) {
           setWarnings(
             res.warnings.map((w: DatasourceWarning) => ({
@@ -674,8 +538,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     { id: 'suppression' as TabId, name: 'Suppression' },
     { id: 'slos' as TabId, name: 'SLOs' },
   ];
-
-  const noDatasourceSelected = selectedDsIds.length === 0;
 
   const renderTable = () => {
     if (activeTab === 'alerts') {

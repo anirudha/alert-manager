@@ -16,16 +16,24 @@ import type { HandlerResult } from './route_utils';
 // ============================================================================
 
 export async function handleListDatasources(svc: DatasourceService): Promise<HandlerResult> {
-  return { status: 200, body: { datasources: await svc.list() } };
+  try {
+    return { status: 200, body: { datasources: await svc.list() } };
+  } catch (e: unknown) {
+    return toHandlerResult(e);
+  }
 }
 
 export async function handleGetDatasource(
   svc: DatasourceService,
   id: string
 ): Promise<HandlerResult> {
-  const ds = await svc.get(id);
-  if (!ds) return { status: 404, body: { error: 'Datasource not found' } };
-  return { status: 200, body: ds };
+  try {
+    const ds = await svc.get(id);
+    if (!ds) return { status: 404, body: { error: 'Datasource not found' } };
+    return { status: 200, body: ds };
+  } catch (e: unknown) {
+    return toHandlerResult(e);
+  }
 }
 
 export async function handleCreateDatasource(
@@ -38,7 +46,11 @@ export async function handleCreateDatasource(
   if (input.type !== 'opensearch' && input.type !== 'prometheus') {
     return { status: 400, body: { error: 'type must be opensearch or prometheus' } };
   }
-  return { status: 201, body: await svc.create(input) };
+  try {
+    return { status: 201, body: await svc.create(input) };
+  } catch (e: unknown) {
+    return toHandlerResult(e);
+  }
 }
 
 export async function handleUpdateDatasource(
@@ -46,26 +58,38 @@ export async function handleUpdateDatasource(
   id: string,
   input: Partial<Datasource>
 ): Promise<HandlerResult> {
-  const ds = await svc.update(id, input);
-  if (!ds) return { status: 404, body: { error: 'Datasource not found' } };
-  return { status: 200, body: ds };
+  try {
+    const ds = await svc.update(id, input);
+    if (!ds) return { status: 404, body: { error: 'Datasource not found' } };
+    return { status: 200, body: ds };
+  } catch (e: unknown) {
+    return toHandlerResult(e);
+  }
 }
 
 export async function handleDeleteDatasource(
   svc: DatasourceService,
   id: string
 ): Promise<HandlerResult> {
-  const ok = await svc.delete(id);
-  if (!ok) return { status: 404, body: { error: 'Datasource not found' } };
-  return { status: 200, body: { deleted: true } };
+  try {
+    const ok = await svc.delete(id);
+    if (!ok) return { status: 404, body: { error: 'Datasource not found' } };
+    return { status: 200, body: { deleted: true } };
+  } catch (e: unknown) {
+    return toHandlerResult(e);
+  }
 }
 
 export async function handleTestDatasource(
   svc: DatasourceService,
   id: string
 ): Promise<HandlerResult> {
-  const r = await svc.testConnection(id);
-  return { status: r.success ? 200 : 400, body: r };
+  try {
+    const r = await svc.testConnection(id);
+    return { status: r.success ? 200 : 400, body: r };
+  } catch (e: unknown) {
+    return toHandlerResult(e);
+  }
 }
 
 // ============================================================================
@@ -78,7 +102,7 @@ export async function handleGetOSMonitors(
 ): Promise<HandlerResult> {
   try {
     return { status: 200, body: { monitors: await alertSvc.getOSMonitors(dsId) } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -92,7 +116,7 @@ export async function handleGetOSMonitor(
     const m = await alertSvc.getOSMonitor(dsId, monitorId);
     if (!m) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: m };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -104,7 +128,7 @@ export async function handleCreateOSMonitor(
 ): Promise<HandlerResult> {
   try {
     return { status: 201, body: await alertSvc.createOSMonitor(dsId, body) };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -119,7 +143,7 @@ export async function handleUpdateOSMonitor(
     const m = await alertSvc.updateOSMonitor(dsId, monitorId, body);
     if (!m) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: m };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -133,7 +157,7 @@ export async function handleDeleteOSMonitor(
     const ok = await alertSvc.deleteOSMonitor(dsId, monitorId);
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -148,7 +172,7 @@ export async function handleGetOSAlerts(
 ): Promise<HandlerResult> {
   try {
     return { status: 200, body: await alertSvc.getOSAlerts(dsId) };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -164,7 +188,7 @@ export async function handleAcknowledgeOSAlerts(
       status: 200,
       body: { result: await alertSvc.acknowledgeOSAlerts(dsId, monitorId, body.alerts || []) },
     };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -180,7 +204,7 @@ export async function handleGetPromRuleGroups(
   try {
     const groups = await alertSvc.getPromRuleGroups(dsId);
     return { status: 200, body: { status: 'success', data: { groups } } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -192,7 +216,7 @@ export async function handleGetPromAlerts(
   try {
     const alerts = await alertSvc.getPromAlerts(dsId);
     return { status: 200, body: { status: 'success', data: { alerts } } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -215,7 +239,7 @@ export async function handleGetUnifiedAlerts(
       rawMaxResults !== undefined && Number.isFinite(rawMaxResults) ? rawMaxResults : undefined;
     const response = await alertSvc.getUnifiedAlerts({ dsIds, timeoutMs, maxResults });
     return { status: 200, body: response };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -234,7 +258,7 @@ export async function handleGetUnifiedRules(
       rawMaxResults !== undefined && Number.isFinite(rawMaxResults) ? rawMaxResults : undefined;
     const response = await alertSvc.getUnifiedRules({ dsIds, timeoutMs, maxResults });
     return { status: 200, body: response };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -250,7 +274,7 @@ export async function handleListWorkspaces(
   try {
     const workspaces = await datasourceService.listWorkspaces(dsId);
     return { status: 200, body: { workspaces } };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -268,7 +292,7 @@ export async function handleGetRuleDetail(
     const rule = await alertSvc.getRuleDetail(dsId, ruleId);
     if (!rule) return { status: 404, body: { error: 'Rule not found' } };
     return { status: 200, body: rule };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }
@@ -282,7 +306,7 @@ export async function handleGetAlertDetail(
     const alert = await alertSvc.getAlertDetail(dsId, alertId);
     if (!alert) return { status: 404, body: { error: 'Alert not found' } };
     return { status: 200, body: alert };
-  } catch (e) {
+  } catch (e: unknown) {
     return toHandlerResult(e);
   }
 }

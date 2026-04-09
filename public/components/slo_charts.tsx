@@ -277,6 +277,12 @@ export const SlosBySliType: React.FC<{ slos: SloSummary[] }> = ({ slos }) => {
       tooltip: {
         trigger: 'axis' as const,
         axisPointer: { type: 'shadow' as const },
+        formatter: (
+          params: { name: string; value: number } | Array<{ name: string; value: number }>
+        ) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          return `<b>${escapeHtml(p.name)}</b>: ${p.value}`;
+        },
       },
       grid: { top: 4, right: 40, bottom: 4, left: 130 },
       xAxis: { type: 'value' as const, show: false },
@@ -344,6 +350,12 @@ export const SlosByService: React.FC<{ slos: SloSummary[] }> = ({ slos }) => {
       tooltip: {
         trigger: 'axis' as const,
         axisPointer: { type: 'shadow' as const },
+        formatter: (
+          params: { name: string; value: number } | Array<{ name: string; value: number }>
+        ) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          return `<b>${escapeHtml(p.name)}</b>: ${p.value}`;
+        },
       },
       grid: { top: 4, right: 40, bottom: 4, left: 130 },
       xAxis: { type: 'value' as const, show: false },

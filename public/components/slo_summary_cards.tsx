@@ -33,11 +33,13 @@ const STAT_CARD_BORDER_COLORS: Record<string, string> = {
   no_data: '#98A2B3',
 };
 
-function handleKeyDown(e: React.KeyboardEvent) {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).click();
-  }
+function handleKeyDown(onClick: () => void) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
 }
 
 // ============================================================================
@@ -75,7 +77,7 @@ export const SloSummaryCards: React.FC<SloSummaryCardsProps> = ({
           tabIndex={0}
           role="button"
           aria-label="Filter by all SLOs"
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleKeyDown(() => handleClick('all'))}
           style={cardStyle('all')}
           data-test-subj="sloStatCardTotal"
         >
@@ -92,7 +94,7 @@ export const SloSummaryCards: React.FC<SloSummaryCardsProps> = ({
           tabIndex={0}
           role="button"
           aria-label="Filter by breached SLOs"
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleKeyDown(() => handleClick('breached'))}
           style={cardStyle('breached')}
           data-test-subj="sloStatCardBreached"
         >
@@ -119,7 +121,7 @@ export const SloSummaryCards: React.FC<SloSummaryCardsProps> = ({
           tabIndex={0}
           role="button"
           aria-label="Filter by warning SLOs"
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleKeyDown(() => handleClick('warning'))}
           style={cardStyle('warning')}
           data-test-subj="sloStatCardWarning"
         >
@@ -141,7 +143,7 @@ export const SloSummaryCards: React.FC<SloSummaryCardsProps> = ({
           tabIndex={0}
           role="button"
           aria-label="Filter by healthy SLOs"
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleKeyDown(() => handleClick('ok'))}
           style={cardStyle('ok')}
           data-test-subj="sloStatCardOk"
         >
@@ -163,7 +165,7 @@ export const SloSummaryCards: React.FC<SloSummaryCardsProps> = ({
           tabIndex={0}
           role="button"
           aria-label="Filter by SLOs with no data"
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleKeyDown(() => handleClick('no_data'))}
           style={cardStyle('no_data')}
           data-test-subj="sloStatCardNoData"
         >

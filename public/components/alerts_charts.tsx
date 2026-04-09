@@ -36,6 +36,7 @@ const STATE_COLORS: Record<string, string> = {
   active: '#BD271E',
   pending: '#F5A700',
   acknowledged: '#006BB4',
+  silenced: '#98A2B3',
   resolved: '#017D73',
   error: '#BD271E',
 };
@@ -46,12 +47,24 @@ const DATASOURCE_DISPLAY_NAMES: Record<string, string> = {
 };
 
 // ============================================================================
+// Shared order arrays (hoisted to module scope to avoid re-creation per render)
+// ============================================================================
+
+const SEVERITY_ORDER: UnifiedAlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const STATE_ORDER: UnifiedAlertState[] = [
+  'active',
+  'pending',
+  'acknowledged',
+  'silenced',
+  'resolved',
+  'error',
+];
+
+// ============================================================================
 // SeverityDonut
 // ============================================================================
 
 export const SeverityDonut: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
-  const order: UnifiedAlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
-
   const spec = useMemo(() => {
     const counts = countBy(alerts, (a) => a.severity);
     const total = alerts.length;
@@ -64,13 +77,11 @@ export const SeverityDonut: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) 
           type: 'pie' as const,
           radius: ['45%', '70%'],
           center: ['50%', '45%'],
-          data: order
-            .filter((s) => (counts[s] || 0) > 0)
-            .map((s) => ({
-              value: counts[s] || 0,
-              name: s,
-              itemStyle: { color: SEVERITY_COLORS[s] },
-            })),
+          data: SEVERITY_ORDER.filter((s) => (counts[s] || 0) > 0).map((s) => ({
+            value: counts[s] || 0,
+            name: s,
+            itemStyle: { color: SEVERITY_COLORS[s] },
+          })),
           label: { show: false },
           emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' as const } },
         },
@@ -209,11 +220,9 @@ export const AlertTimeline: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) 
 // ============================================================================
 
 export const StateBreakdown: React.FC<{ alerts: UnifiedAlert[] }> = ({ alerts }) => {
-  const order: UnifiedAlertState[] = ['active', 'pending', 'acknowledged', 'resolved', 'error'];
-
   const spec = useMemo(() => {
     const counts = countBy(alerts, (a) => a.state);
-    const presentStates = order.filter((s) => (counts[s] || 0) > 0);
+    const presentStates = STATE_ORDER.filter((s) => (counts[s] || 0) > 0);
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -393,10 +402,12 @@ export const AlertsByGroup: React.FC<{ alerts: UnifiedAlert[]; groupKey: string 
   alerts,
   groupKey,
 }) => {
-  const groups = countBy(alerts, (a) => a.labels[groupKey] || 'unknown');
-  const sorted = Object.entries(groups)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
+  const sorted = useMemo(() => {
+    const groups = countBy(alerts, (a) => a.labels[groupKey] || 'unknown');
+    return Object.entries(groups)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+  }, [alerts, groupKey]);
 
   if (sorted.length === 0)
     return (
