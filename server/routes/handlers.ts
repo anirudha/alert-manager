@@ -162,7 +162,7 @@ export async function handleAcknowledgeOSAlerts(
   try {
     return {
       status: 200,
-      body: await alertSvc.acknowledgeOSAlerts(dsId, monitorId, body.alerts || []),
+      body: { result: await alertSvc.acknowledgeOSAlerts(dsId, monitorId, body.alerts || []) },
     };
   } catch (e) {
     return toHandlerResult(e);

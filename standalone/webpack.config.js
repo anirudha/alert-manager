@@ -16,20 +16,17 @@ module.exports = {
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
     // Force resolution from standalone node_modules first
-    modules: [
-      path.resolve(__dirname, 'node_modules'),
-      'node_modules'
-    ],
+    modules: [path.resolve(__dirname, 'node_modules'), 'node_modules'],
     alias: {
       // Force react and react-dom to use standalone versions
-      'react': path.resolve(__dirname, 'node_modules/react'),
+      react: path.resolve(__dirname, 'node_modules/react'),
       'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
       'react-router-dom': path.resolve(__dirname, 'node_modules/react-router-dom'),
       // Map @opensearch/datemath to @elastic/datemath (OUI peer dependency)
       '@opensearch/datemath': path.resolve(__dirname, 'node_modules/@elastic/datemath'),
       // Map @elastic/eui to @opensearch-project/oui so shared components resolve correctly
       '@elastic/eui': path.resolve(__dirname, 'node_modules/@opensearch-project/oui'),
-    }
+    },
   },
   module: {
     rules: [

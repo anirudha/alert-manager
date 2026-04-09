@@ -99,9 +99,9 @@ export function sortRules<T>(
   const sorted = [...rules];
   sorted.sort((a, b) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic field access for generic sort
-    let aVal = accessor ? accessor(a, field) : (a as Record<string, any>)[field] ?? '';
+    let aVal = accessor ? accessor(a, field) : ((a as Record<string, any>)[field] ?? '');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic field access for generic sort
-    let bVal = accessor ? accessor(b, field) : (b as Record<string, any>)[field] ?? '';
+    let bVal = accessor ? accessor(b, field) : ((b as Record<string, any>)[field] ?? '');
     if (typeof aVal === 'string') aVal = aVal.toLowerCase();
     if (typeof bVal === 'string') bVal = bVal.toLowerCase();
     if (aVal < bVal) return direction === 'asc' ? -1 : 1;
@@ -118,7 +118,7 @@ export function filterAlerts<
     labels: Record<string, string>;
     name: string;
     message?: string;
-  }
+  },
 >(
   alerts: T[],
   filters: {

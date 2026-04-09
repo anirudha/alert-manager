@@ -393,8 +393,8 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
                     {monitorKind === 'cluster_metrics'
                       ? 'Cluster API Configuration'
                       : monitorKind === 'doc'
-                      ? 'Document-Level Queries'
-                      : 'Query Definition'}
+                        ? 'Document-Level Queries'
+                        : 'Query Definition'}
                   </strong>
                 }
                 initialIsOpen={true}
