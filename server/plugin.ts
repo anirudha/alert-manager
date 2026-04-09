@@ -59,6 +59,7 @@ function readOsdConfigCredentials(
     const absPath = resolve(process.cwd(), configPath);
     logger.debug(`alertManager: Reading config from ${absPath}`);
     const raw = readFileSync(absPath, 'utf-8');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- YAML config has dynamic/unknown shape
     const cfg = yaml.load(raw) as Record<string, any>;
     // OSD YAML uses flat dotted keys (e.g. "opensearch.username") not nested objects
     const user = cfg?.['opensearch.username'] ?? cfg?.opensearch?.username;
@@ -69,8 +70,12 @@ function readOsdConfigCredentials(
       logger.info(`alertManager: Read OpenSearch credentials from config file: ${absPath}`);
       return { url, username: user, password: pass };
     }
-  } catch (err: any) {
-    logger.debug(`alertManager: Could not read config file: ${err.message}`);
+  } catch (err: unknown) {
+    logger.debug(
+      `alertManager: Could not read config file: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
   }
   return undefined;
 }
@@ -290,9 +295,11 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
             );
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.logger.warn(
-          `alertManager: Failed to create SavedObjectSloStore, using in-memory fallback: ${err.message}`
+          `alertManager: Failed to create SavedObjectSloStore, using in-memory fallback: ${
+            err instanceof Error ? err.message : String(err)
+          }`
         );
       }
     }

@@ -71,7 +71,7 @@ const suppressionInput = {
 // ---------------------------------------------------------------------------
 
 describe('handleCreateMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 400 when datasourceId is missing', async () => {
     const { alertSvc } = createServices();
     const result = await handleCreateMonitor(alertSvc, { name: 'test' });
     expect(result.status).toBe(400);
@@ -89,7 +89,7 @@ describe('handleCreateMonitor', () => {
 });
 
 describe('handleUpdateMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 400 when datasourceId is missing', async () => {
     const { alertSvc } = createServices();
     const result = await handleUpdateMonitor(alertSvc, 'mon-1', { name: 'updated' });
     expect(result.status).toBe(400);
@@ -97,7 +97,7 @@ describe('handleUpdateMonitor', () => {
 });
 
 describe('handleDeleteMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 400 when datasourceId is missing', async () => {
     const { alertSvc } = createServices();
     const result = await handleDeleteMonitor(alertSvc, 'mon-1');
     expect(result.status).toBe(400);
@@ -254,13 +254,13 @@ describe('handleAcknowledgeAlert', () => {
     expect(result.body.error).toContain('required');
   });
 
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const { alertSvc } = createServices();
     const result = await handleAcknowledgeAlert(alertSvc, 'alert-123', {
       datasourceId: 'bad-ds',
       monitorId: 'mon-1',
     });
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 

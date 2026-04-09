@@ -407,10 +407,12 @@ app.get('/api/alertmanager/config', async (_req, res) => {
 // ============================================================================
 
 app.get('/api/alerts', async (req, res) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express query string type is qs.ParsedQs
   const r = await handleGetUnifiedAlerts(alertService, req.query as any);
   res.status(r.status).json(r.body);
 });
 app.get('/api/rules', async (req, res) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express query string type is qs.ParsedQs
   const r = await handleGetUnifiedRules(alertService, req.query as any);
   res.status(r.status).json(r.body);
 });
@@ -426,8 +428,8 @@ app.get('/api/paginated/rules', async (req, res) => {
     const pageSize = req.query.pageSize ? parseInt(String(req.query.pageSize), 10) : 20;
     const result = await alertService.getPaginatedRules({ dsIds, page, pageSize });
     res.json(result);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (e: unknown) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
 });
 
@@ -438,8 +440,8 @@ app.get('/api/paginated/alerts', async (req, res) => {
     const pageSize = req.query.pageSize ? parseInt(String(req.query.pageSize), 10) : 20;
     const result = await alertService.getPaginatedAlerts({ dsIds, page, pageSize });
     res.json(result);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (e: unknown) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
 });
 
@@ -546,6 +548,7 @@ app.post('/api/webhooks/alertmanager', (req, res) => {
 // ============================================================================
 
 app.get('/api/slos', async (req, res) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express query string type is qs.ParsedQs
   const r = await handleListSLOs(sloService, req.query as any, logger);
   res.status(r.status).json(r.body);
 });

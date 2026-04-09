@@ -189,84 +189,84 @@ describe('handleTestDatasource', () => {
 // ---------------------------------------------------------------------------
 
 describe('handleGetOSMonitors', () => {
-  it('returns 400 when backend throws', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleGetOSMonitors(alertSvc, 'non-existent-ds');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
     expect(result.body.error).toBeDefined();
   });
 });
 
 describe('handleGetOSMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleGetOSMonitor(alertSvc, 'bad-ds', 'monitor-1');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleCreateOSMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleCreateOSMonitor(alertSvc, 'bad-ds', { name: 'test' } as any);
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleUpdateOSMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleUpdateOSMonitor(alertSvc, 'bad-ds', 'mon-1', { name: 'updated' });
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleDeleteOSMonitor', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleDeleteOSMonitor(alertSvc, 'bad-ds', 'mon-1');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleGetOSAlerts', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleGetOSAlerts(alertSvc, 'bad-ds');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleAcknowledgeOSAlerts', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleAcknowledgeOSAlerts(alertSvc, 'bad-ds', 'mon-1', { alerts: [] });
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleGetPromRuleGroups', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleGetPromRuleGroups(alertSvc, 'bad-ds');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
 describe('handleGetPromAlerts', () => {
-  it('returns 400 when backend throws for unknown datasource', async () => {
+  it('returns 404 when datasource not found', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     const result = await handleGetPromAlerts(alertSvc, 'bad-ds');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(404);
   });
 });
 
@@ -330,17 +330,17 @@ async function createServicesWithMockBackend() {
 }
 
 // ---------------------------------------------------------------------------
-// safeError (exported implicitly via handlers — test via handler responses)
+// toHandlerResult (exported implicitly via handlers — test via handler responses)
 // ---------------------------------------------------------------------------
 
-describe('safeError — error masking behaviour', () => {
-  it('masks internal errors to generic message', async () => {
+describe('toHandlerResult — error classification behaviour', () => {
+  it('masks internal errors to generic message with 500 status', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     // Spy to throw an error that does NOT contain "not found" / "required" / "must be"
     jest.spyOn(alertSvc, 'getOSMonitors').mockRejectedValueOnce(new Error('Connection refused'));
     const result = await handleGetOSMonitors(alertSvc, 'some-ds');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(500);
     expect(result.body.error).toBe('An internal error occurred');
   });
 
@@ -533,12 +533,12 @@ describe('handleGetRuleDetail', () => {
     expect(result.body.error).toBe('Rule not found');
   });
 
-  it('returns 400 when backend throws', async () => {
+  it('returns 500 when backend throws', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     jest.spyOn(alertSvc, 'getRuleDetail').mockRejectedValueOnce(new Error('DB crash'));
     const result = await handleGetRuleDetail(alertSvc, 'ds-1', 'rule-1');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(500);
     expect(result.body.error).toBe('An internal error occurred');
   });
 });
@@ -563,12 +563,12 @@ describe('handleGetAlertDetail', () => {
     expect(result.body.error).toBe('Alert not found');
   });
 
-  it('returns 400 when backend throws', async () => {
+  it('returns 500 when backend throws', async () => {
     const dsSvc = createDatasourceService();
     const alertSvc = createAlertService(dsSvc);
     jest.spyOn(alertSvc, 'getAlertDetail').mockRejectedValueOnce(new Error('timeout'));
     const result = await handleGetAlertDetail(alertSvc, 'ds-1', 'alert-1');
-    expect(result.status).toBe(400);
+    expect(result.status).toBe(500);
     expect(result.body.error).toBe('An internal error occurred');
   });
 });

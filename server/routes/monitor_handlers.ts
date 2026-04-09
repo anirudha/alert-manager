@@ -13,18 +13,9 @@ import {
   OSMonitor,
 } from '../../common';
 import { serializeMonitors, deserializeMonitor, MonitorConfig } from '../../common/serializer';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Result = { status: number; body: any };
-
-/** Sanitize error for client response. */
-function safeError(e: unknown): string {
-  const full = String(e);
-  if (full.includes('not found') || full.includes('required') || full.includes('must be')) {
-    return full;
-  }
-  return 'An internal error occurred';
-}
+import { isAlertManagerError } from '../../common';
+import { toHandlerResult } from './route_utils';
+import type { HandlerResult } from './route_utils';
 
 // ============================================================================
 // Monitor CRUD
@@ -38,7 +29,7 @@ interface MonitorMutationBody {
 export async function handleCreateMonitor(
   alertSvc: MultiBackendAlertService,
   body: MonitorMutationBody
-): Promise<Result> {
+): Promise<HandlerResult> {
   if (!body.datasourceId) {
     return { status: 400, body: { error: 'datasourceId is required' } };
   }
@@ -49,7 +40,7 @@ export async function handleCreateMonitor(
     );
     return { status: 201, body: monitor };
   } catch (e) {
-    return { status: 400, body: { error: safeError(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -57,7 +48,7 @@ export async function handleUpdateMonitor(
   alertSvc: MultiBackendAlertService,
   id: string,
   body: MonitorMutationBody
-): Promise<Result> {
+): Promise<HandlerResult> {
   if (!body.datasourceId) {
     return { status: 400, body: { error: 'datasourceId is required' } };
   }
@@ -70,7 +61,7 @@ export async function handleUpdateMonitor(
     if (!monitor) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: monitor };
   } catch (e) {
-    return { status: 400, body: { error: safeError(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -78,7 +69,7 @@ export async function handleDeleteMonitor(
   alertSvc: MultiBackendAlertService,
   id: string,
   dsId?: string
-): Promise<Result> {
+): Promise<HandlerResult> {
   if (!dsId) {
     return { status: 400, body: { error: 'datasourceId is required' } };
   }
@@ -87,7 +78,7 @@ export async function handleDeleteMonitor(
     if (!ok) return { status: 404, body: { error: 'Monitor not found' } };
     return { status: 200, body: { deleted: true } };
   } catch (e) {
-    return { status: 400, body: { error: safeError(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -103,7 +94,7 @@ interface MonitorImportBody {
 export async function handleImportMonitors(
   alertSvc: MultiBackendAlertService,
   body: MonitorImportBody | unknown[]
-): Promise<Result> {
+): Promise<HandlerResult> {
   const importBody = body as MonitorImportBody;
   const dsId = Array.isArray(body) ? undefined : importBody.datasourceId;
   const configs = Array.isArray(body) ? body : importBody.monitors;
@@ -137,7 +128,12 @@ export async function handleImportMonitors(
         );
         importResults.push({ index, success: true, id: created.id });
       } catch (e) {
-        importResults.push({ index, success: false, errors: [safeError(e)] });
+        const errMsg = isAlertManagerError(e)
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : String(e);
+        importResults.push({ index, success: false, errors: [errMsg] });
       }
     }
   } else {
@@ -158,13 +154,15 @@ export async function handleImportMonitors(
   };
 }
 
-export async function handleExportMonitors(alertSvc: MultiBackendAlertService): Promise<Result> {
+export async function handleExportMonitors(
+  alertSvc: MultiBackendAlertService
+): Promise<HandlerResult> {
   try {
     const response = await alertSvc.getUnifiedRules();
     const configs = serializeMonitors(response.results);
     return { status: 200, body: { monitors: configs } };
   } catch (e) {
-    return { status: 500, body: { error: safeError(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -172,11 +170,11 @@ export async function handleExportMonitors(alertSvc: MultiBackendAlertService): 
 // Suppression Rules
 // ============================================================================
 
-export function handleListSuppressionRules(svc: SuppressionRuleService): Result {
+export function handleListSuppressionRules(svc: SuppressionRuleService): HandlerResult {
   return { status: 200, body: { rules: svc.list() } };
 }
 
-export function handleGetSuppressionRule(svc: SuppressionRuleService, id: string): Result {
+export function handleGetSuppressionRule(svc: SuppressionRuleService, id: string): HandlerResult {
   const rule = svc.get(id);
   if (!rule) return { status: 404, body: { error: 'Suppression rule not found' } };
   return { status: 200, body: rule };
@@ -185,7 +183,7 @@ export function handleGetSuppressionRule(svc: SuppressionRuleService, id: string
 export function handleCreateSuppressionRule(
   svc: SuppressionRuleService,
   body: Omit<SuppressionRuleConfig, 'id' | 'createdAt'>
-): Result {
+): HandlerResult {
   const rule = svc.create(body);
   return { status: 201, body: rule };
 }
@@ -194,13 +192,16 @@ export function handleUpdateSuppressionRule(
   svc: SuppressionRuleService,
   id: string,
   body: Partial<SuppressionRuleConfig>
-): Result {
+): HandlerResult {
   const rule = svc.update(id, body);
   if (!rule) return { status: 404, body: { error: 'Suppression rule not found' } };
   return { status: 200, body: rule };
 }
 
-export function handleDeleteSuppressionRule(svc: SuppressionRuleService, id: string): Result {
+export function handleDeleteSuppressionRule(
+  svc: SuppressionRuleService,
+  id: string
+): HandlerResult {
   const ok = svc.delete(id);
   if (!ok) return { status: 404, body: { error: 'Suppression rule not found' } };
   return { status: 200, body: { deleted: true } };
@@ -214,7 +215,7 @@ export async function handleAcknowledgeAlert(
   alertSvc: MultiBackendAlertService,
   alertId: string,
   body?: { datasourceId?: string; monitorId?: string }
-): Promise<Result> {
+): Promise<HandlerResult> {
   const dsId = body?.datasourceId;
   const monitorId = body?.monitorId;
   if (!dsId || !monitorId) {
@@ -224,7 +225,7 @@ export async function handleAcknowledgeAlert(
     const result = await alertSvc.acknowledgeOSAlerts(dsId, monitorId, [alertId]);
     return { status: 200, body: { id: alertId, state: 'acknowledged', result } };
   } catch (e) {
-    return { status: 400, body: { error: safeError(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -232,7 +233,7 @@ export async function handleSilenceAlert(
   svc: SuppressionRuleService,
   alertId: string,
   body: { duration?: string }
-): Promise<Result> {
+): Promise<HandlerResult> {
   const duration = body?.duration || '1h';
   const now = new Date();
   const endTime = new Date(now.getTime() + parseDurationMs(duration));

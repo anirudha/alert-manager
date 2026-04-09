@@ -12,8 +12,17 @@
  *  - Request deduplication for concurrent calls
  *  - Full CRUD: monitors, suppression rules, alert actions, SLOs
  */
-import { Datasource } from '../../common/types';
-import type { PrometheusMetricMetadata } from '../../common/types';
+import { Datasource } from '../../common';
+import type { SuppressionRuleConfig } from '../../common/suppression';
+import type {
+  DatasourceWarning,
+  PrometheusMetricMetadata,
+  UnifiedAlertSummary,
+  UnifiedRuleSummary,
+  UnifiedAlert,
+  UnifiedRule,
+  OSMonitor,
+} from '../../common/types';
 import type { SloDefinition, SloInput, SloSummary } from '../../common/slo_types';
 
 // ---------------------------------------------------------------------------
@@ -21,10 +30,10 @@ import type { SloDefinition, SloInput, SloSummary } from '../../common/slo_types
 // ---------------------------------------------------------------------------
 
 export interface HttpClient {
-  get<T = any>(path: string, opts?: any): Promise<T>;
-  post<T = any>(path: string, body?: any): Promise<T>;
-  put<T = any>(path: string, body?: any): Promise<T>;
-  delete<T = any>(path: string): Promise<T>;
+  get<T = unknown>(path: string, opts?: { query?: Record<string, string | undefined> }): Promise<T>;
+  post<T = unknown>(path: string, body?: unknown): Promise<T>;
+  put<T = unknown>(path: string, body?: unknown): Promise<T>;
+  delete<T = unknown>(path: string): Promise<T>;
 }
 
 // ---------------------------------------------------------------------------
@@ -37,8 +46,80 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   hasMore: boolean;
-  warnings?: string[];
+  warnings?: DatasourceWarning[];
 }
+
+// ---------------------------------------------------------------------------
+// API response types for endpoints with dynamic shapes
+// ---------------------------------------------------------------------------
+
+/** Response from GET /alertmanager/config */
+export interface AlertmanagerConfigResponse {
+  available: boolean;
+  cluster?: {
+    status: string;
+    peers: Array<{ name: string; address: string }>;
+    peerCount: number;
+  };
+  uptime?: string;
+  versionInfo?: Record<string, string>;
+  config?: {
+    global: Record<string, unknown>;
+    route: unknown;
+    receivers: Array<{
+      name: string;
+      integrations: Array<{ type: string; summary: string }>;
+    }>;
+    inhibitRules: unknown[];
+  };
+  configParseError?: string;
+  raw?: string;
+  error?: string;
+}
+
+/** Response from POST /alerts/:id/acknowledge */
+export interface AcknowledgeAlertResponse {
+  id: string;
+  state: string;
+  result: unknown;
+}
+
+/** Response from POST /alerts/:id/silence */
+export interface SilenceAlertResponse {
+  silenced: boolean;
+  suppressionRule: SuppressionRuleConfig;
+}
+
+/** Response shape for monitor creation/update */
+export interface MonitorResponse {
+  id: string;
+  [key: string]: unknown;
+}
+
+/** Response shape for monitor import */
+export interface MonitorImportResponse {
+  imported: number;
+  total: number;
+  results: Array<{ index: number; success: boolean; errors?: string[]; id?: string }>;
+}
+
+/** Response shape for monitor export */
+export interface MonitorExportResponse {
+  monitors: Array<Record<string, unknown>>;
+}
+
+/** Response shape for monitor deletion */
+export interface MonitorDeleteResponse {
+  deleted: boolean;
+}
+
+/** Response from GET /suppression-rules */
+export interface SuppressionRulesListResponse {
+  rules: SuppressionRuleConfig[];
+}
+
+/** Input for creating a suppression rule (no id or createdAt). */
+export type SuppressionRuleInput = Omit<SuppressionRuleConfig, 'id' | 'createdAt'>;
 
 // ---------------------------------------------------------------------------
 // Path configuration
@@ -162,13 +243,13 @@ export class AlarmsApiClient {
     dsIds: string[],
     _page: number,
     pageSize: number
-  ): Promise<PaginatedResponse<any>> {
+  ): Promise<PaginatedResponse<UnifiedAlertSummary>> {
     const query: Record<string, string> = { maxResults: String(pageSize) };
     if (dsIds.length > 0) query.dsIds = dsIds.join(',');
-    const res = await this.http.get<{ results?: any[]; alerts?: any[] }>(
-      this.paths.alerts,
-      this.mode === 'osd' ? { query } : undefined
-    );
+    const res = await this.http.get<{
+      results?: UnifiedAlertSummary[];
+      alerts?: UnifiedAlertSummary[];
+    }>(this.paths.alerts, this.mode === 'osd' ? { query } : undefined);
     const items = res.results ?? res.alerts ?? [];
     return { results: items, total: items.length, page: 1, pageSize: items.length, hasMore: false };
   }
@@ -179,54 +260,79 @@ export class AlarmsApiClient {
     dsIds: string[],
     _page: number,
     pageSize: number
-  ): Promise<PaginatedResponse<any>> {
+  ): Promise<PaginatedResponse<UnifiedRuleSummary>> {
     const query: Record<string, string> = { maxResults: String(pageSize) };
     if (dsIds.length > 0) query.dsIds = dsIds.join(',');
-    const res = await this.http.get<{ results?: any[]; rules?: any[] }>(
-      this.paths.rules,
-      this.mode === 'osd' ? { query } : undefined
-    );
+    const res = await this.http.get<{
+      results?: UnifiedRuleSummary[];
+      rules?: UnifiedRuleSummary[];
+    }>(this.paths.rules, this.mode === 'osd' ? { query } : undefined);
     const items = res.results ?? res.rules ?? [];
     return { results: items, total: items.length, page: 1, pageSize: items.length, hasMore: false };
   }
 
   // ---- Monitor CRUD -------------------------------------------------------
 
-  async createMonitor(data: any, dsId = 'ds-1'): Promise<any> {
-    return this.http.post(this.paths.monitors(dsId), data);
+  async createMonitor(
+    data: Partial<OSMonitor> | Record<string, unknown>,
+    dsId = 'ds-1'
+  ): Promise<MonitorResponse> {
+    return this.http.post<MonitorResponse>(this.paths.monitors(dsId), data);
   }
-  async updateMonitor(id: string, data: any, dsId = 'ds-1'): Promise<any> {
-    return this.http.put(`${this.paths.monitors(dsId)}/${encodeURIComponent(id)}`, data);
+  async updateMonitor(
+    id: string,
+    data: Partial<OSMonitor> | Record<string, unknown>,
+    dsId = 'ds-1'
+  ): Promise<MonitorResponse> {
+    return this.http.put<MonitorResponse>(
+      `${this.paths.monitors(dsId)}/${encodeURIComponent(id)}`,
+      data
+    );
   }
-  async deleteMonitor(id: string, dsId = 'ds-1'): Promise<any> {
-    return this.http.delete(`${this.paths.monitors(dsId)}/${encodeURIComponent(id)}`);
+  async deleteMonitor(id: string, dsId = 'ds-1'): Promise<MonitorDeleteResponse> {
+    return this.http.delete<MonitorDeleteResponse>(
+      `${this.paths.monitors(dsId)}/${encodeURIComponent(id)}`
+    );
   }
-  async importMonitors(json: any[], dsId = 'ds-1'): Promise<any> {
-    return this.http.post(`${this.paths.monitors(dsId)}/import`, json);
+  async importMonitors(
+    json: Array<Record<string, unknown>>,
+    dsId = 'ds-1'
+  ): Promise<MonitorImportResponse> {
+    return this.http.post<MonitorImportResponse>(`${this.paths.monitors(dsId)}/import`, json);
   }
-  async exportMonitors(dsId = 'ds-1'): Promise<any> {
-    return this.http.get(`${this.paths.monitors(dsId)}/export`);
+  async exportMonitors(dsId = 'ds-1'): Promise<MonitorExportResponse> {
+    return this.http.get<MonitorExportResponse>(`${this.paths.monitors(dsId)}/export`);
   }
 
   // ---- Alertmanager config ------------------------------------------------
 
-  async getAlertmanagerConfig(): Promise<any> {
-    return this.http.get(this.paths.alertmanagerConfig);
+  async getAlertmanagerConfig(): Promise<AlertmanagerConfigResponse> {
+    return this.http.get<AlertmanagerConfigResponse>(this.paths.alertmanagerConfig);
   }
 
   // ---- Suppression rules --------------------------------------------------
 
-  async listSuppressionRules(): Promise<any> {
-    return this.http.get(this.paths.suppressionRules);
+  async listSuppressionRules(): Promise<SuppressionRulesListResponse> {
+    return this.http.get<SuppressionRulesListResponse>(this.paths.suppressionRules);
   }
-  async createSuppressionRule(data: any): Promise<any> {
-    return this.http.post(this.paths.suppressionRules, data);
+  async createSuppressionRule(
+    data: SuppressionRuleInput | Record<string, unknown>
+  ): Promise<SuppressionRuleConfig> {
+    return this.http.post<SuppressionRuleConfig>(this.paths.suppressionRules, data);
   }
-  async updateSuppressionRule(id: string, data: any): Promise<any> {
-    return this.http.put(`${this.paths.suppressionRules}/${encodeURIComponent(id)}`, data);
+  async updateSuppressionRule(
+    id: string,
+    data: Partial<SuppressionRuleConfig> | Record<string, unknown>
+  ): Promise<SuppressionRuleConfig> {
+    return this.http.put<SuppressionRuleConfig>(
+      `${this.paths.suppressionRules}/${encodeURIComponent(id)}`,
+      data
+    );
   }
-  async deleteSuppressionRule(id: string): Promise<any> {
-    return this.http.delete(`${this.paths.suppressionRules}/${encodeURIComponent(id)}`);
+  async deleteSuppressionRule(id: string): Promise<MonitorDeleteResponse> {
+    return this.http.delete<MonitorDeleteResponse>(
+      `${this.paths.suppressionRules}/${encodeURIComponent(id)}`
+    );
   }
 
   // ---- SLO CRUD -----------------------------------------------------------
@@ -291,21 +397,30 @@ export class AlarmsApiClient {
 
   // ---- Alert actions ------------------------------------------------------
 
-  async acknowledgeAlert(id: string, datasourceId?: string, monitorId?: string): Promise<any> {
-    return this.http.post(this.paths.acknowledgeAlert(id), { datasourceId, monitorId });
+  async acknowledgeAlert(
+    id: string,
+    datasourceId?: string,
+    monitorId?: string
+  ): Promise<AcknowledgeAlertResponse> {
+    return this.http.post<AcknowledgeAlertResponse>(this.paths.acknowledgeAlert(id), {
+      datasourceId,
+      monitorId,
+    });
   }
-  async silenceAlert(id: string, duration?: string): Promise<any> {
-    return this.http.post(this.paths.silenceAlert(id), { duration: duration || '1h' });
+  async silenceAlert(id: string, duration?: string): Promise<SilenceAlertResponse> {
+    return this.http.post<SilenceAlertResponse>(this.paths.silenceAlert(id), {
+      duration: duration || '1h',
+    });
   }
 
   // ---- Detail views (flyouts) ---------------------------------------------
 
-  async getAlertDetail(dsId: string, alertId: string): Promise<any> {
-    return this.http.get(this.paths.alertDetail(dsId, alertId));
+  async getAlertDetail(dsId: string, alertId: string): Promise<UnifiedAlert> {
+    return this.http.get<UnifiedAlert>(this.paths.alertDetail(dsId, alertId));
   }
 
-  async getRuleDetail(dsId: string, ruleId: string): Promise<any> {
-    return this.http.get(this.paths.ruleDetail(dsId, ruleId));
+  async getRuleDetail(dsId: string, ruleId: string): Promise<UnifiedRule> {
+    return this.http.get<UnifiedRule>(this.paths.ruleDetail(dsId, ruleId));
   }
 
   // ---- Cache management ---------------------------------------------------

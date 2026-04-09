@@ -9,15 +9,16 @@
  */
 import yaml from 'js-yaml';
 import { PrometheusBackend } from '../../common';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Result = { status: number; body: any };
+import { toHandlerResult } from './route_utils';
+import type { HandlerResult } from './route_utils';
 
 // ============================================================================
 // Alertmanager API v2 Handlers
 // ============================================================================
 
-export async function handleGetAlertmanagerAlerts(promBackend: PrometheusBackend): Promise<Result> {
+export async function handleGetAlertmanagerAlerts(
+  promBackend: PrometheusBackend
+): Promise<HandlerResult> {
   try {
     if (!promBackend.getAlertmanagerAlerts) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -25,13 +26,13 @@ export async function handleGetAlertmanagerAlerts(promBackend: PrometheusBackend
     const alerts = await promBackend.getAlertmanagerAlerts();
     return { status: 200, body: { alerts } };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
 export async function handleGetAlertmanagerSilences(
   promBackend: PrometheusBackend
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     if (!promBackend.getSilences) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -39,7 +40,7 @@ export async function handleGetAlertmanagerSilences(
     const silences = await promBackend.getSilences();
     return { status: 200, body: { silences } };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -47,7 +48,7 @@ export async function handleCreateAlertmanagerSilence(
   promBackend: PrometheusBackend,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   body: any
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     if (!promBackend.createSilence) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -55,14 +56,14 @@ export async function handleCreateAlertmanagerSilence(
     const silenceId = await promBackend.createSilence(body);
     return { status: 200, body: { silenceID: silenceId } };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
 export async function handleDeleteAlertmanagerSilence(
   promBackend: PrometheusBackend,
   id: string
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     if (!promBackend.deleteSilence) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -70,11 +71,13 @@ export async function handleDeleteAlertmanagerSilence(
     const ok = await promBackend.deleteSilence(id);
     return { status: 200, body: { success: ok } };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
-export async function handleGetAlertmanagerStatus(promBackend: PrometheusBackend): Promise<Result> {
+export async function handleGetAlertmanagerStatus(
+  promBackend: PrometheusBackend
+): Promise<HandlerResult> {
   try {
     if (!promBackend.getAlertmanagerStatus) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -82,13 +85,13 @@ export async function handleGetAlertmanagerStatus(promBackend: PrometheusBackend
     const status = await promBackend.getAlertmanagerStatus();
     return { status: 200, body: status };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
 export async function handleGetAlertmanagerReceivers(
   promBackend: PrometheusBackend
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     if (!promBackend.getAlertmanagerReceivers) {
       return { status: 501, body: { error: 'Alertmanager receivers not available' } };
@@ -96,13 +99,13 @@ export async function handleGetAlertmanagerReceivers(
     const receivers = await promBackend.getAlertmanagerReceivers();
     return { status: 200, body: { receivers } };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
 export async function handleGetAlertmanagerAlertGroups(
   promBackend: PrometheusBackend
-): Promise<Result> {
+): Promise<HandlerResult> {
   try {
     if (!promBackend.getAlertmanagerAlertGroups) {
       return { status: 501, body: { error: 'Alertmanager alert groups not available' } };
@@ -110,7 +113,7 @@ export async function handleGetAlertmanagerAlertGroups(
     const groups = await promBackend.getAlertmanagerAlertGroups();
     return { status: 200, body: { groups } };
   } catch (e: unknown) {
-    return { status: 500, body: { error: String(e) } };
+    return toHandlerResult(e);
   }
 }
 
@@ -165,7 +168,9 @@ export function extractReceiverIntegrations(
  * Fetch Alertmanager status, parse the YAML config, and return structured data.
  * Merges the duplicated logic from standalone/server.ts and server/routes/index.ts.
  */
-export async function handleGetAlertmanagerConfig(promBackend: PrometheusBackend): Promise<Result> {
+export async function handleGetAlertmanagerConfig(
+  promBackend: PrometheusBackend
+): Promise<HandlerResult> {
   try {
     if (!promBackend.getAlertmanagerStatus) {
       return { status: 200, body: { available: false, error: 'Alertmanager not configured' } };
@@ -205,17 +210,12 @@ export async function handleGetAlertmanagerConfig(promBackend: PrometheusBackend
       body: {
         available: true,
         cluster: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          status: (status.cluster as any)?.status || 'unknown',
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          peers: (status.cluster as any)?.peers || [],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          peerCount: ((status.cluster as any)?.peers || []).length,
+          status: status.cluster?.status || 'unknown',
+          peers: status.cluster?.peers || [],
+          peerCount: (status.cluster?.peers || []).length,
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        uptime: (status as any).uptime,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        versionInfo: (status as any).versionInfo || {},
+        uptime: status.uptime,
+        versionInfo: status.versionInfo || {},
         config: parsedConfig,
         configParseError,
         raw: rawYaml,

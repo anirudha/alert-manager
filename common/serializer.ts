@@ -94,6 +94,7 @@ export function deserializeMonitor(json: unknown): {
     return { config: null, errors: ['Input too large (max 1MB)'] };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deserialized JSON has unknown shape
   const obj = json as Record<string, any>;
 
   if (!obj.name || typeof obj.name !== 'string') errors.push('name: required string field');
