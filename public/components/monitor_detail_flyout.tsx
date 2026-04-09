@@ -35,7 +35,7 @@ import {
   EuiHorizontalRule,
   EuiIcon,
   EuiLoadingContent,
-} from '@elastic/eui';
+} from '@opensearch-project/oui';
 import {
   UnifiedRule,
   UnifiedAlertSeverity,
@@ -45,7 +45,7 @@ import {
   SuppressionRule,
   OSMonitor,
   OSMonitorInput,
-} from '../../common/types';
+} from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 // ============================================================================
@@ -196,10 +196,10 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
     const ruleId = monitor.id;
     apiClient
       .getRuleDetail(dsId, ruleId)
-      .then((data: any) => {
+      .then((data: UnifiedRule) => {
         if (!cancelled && data) setDetail(data);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error('Failed to load monitor details:', err);
       })
       .finally(() => {
@@ -393,8 +393,8 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
                     {monitorKind === 'cluster_metrics'
                       ? 'Cluster API Configuration'
                       : monitorKind === 'doc'
-                        ? 'Document-Level Queries'
-                        : 'Query Definition'}
+                      ? 'Document-Level Queries'
+                      : 'Query Definition'}
                   </strong>
                 }
                 initialIsOpen={true}
@@ -501,7 +501,9 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
                       ? [
                           {
                             title: 'Threshold',
-                            description: `${monitor.threshold.operator} ${monitor.threshold.value}${monitor.threshold.unit || ''}`,
+                            description: `${monitor.threshold.operator} ${monitor.threshold.value}${
+                              monitor.threshold.unit || ''
+                            }`,
                           },
                         ]
                       : []),

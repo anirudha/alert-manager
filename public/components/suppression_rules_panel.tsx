@@ -34,7 +34,7 @@ import {
   EuiToolTip,
   EuiFieldNumber,
   EuiDatePicker,
-} from '@elastic/eui';
+} from '@opensearch-project/oui';
 import moment, { Moment } from 'moment';
 import { AlarmsApiClient } from '../services/alarms_client';
 
@@ -313,6 +313,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                 aria-label="Edit"
                 size="s"
                 onClick={() => openEdit(rule)}
+                data-test-subj={`alertManager-suppression-edit-${rule.id}`}
               />
             </EuiToolTip>
           </EuiFlexItem>
@@ -324,6 +325,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                 size="s"
                 color="danger"
                 onClick={() => setDeleteId(rule.id)}
+                data-test-subj={`alertManager-suppression-delete-${rule.id}`}
               />
             </EuiToolTip>
           </EuiFlexItem>
@@ -347,7 +349,13 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
           </EuiTitle>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EuiButton fill iconType="plusInCircle" size="s" onClick={openCreate}>
+          <EuiButton
+            fill
+            iconType="plusInCircle"
+            size="s"
+            onClick={openCreate}
+            data-test-subj="alertManager-suppression-createRule"
+          >
             Create Rule
           </EuiButton>
         </EuiFlexItem>
@@ -359,7 +367,12 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
           body={<p>Create a suppression rule to silence alerts during maintenance windows.</p>}
         />
       ) : (
-        <EuiBasicTable items={rules} columns={columns} loading={loading} />
+        <EuiBasicTable
+          items={rules}
+          columns={columns}
+          loading={loading}
+          data-test-subj="alertManager-suppression-table"
+        />
       )}
 
       {showFlyout && (
@@ -383,7 +396,11 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
               isInvalid={hasSubmitted && !!validationErrors.name}
               error={hasSubmitted ? validationErrors.name : undefined}
             >
-              <EuiFieldText value={formName} onChange={(e) => setFormName(e.target.value)} />
+              <EuiFieldText
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                data-test-subj="alertManager-suppression-formName"
+              />
             </EuiFormRow>
             <EuiSpacer size="m" />
             <EuiFormRow label="Description">
@@ -391,6 +408,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 rows={2}
+                data-test-subj="alertManager-suppression-formDescription"
               />
             </EuiFormRow>
             <EuiSpacer size="m" />
@@ -427,6 +445,8 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                       value={formMatcherKey}
                       onChange={(e) => setFormMatcherKey(e.target.value)}
                       isInvalid={hasSubmitted && !!validationErrors.matcherKey}
+                      aria-label="Matcher label key"
+                      data-test-subj="alertManager-suppression-matcherKey"
                     />
                   </EuiFlexItem>
                   <EuiFlexItem>
@@ -436,10 +456,16 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                       value={formMatcherValue}
                       onChange={(e) => setFormMatcherValue(e.target.value)}
                       isInvalid={hasSubmitted && !!validationErrors.matcherValue}
+                      aria-label="Matcher label value"
+                      data-test-subj="alertManager-suppression-matcherValue"
                     />
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>
-                    <EuiButtonEmpty size="xs" onClick={addMatcher}>
+                    <EuiButtonEmpty
+                      size="xs"
+                      onClick={addMatcher}
+                      data-test-subj="alertManager-suppression-addMatcher"
+                    >
                       Add
                     </EuiButtonEmpty>
                   </EuiFlexItem>
@@ -464,7 +490,8 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
                   { value: 'recurring', text: 'Recurring' },
                 ]}
                 value={formScheduleType}
-                onChange={(e) => setFormScheduleType(e.target.value as any)}
+                onChange={(e) => setFormScheduleType(e.target.value as 'one_time' | 'recurring')}
+                data-test-subj="alertManager-suppression-scheduleType"
               />
             </EuiFormRow>
             <EuiSpacer size="m" />
@@ -551,10 +578,20 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
           <EuiFlyoutFooter>
             <EuiFlexGroup justifyContent="spaceBetween">
               <EuiFlexItem grow={false}>
-                <EuiButtonEmpty onClick={() => setShowFlyout(false)}>Cancel</EuiButtonEmpty>
+                <EuiButtonEmpty
+                  onClick={() => setShowFlyout(false)}
+                  data-test-subj="alertManager-suppression-cancel"
+                >
+                  Cancel
+                </EuiButtonEmpty>
               </EuiFlexItem>
               <EuiFlexItem grow={false}>
-                <EuiButton fill onClick={handleSave} isDisabled={hasSubmitted && !isFormValid}>
+                <EuiButton
+                  fill
+                  onClick={handleSave}
+                  isDisabled={hasSubmitted && !isFormValid}
+                  data-test-subj="alertManager-suppression-save"
+                >
                   {editingRule ? 'Update' : 'Create'}
                 </EuiButton>
               </EuiFlexItem>

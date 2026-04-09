@@ -30,8 +30,8 @@ import {
   EuiIcon,
   EuiToolTip,
   EuiLink,
-} from '@elastic/eui';
-import { UnifiedAlert, Datasource } from '../../common/types';
+} from '@opensearch-project/oui';
+import { UnifiedAlert, Datasource } from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -85,10 +85,10 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
     let cancelled = false;
     apiClient
       .getAlertDetail(alert.datasourceId, alert.id)
-      .then((data: any) => {
+      .then((data: UnifiedAlert) => {
         if (!cancelled && data) setDetailData(data);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error('Failed to load alert details:', err);
       });
     return () => {
@@ -504,7 +504,11 @@ function getAlertAiAnalysis(alert: UnifiedAlert): string {
   };
   return (
     analyses[alert.name] ||
-    `Alert "${alert.name}" is currently ${alert.state} with ${alert.severity} severity. Started ${getAlertDuration(alert.startTime)} ago. Review the labels and annotations for additional context on the root cause.`
+    `Alert "${alert.name}" is currently ${alert.state} with ${
+      alert.severity
+    } severity. Started ${getAlertDuration(
+      alert.startTime
+    )} ago. Review the labels and annotations for additional context on the root cause.`
   );
 }
 

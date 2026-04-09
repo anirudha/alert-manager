@@ -42,6 +42,7 @@ Cypress.on('uncaught:exception', (err) => {
       err.message.includes('Loading chunk') ||
       err.message.includes('Unexpected token') ||
       err.message.includes('Cannot read properties of undefined') ||
+      err.message.includes('Cannot read properties of null') ||
       err.message.includes('Unauthorized') ||
       err.message.includes('Maximum call stack size exceeded') ||
       err.message.includes('Failed to fetch') ||

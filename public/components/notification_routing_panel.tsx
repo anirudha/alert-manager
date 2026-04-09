@@ -25,7 +25,7 @@ import {
   EuiText,
   EuiTitle,
   EuiToolTip,
-} from '@elastic/eui';
+} from '@opensearch-project/oui';
 import { AlarmsApiClient } from '../services/alarms_client';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +66,7 @@ interface AlertmanagerConfig {
   uptime?: string;
   versionInfo?: Record<string, string>;
   config?: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Alertmanager global config has dynamic shape
     global?: Record<string, any>;
     route?: AlertmanagerRoute;
     receivers?: ReceiverInfo[];
@@ -161,8 +162,8 @@ export const NotificationRoutingPanel: React.FC<NotificationRoutingPanelProps> =
     try {
       const res = await apiClient.getAlertmanagerConfig();
       setConfig(res);
-    } catch (e: any) {
-      setError(e.message || 'Failed to fetch Alertmanager config');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch Alertmanager config');
     }
     setLoading(false);
   }, [apiClient]);

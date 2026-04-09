@@ -9,19 +9,14 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  EuiBasicTable,
   EuiPage,
   EuiPageBody,
   EuiPageHeader,
   EuiPageHeaderSection,
   EuiTitle,
   EuiSpacer,
-  EuiEmptyPrompt,
-  EuiBadge,
   EuiTab,
   EuiTabs,
-  EuiButton,
-  EuiButtonEmpty,
   EuiFlexGroup,
   EuiFlexItem,
   EuiText,
@@ -31,8 +26,8 @@ import {
   EuiLoadingSpinner,
   EuiCallOut,
   EuiGlobalToastList,
-} from '@elastic/eui';
-import { Datasource, UnifiedAlert, UnifiedRule, PaginatedResponse } from '../../common/types';
+} from '@opensearch-project/oui';
+import { Datasource, DatasourceWarning, UnifiedAlert, UnifiedRule } from '../../common';
 import { MonitorsTable } from './monitors_table';
 import { CreateMonitor, MonitorFormState } from './create_monitor';
 import { AlertsDashboard } from './alerts_dashboard';
@@ -140,6 +135,7 @@ const DatasourceSelector: React.FC<{
         <EuiFlexItem>
           <EuiComboBox
             placeholder="Select a datasource to view rules and alerts..."
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiComboBox grouped options type mismatch
             options={options as any}
             selectedOptions={selectedOptions}
             onChange={(selected: Array<{ label: string }>) => {
@@ -150,6 +146,7 @@ const DatasourceSelector: React.FC<{
             isClearable
             compressed
             aria-label="Select datasource"
+            data-test-subj="alertManager-datasource-combo"
           />
         </EuiFlexItem>
         {loadingWorkspaces && (
@@ -159,94 +156,6 @@ const DatasourceSelector: React.FC<{
         )}
       </EuiFlexGroup>
     </EuiPanel>
-  );
-};
-
-// ============================================================================
-// Pagination Controls
-// ============================================================================
-
-const PaginationBar: React.FC<{
-  page: number;
-  pageSize: number;
-  total: number;
-  hasMore: boolean;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: number) => void;
-}> = ({ page, pageSize, total, hasMore, onPageChange, onPageSizeChange }) => {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-
-  return (
-    <EuiFlexGroup
-      alignItems="center"
-      justifyContent="spaceBetween"
-      responsive={false}
-      style={{ padding: '8px 0' }}
-    >
-      <EuiFlexItem grow={false}>
-        <EuiText size="xs" color="subdued">
-          Showing {total > 0 ? start : 0}–{end} of {total} items
-        </EuiText>
-      </EuiFlexItem>
-      <EuiFlexItem grow={false}>
-        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiText size="xs" color="subdued">
-              Rows:
-            </EuiText>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              style={{
-                padding: '2px 4px',
-                fontSize: 12,
-                border: '1px solid #D3DAE6',
-                borderRadius: 4,
-              }}
-              aria-label="Rows per page"
-            >
-              {[10, 20, 50, 100].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiButtonEmpty
-              size="xs"
-              onClick={() => onPageChange(page - 1)}
-              isDisabled={page <= 1}
-              iconType="arrowLeft"
-              aria-label="Previous page"
-            >
-              Prev
-            </EuiButtonEmpty>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiText size="xs">
-              Page {page} of {totalPages}
-            </EuiText>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiButtonEmpty
-              size="xs"
-              onClick={() => onPageChange(page + 1)}
-              isDisabled={!hasMore}
-              iconType="arrowRight"
-              iconSide="right"
-              aria-label="Next page"
-            >
-              Next
-            </EuiButtonEmpty>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiFlexItem>
-    </EuiFlexGroup>
   );
 };
 
@@ -341,8 +250,12 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             try {
               const ws = await apiClient.listWorkspaces(pds.id);
               allWs.push(...ws);
-            } catch (e: any) {
-              addToast('Failed to discover workspaces', 'warning', e?.message || 'Unknown error');
+            } catch (e: unknown) {
+              addToast(
+                'Failed to discover workspaces',
+                'warning',
+                e instanceof Error ? e.message : String(e)
+              );
             }
           }
           setWorkspaceOptions(allWs);
@@ -358,7 +271,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           // No Prometheus datasources — auto-select all OpenSearch datasources
           setSelectedDsIds(nonPromIds);
         }
-      } catch (e) {
+      } catch (e: unknown) {
         console.error('Failed to load datasources', e);
       } finally {
         setLoading(false);
@@ -386,11 +299,14 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         setAlertsHasMore(res.hasMore || false);
         if (res.warnings && res.warnings.length > 0) {
           setWarnings(
-            res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error }))
+            res.warnings.map((w: DatasourceWarning) => ({
+              datasourceName: w.datasourceName,
+              error: w.error,
+            }))
           );
         }
-      } catch (e: any) {
-        setError(e.message || 'Failed to fetch alerts');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to fetch alerts');
       } finally {
         setDataLoading(false);
       }
@@ -416,11 +332,14 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         setRulesHasMore(res.hasMore || false);
         if (res.warnings && res.warnings.length > 0) {
           setWarnings(
-            res.warnings.map((w: any) => ({ datasourceName: w.datasourceName, error: w.error }))
+            res.warnings.map((w: DatasourceWarning) => ({
+              datasourceName: w.datasourceName,
+              error: w.error,
+            }))
           );
         }
-      } catch (e: any) {
-        setError(e.message || 'Failed to fetch rules');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to fetch rules');
       } finally {
         setDataLoading(false);
       }
@@ -471,8 +390,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           ? { ...prev, state: 'acknowledged' as const, lastUpdated: new Date().toISOString() }
           : prev
       );
-    } catch (e: any) {
-      addToast('Failed to acknowledge alert', 'danger', e?.message || 'Unknown error');
+    } catch (e: unknown) {
+      addToast('Failed to acknowledge alert', 'danger', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -503,8 +422,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             }
           : prev
       );
-    } catch (e: any) {
-      addToast('Failed to silence alert', 'danger', e?.message || 'Unknown error');
+    } catch (e: unknown) {
+      addToast('Failed to silence alert', 'danger', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -513,9 +432,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     for (const id of ids) {
       try {
         await apiClient.deleteMonitor(id);
-      } catch (e: any) {
+      } catch (e: unknown) {
         failed.push(id);
-        addToast('Failed to delete monitor', 'danger', e?.message || 'Unknown error');
+        addToast('Failed to delete monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
     }
     const succeeded = ids.filter((id) => !failed.includes(id));
@@ -535,8 +454,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       try {
         await apiClient.deleteSuppressionRule(id);
         addToast('Monitor unmuted');
-      } catch (e: any) {
-        addToast('Failed to unmute monitor', 'danger', e?.message || 'Unknown error');
+      } catch (e: unknown) {
+        addToast('Failed to unmute monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
     } else {
       try {
@@ -551,15 +470,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           enabled: true,
         });
         addToast('Monitor muted for 1 hour');
-      } catch (e: any) {
-        addToast('Failed to mute monitor', 'danger', e?.message || 'Unknown error');
+      } catch (e: unknown) {
+        addToast('Failed to mute monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
     }
     setRules((prev) =>
       prev.map((r) => {
         if (r.id === id) {
-          const newStatus = r.status === 'muted' ? 'active' : 'muted';
-          return { ...r, status: newStatus as any };
+          const newStatus: 'active' | 'muted' = r.status === 'muted' ? 'active' : 'muted';
+          return { ...r, status: newStatus };
         }
         return r;
       })
@@ -578,19 +497,19 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     try {
       await apiClient.createMonitor(clone);
       addToast('Monitor cloned');
-    } catch (e: any) {
-      addToast('Failed to clone monitor', 'danger', e?.message || 'Unknown error');
+    } catch (e: unknown) {
+      addToast('Failed to clone monitor', 'danger', e instanceof Error ? e.message : String(e));
     }
     setRules((prev) => [clone, ...prev]);
   };
 
-  const handleImportMonitors = async (configs: any[]) => {
+  const handleImportMonitors = async (configs: Array<Record<string, unknown>>) => {
     try {
       await apiClient.importMonitors(configs);
       addToast('Monitors imported successfully');
       fetchRules(selectedDsIds, rulesPage, rulesPageSize);
-    } catch (e: any) {
-      addToast('Failed to import monitors', 'danger', e?.message || 'Unknown error');
+    } catch (e: unknown) {
+      addToast('Failed to import monitors', 'danger', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -638,6 +557,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         conditionPreviewData: [],
         notificationRouting: [],
         suppressionRules: [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw field is empty for new monitors
         raw: {} as any,
       };
     } else {
@@ -651,10 +571,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         formState.monitorType === 'ppl_monitor'
           ? ('metric' as const)
           : formState.monitorType === 'bucket_level_monitor'
-            ? ('infrastructure' as const)
-            : formState.monitorType === 'doc_level_monitor'
-              ? ('log' as const)
-              : ('metric' as const);
+          ? ('infrastructure' as const)
+          : formState.monitorType === 'doc_level_monitor'
+          ? ('log' as const)
+          : ('metric' as const);
 
       // PPL monitors have Prometheus-like labels/annotations
       const labelsObj: Record<string, string> = {};
@@ -709,6 +629,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         conditionPreviewData: [],
         notificationRouting: [],
         suppressionRules: [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw field is empty for new monitors
         raw: {} as any,
       };
     }
@@ -719,8 +640,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     try {
       await apiClient.createMonitor(formState);
       addToast('Monitor created successfully');
-    } catch (e: any) {
-      addToast('Failed to create monitor', 'danger', e?.message || 'Unknown error');
+    } catch (e: unknown) {
+      addToast('Failed to create monitor', 'danger', e instanceof Error ? e.message : String(e));
     }
     setRules((prev) => [newRule, ...prev]);
     setShowCreateMonitor(false);
@@ -733,8 +654,8 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       try {
         await apiClient.createMonitor(f);
         succeeded++;
-      } catch (e: any) {
-        addToast('Failed to create monitor', 'danger', e?.message || 'Unknown error');
+      } catch (e: unknown) {
+        addToast('Failed to create monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
     }
     if (succeeded > 0) {
@@ -807,7 +728,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   };
 
   return (
-    <EuiPage>
+    <EuiPage data-test-subj="alertManager-page">
       <EuiPageBody component="main">
         <EuiPageHeader>
           <EuiPageHeaderSection>
@@ -817,9 +738,14 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           </EuiPageHeaderSection>
         </EuiPageHeader>
         <EuiSpacer size="m" />
-        <EuiTabs>
+        <EuiTabs data-test-subj="alertManager-tabs">
           {tabs.map((t) => (
-            <EuiTab key={t.id} isSelected={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
+            <EuiTab
+              key={t.id}
+              isSelected={activeTab === t.id}
+              onClick={() => setActiveTab(t.id)}
+              data-test-subj={`alertManager-tabs-${t.id}`}
+            >
               {t.name}
             </EuiTab>
           ))}
@@ -856,6 +782,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           </EuiCallOut>
         )}
 
+        <div aria-live="polite" className="ouiScreenReaderOnly">
+          {`Showing ${tabs.find((t) => t.id === activeTab)?.name ?? activeTab} tab`}
+        </div>
         {renderTable()}
         {showCreateMonitor && (
           <CreateMonitor
@@ -881,8 +810,11 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           />
         )}
         <EuiGlobalToastList
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiGlobalToastList toast type mismatch
           toasts={toasts as any}
-          dismissToast={(t: any) => setToasts((prev) => prev.filter((p) => p.id !== t.id))}
+          dismissToast={(t: { id: string }) =>
+            setToasts((prev) => prev.filter((p) => p.id !== t.id))
+          }
           toastLifeTimeMs={4000}
         />
       </EuiPageBody>
