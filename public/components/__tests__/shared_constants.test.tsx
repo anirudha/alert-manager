@@ -11,7 +11,8 @@ import {
   errorBudgetColor,
   attainmentColor,
   formatLatency,
-  PAGINATION_BUTTON_STYLE,
+  escapeHtml,
+  countBy,
 } from '../shared_constants';
 
 // ============================================================================
@@ -192,20 +193,66 @@ describe('formatLatency', () => {
   });
 });
 
-describe('PAGINATION_BUTTON_STYLE', () => {
-  it('returns active styles when isActive is true', () => {
-    const style = PAGINATION_BUTTON_STYLE(true);
-    expect(style.background).toBe('#006BB4');
-    expect(style.color).toBe('#fff');
-    expect(style.cursor).toBe('default');
-    expect(style.fontWeight).toBe(700);
+// ============================================================================
+// escapeHtml
+// ============================================================================
+
+describe('escapeHtml', () => {
+  it('escapes ampersands', () => {
+    expect(escapeHtml('foo & bar')).toBe('foo &amp; bar');
   });
 
-  it('returns inactive styles when isActive is false', () => {
-    const style = PAGINATION_BUTTON_STYLE(false);
-    expect(style.background).toBe('transparent');
-    expect(style.color).toBe('#006BB4');
-    expect(style.cursor).toBe('pointer');
-    expect(style.fontWeight).toBe(400);
+  it('escapes angle brackets', () => {
+    expect(escapeHtml('<script>alert("xss")</script>')).toBe(
+      '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'
+    );
+  });
+
+  it('escapes double quotes', () => {
+    expect(escapeHtml('a "quoted" value')).toBe('a &quot;quoted&quot; value');
+  });
+
+  it('returns the same string when no special characters are present', () => {
+    expect(escapeHtml('hello world')).toBe('hello world');
+  });
+
+  it('handles empty string', () => {
+    expect(escapeHtml('')).toBe('');
+  });
+
+  it('escapes multiple special characters in sequence', () => {
+    expect(escapeHtml('&<>"')).toBe('&amp;&lt;&gt;&quot;');
+  });
+});
+
+// ============================================================================
+// countBy
+// ============================================================================
+
+describe('countBy', () => {
+  it('counts occurrences by key function', () => {
+    const items = [
+      { severity: 'critical' },
+      { severity: 'high' },
+      { severity: 'critical' },
+      { severity: 'low' },
+    ];
+    expect(countBy(items, (i) => i.severity)).toEqual({
+      critical: 2,
+      high: 1,
+      low: 1,
+    });
+  });
+
+  it('returns empty object for empty array', () => {
+    expect(countBy([], () => 'x')).toEqual({});
+  });
+
+  it('handles single-item arrays', () => {
+    expect(countBy(['a'], (s) => s)).toEqual({ a: 1 });
+  });
+
+  it('handles all items with the same key', () => {
+    expect(countBy([1, 2, 3], () => 'same')).toEqual({ same: 3 });
   });
 });

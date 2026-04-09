@@ -16,12 +16,8 @@ import {
   EuiPopover,
   EuiContextMenuPanel,
   EuiContextMenuItem,
-} from '@elastic/eui';
-import {
-  PAGINATION_CSS,
-  PAGINATION_BUTTON_STYLE,
-  PAGINATION_BUTTON_HOVER_CLASS,
-} from './shared_constants';
+} from '@opensearch-project/oui';
+import './table_pagination.css';
 
 interface TablePaginationProps {
   pageIndex: number;
@@ -53,7 +49,6 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
 
   return (
     <>
-      <style>{PAGINATION_CSS}</style>
       <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
         <EuiFlexItem grow={false}>
           <EuiPopover
@@ -64,6 +59,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                 iconType="arrowDown"
                 iconSide="right"
                 onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+                data-test-subj="alertManager-pagination-rowsPerPage"
               >
                 Rows per page: {pageSize}
               </EuiButtonEmpty>
@@ -100,6 +96,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                 isDisabled={pageIndex === 0}
                 size="s"
                 color="text"
+                data-test-subj="alertManager-pagination-prev"
               />
             </EuiFlexItem>
             {pages.map((p) => (
@@ -109,8 +106,10 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                   disabled={p === pageIndex}
                   aria-label={`Page ${p + 1} of ${pageCount}`}
                   aria-current={p === pageIndex ? 'page' : undefined}
-                  className={PAGINATION_BUTTON_HOVER_CLASS}
-                  style={PAGINATION_BUTTON_STYLE(p === pageIndex)}
+                  className={`alertMgr-pageBtn${
+                    p === pageIndex ? ' alertMgr-pageBtn--active' : ''
+                  }`}
+                  data-test-subj={`alertManager-pagination-page-${p + 1}`}
                 >
                   {p + 1}
                 </button>
@@ -124,6 +123,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
                 isDisabled={pageIndex >= pageCount - 1}
                 size="s"
                 color="text"
+                data-test-subj="alertManager-pagination-next"
               />
             </EuiFlexItem>
           </EuiFlexGroup>

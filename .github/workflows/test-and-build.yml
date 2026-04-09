@@ -6,8 +6,30 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  lint-test-build:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --legacy-peer-deps
+      - name: Run Prettier check
+        run: npx prettier --check "**/*.{ts,tsx,js}" --ignore-path .gitignore
+      - name: Check license headers
+        run: |
+          MISSING=$(grep -rL "Copyright OpenSearch Contributors" --include="*.ts" --include="*.tsx" core/ server/ public/ common/ standalone/ | grep -v __mocks__ | grep -v node_modules | grep -v standalone/dist || true)
+          if [ -n "$MISSING" ]; then
+            echo "Missing license headers in:"
+            echo "$MISSING"
+            exit 1
+          fi
+
+  test-build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,9 +52,9 @@ jobs:
           mkdir -p ../../
           echo '{"compilerOptions":{"target":"ES2020","module":"commonjs","moduleResolution":"node","esModuleInterop":true,"skipLibCheck":true,"jsx":"react","ignoreDeprecations":"5.0"}}' > ../../tsconfig.json
 
-      # Note: lint is skipped in standalone CI because the ESLint config extends
+      # Note: ESLint is skipped in standalone CI because the ESLint config extends
       # @elastic/eslint-config-kibana which is only available inside the OSD monorepo.
-      # Lint runs automatically via husky pre-commit hooks during development.
+      # Prettier and license header checks run in the lint job above.
 
       - name: Run tests with coverage
         run: npm run test:coverage

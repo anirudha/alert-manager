@@ -10,7 +10,6 @@
  * Centralising these here avoids drift between components that
  * previously each defined their own (slightly different) copies.
  */
-import React from 'react';
 
 // ============================================================================
 // Severity
@@ -234,44 +233,34 @@ export function formatLatency(seconds: number): string {
 }
 
 // ============================================================================
-// Pagination button styles  (m10 — hover / focus-visible feedback)
+// HTML escaping
 // ============================================================================
 
 /**
- * Inline style factory for page-number buttons inside TablePagination.
- * Provides the base look; combine with `PAGINATION_BUTTON_HOVER_CLASS`
- * and `PAGINATION_CSS` for interactive states.
+ * Escape HTML special characters to prevent XSS in ECharts tooltip formatters
+ * and other contexts where user-supplied strings are rendered as HTML.
  */
-export const PAGINATION_BUTTON_STYLE = (isActive: boolean): React.CSSProperties => ({
-  minWidth: 32,
-  height: 32,
-  border: 'none',
-  borderRadius: 4,
-  background: isActive ? '#006BB4' : 'transparent',
-  color: isActive ? '#fff' : '#006BB4',
-  fontWeight: isActive ? 700 : 400,
-  cursor: isActive ? 'default' : 'pointer',
-  fontSize: 14,
-});
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ============================================================================
+// Collection utilities
+// ============================================================================
 
 /**
- * CSS class name to attach to every page-number <button> so that the
- * hover/focus rules in PAGINATION_CSS can target them.
+ * Count occurrences of items grouped by a key function.
+ * Generic replacement for lodash.countBy — used by alerts dashboard and charts.
  */
-export const PAGINATION_BUTTON_HOVER_CLASS = 'alert-mgr-page-btn';
-
-/**
- * Inject once (via a <style> tag or equivalent) to enable hover and
- * focus-visible feedback on pagination page-number buttons.
- */
-export const PAGINATION_CSS = `
-  .alert-mgr-page-btn:not(:disabled):hover {
-    background-color: #E6F0FF;
-    border-radius: 4px;
+export function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    const k = key(item);
+    counts[k] = (counts[k] || 0) + 1;
   }
-  .alert-mgr-page-btn:focus-visible {
-    outline: 2px solid #006BB4;
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-`;
+  return counts;
+}
