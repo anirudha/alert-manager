@@ -12,8 +12,8 @@
  * The saved object type `slo-definition` is registered in server/plugin.ts.
  */
 
-import type { SloDefinition, ISloStore } from '../core/slo_types';
-import type { SavedObjectsClientContract } from '../../../src/core/server';
+import type { SloDefinition, ISloStore } from '../common/slo_types';
+import type { SavedObjectsClientContract } from 'opensearch-dashboards/server';
 
 const SO_TYPE = 'slo-definition';
 
@@ -40,7 +40,11 @@ export class SavedObjectSloStore implements ISloStore {
 
     // Paginate through all results to avoid the 1000-object cap
     while (true) {
-      const findOpts: { type: string; perPage: number; page: number; filter?: string } = { type: SO_TYPE, perPage, page };
+      const findOpts: { type: string; perPage: number; page: number; filter?: string } = {
+        type: SO_TYPE,
+        perPage,
+        page,
+      };
       if (datasourceId) {
         // Escape quotes in datasourceId to prevent KQL injection
         const escaped = datasourceId.replace(/"/g, '\\"');

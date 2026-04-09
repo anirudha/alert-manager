@@ -30,7 +30,7 @@ import {
   EuiToolTip,
   EuiLoadingSpinner,
 } from '@elastic/eui';
-import type { SloSummary, SloDefinition, BurnRateConfig } from '../../core/slo_types';
+import type { SloSummary, SloDefinition, BurnRateConfig } from '../../common/slo_types';
 import {
   SLO_STATUS_COLORS,
   SLI_TYPE_LABELS,

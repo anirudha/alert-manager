@@ -38,8 +38,8 @@ import {
 } from '@elastic/eui';
 import { PromQLEditor, validatePromQL } from './promql_editor';
 import { MetricBrowser } from './metric_browser';
-import { Datasource, UnifiedAlertSeverity } from '../../core';
-import { validateMonitorForm } from '../../core/validators';
+import { Datasource, UnifiedAlertSeverity } from '../../common/types';
+import { validateMonitorForm } from '../../common/validators';
 import { AiMonitorWizard, AlertTemplate } from './ai_monitor_wizard';
 
 // ============================================================================

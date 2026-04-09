@@ -65,7 +65,7 @@ import type {
   SliType,
   SloLiveStatus,
   GeneratedRule,
-} from '../../core/slo_types';
+} from '../../common/slo_types';
 import { CreateSloWizard } from './create_slo_wizard';
 import { SloDetailFlyout } from './slo_detail_flyout';
 import { EchartsRender } from './echarts_render';
@@ -165,7 +165,7 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
       try {
         const data = await apiClient.getSlo(sloId);
         if (cancelled) return;
-        const { generateSloRuleGroup } = await import('../../core/slo_promql_generator');
+        const { generateSloRuleGroup } = await import('../../common/slo_promql_generator');
         const ruleGroup = generateSloRuleGroup(data as any);
         setRules(ruleGroup.rules);
       } catch (err: unknown) {
@@ -1232,7 +1232,9 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                         style={{
                           cursor: 'pointer',
                           boxShadow:
-                            !statFilter || statFilter === 'all' ? 'inset 0 0 0 2px #006BB4' : 'none',
+                            !statFilter || statFilter === 'all'
+                              ? 'inset 0 0 0 2px #006BB4'
+                              : 'none',
                           backgroundColor:
                             !statFilter || statFilter === 'all' ? '#E6F0FF' : undefined,
                           borderRadius: 6,

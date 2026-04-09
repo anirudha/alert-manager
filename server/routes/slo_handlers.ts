@@ -9,15 +9,15 @@
  * Follows the same pattern as server/routes/handlers.ts.
  */
 
-import type { SloService } from '../../core/slo_service';
+import type { SloService } from '../../common/slo_service';
 import type {
   SloInput,
   SloUpdateInput,
   SloListFilters,
   SloStatus,
   SliType,
-} from '../../core/slo_types';
-import type { Logger } from '../../core/types';
+} from '../../common/slo_types';
+import type { Logger } from '../../common/types';
 
 type Result = { status: number; body: unknown };
 

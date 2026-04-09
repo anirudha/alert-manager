@@ -29,9 +29,9 @@ import {
   EuiText,
 } from '@elastic/eui';
 import type { EuiComboBoxOptionOption } from '@elastic/eui';
-import type { SliType, SliCalcMethod, SliSourceType } from '../../core/slo_types';
-import type { SloTemplate } from '../../core/slo_templates';
-import { detectMetricType } from '../../core/slo_templates';
+import type { SliType, SliCalcMethod, SliSourceType } from '../../common/slo_types';
+import type { SloTemplate } from '../../common/slo_templates';
+import { detectMetricType } from '../../common/slo_templates';
 import type { AlarmsApiClient } from '../services/alarms_client';
 import { usePrometheusMetadata } from '../hooks/use_prometheus_metadata';
 import {

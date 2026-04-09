@@ -25,7 +25,7 @@ import {
   handleGetAlertDetail,
   handleListWorkspaces,
 } from '../handlers';
-import { InMemoryDatasourceService, MultiBackendAlertService, Logger } from '../../../core';
+import { InMemoryDatasourceService, MultiBackendAlertService, Logger } from '../../../common';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -323,7 +323,7 @@ async function createServicesWithMockBackend() {
   const dsSvc = createDatasourceService();
   const alertSvc = createAlertService(dsSvc);
   const ds = await dsSvc.create(dsInput);
-  const { MockOpenSearchBackend } = await import('../../../core/testing');
+  const { MockOpenSearchBackend } = await import('../../../common/testing');
   const mockBackend = new MockOpenSearchBackend(noopLogger);
   alertSvc.registerOpenSearch(mockBackend);
   return { dsSvc, alertSvc, dsId: ds.id, mockBackend };
@@ -431,7 +431,7 @@ describe('handleGetPromRuleGroups — success path', () => {
       url: 'http://localhost:9090',
       enabled: true,
     });
-    const { MockPrometheusBackend } = await import('../../../core/testing');
+    const { MockPrometheusBackend } = await import('../../../common/testing');
     const promBackend = new MockPrometheusBackend(noopLogger);
     promBackend.seed(ds.id);
     alertSvc.registerPrometheus(promBackend);
@@ -455,7 +455,7 @@ describe('handleGetPromAlerts — success path', () => {
       url: 'http://localhost:9090',
       enabled: true,
     });
-    const { MockPrometheusBackend } = await import('../../../core/testing');
+    const { MockPrometheusBackend } = await import('../../../common/testing');
     const promBackend = new MockPrometheusBackend(noopLogger);
     promBackend.seed(ds.id);
     alertSvc.registerPrometheus(promBackend);

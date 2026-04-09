@@ -22,8 +22,8 @@ import {
   MultiBackendAlertService,
   SuppressionRuleService,
   Logger,
-} from '../../../core';
-import { MockOpenSearchBackend } from '../../../core/testing';
+} from '../../../common';
+import { MockOpenSearchBackend } from '../../../common/testing';
 
 // ---------------------------------------------------------------------------
 // Helpers

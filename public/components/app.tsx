@@ -10,10 +10,10 @@ import React from 'react';
 import { I18nProvider } from '@osd/i18n/react';
 import { BrowserRouter as Router } from 'react-router-dom';
 
-import { CoreStart } from '../../../../src/core/public';
+import { CoreStart } from 'opensearch-dashboards/public';
 import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/public';
 
-import { PLUGIN_ID } from '../../common';
+import { PLUGIN_ID } from '../../common/constants';
 import { AlarmsPage } from './alarms_page';
 import { AlarmsApiClient } from '../services/alarms_client';
 

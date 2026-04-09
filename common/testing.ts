@@ -5,7 +5,7 @@
 
 /**
  * Test and development exports — mock backends and enrichment helpers.
- * Import from 'core/testing' instead of 'core' to make the dev-only
+ * Import from 'common/testing' instead of 'common' to make the dev-only
  * dependency explicit.
  */
 export { MockOpenSearchBackend, MockPrometheusBackend } from './mock_backend';

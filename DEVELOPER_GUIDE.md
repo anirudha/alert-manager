@@ -32,9 +32,9 @@ Alert Manager uses a **dual-mode architecture** -- one codebase, two distributio
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    Shared Core Layer                      │
-│  core/types.ts  core/alert_service.ts  core/slo_types.ts │
-│  core/datasource_service.ts  server/routes/handlers.ts   │
+│                   Shared Common Layer                      │
+│  common/types.ts  common/alert_service.ts  common/slo_types.ts │
+│  common/datasource_service.ts  server/routes/handlers.ts   │
 │  public/components/*  (shared React UI)                  │
 └─────────┬─────────────────────────┬──────────────────────┘
           │                         │
@@ -53,7 +53,7 @@ Alert Manager uses a **dual-mode architecture** -- one codebase, two distributio
 
 **Key layers:**
 
-- **`core/`** -- Pure business logic, zero platform dependencies. Services for alerts, datasources, SLOs, and suppression rules. Shared between both modes.
+- **`common/`** -- Pure business logic, zero platform dependencies. Services for alerts, datasources, SLOs, and suppression rules. Shared between both modes.
 - **`server/`** -- OSD plugin server: Hapi routes via `IRouter`, saved object types, plugin lifecycle.
 - **`public/`** -- Shared React + OUI components. Mounted by OSD's app framework or standalone webpack.
 - **`standalone/`** -- Express server + webpack client. Separate `package.json`, published to npm.
@@ -187,7 +187,7 @@ cd plugins/alertManager
 **What it does:**
 1. Delegates to `yarn plugin-helpers build` (the standard OSD plugin build pipeline)
 2. Uses `@osd/optimizer` to bundle client-side code
-3. Uses Babel to transpile server-side TypeScript (`core/`, `server/`, `common/`)
+3. Uses Babel to transpile server-side TypeScript (`common/`, `server/`)
 4. Packages everything into the OSD plugin zip format
 
 **Install to a cluster:**
@@ -238,7 +238,7 @@ Two test projects run in parallel:
 
 | Project | Environment | Test Root | What it tests |
 |---------|------------|-----------|---------------|
-| `server` | Node.js | `core/`, `server/` | Services, backends, route handlers |
+| `server` | Node.js | `common/`, `server/` | Services, backends, route handlers |
 | `components` | jsdom | `public/` | React components, UI logic |
 
 ```bash
@@ -252,7 +252,7 @@ npm run test:coverage
 npm run test:watch
 
 # Run a single test file
-npx jest core/__tests__/alert_service.test.ts
+npx jest common/__tests__/alert_service.test.ts
 npx jest public/__tests__/alerts_tab.test.tsx
 ```
 
@@ -341,7 +341,7 @@ alertManager/
 ├── tsconfig.test.json           # Test TS config (Jest)
 ├── package.json                 # Root package.json (scripts, devDeps)
 │
-├── core/                        # Platform-agnostic business logic
+├── common/                      # Platform-agnostic business logic
 │   ├── types.ts                 # All TypeScript interfaces (Datasource, Alert, etc.)
 │   ├── alert_service.ts         # Multi-backend alert service
 │   ├── datasource_service.ts    # In-memory datasource registry
@@ -393,10 +393,6 @@ alertManager/
 │   ├── bin/cli.js               # npx entry point
 │   └── components/              # Symlink to ../public/components
 │
-├── stubs/                       # OSD type stubs for Jest test execution
-│   ├── src/core/server/
-│   └── @osd/config-schema/
-│
 ├── scripts/
 │   └── e2e-osd.sh              # OSD E2E orchestration script
 │
@@ -416,7 +412,7 @@ alertManager/
 
 The dual-mode architecture means features are added in layers:
 
-### 1. Define types in `core/types.ts`
+### 1. Define types in `common/types.ts`
 
 ```typescript
 export interface MyNewThing {
@@ -425,10 +421,10 @@ export interface MyNewThing {
 }
 ```
 
-### 2. Implement business logic in `core/`
+### 2. Implement business logic in `common/`
 
 ```typescript
-// core/my_service.ts
+// common/my_service.ts
 export class MyService {
   async doSomething(): Promise<MyNewThing[]> {
     // Pure logic, no platform dependencies
@@ -472,7 +468,7 @@ Components in `public/components/` are shared between both modes via symlink (`s
 
 ### 7. Add tests
 
-- Unit test in `core/__tests__/my_service.test.ts` or `public/__tests__/my_component.test.tsx`
+- Unit test in `common/__tests__/my_service.test.ts` or `public/__tests__/my_component.test.tsx`
 - E2E coverage in `cypress/e2e/`
 
 ---

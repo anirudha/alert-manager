@@ -22,12 +22,12 @@ import {
 import {
   validatePromQL as coreValidatePromQL,
   prettifyPromQL as corePrettifyPromQL,
-} from '../../core/promql_validator';
+} from '../../common/promql_validator';
 import {
   MOCK_METRICS as MOCK_METRICS_READONLY,
   MOCK_LABEL_NAMES as MOCK_LABEL_NAMES_READONLY,
   MOCK_LABEL_VALUES as MOCK_LABEL_VALUES_READONLY,
-} from '../../core/mock_data';
+} from '../../common/mock_data';
 
 // ============================================================================
 // PromQL Language Data
@@ -242,7 +242,7 @@ const PROMQL_OPERATORS = [
   '^',
 ];
 
-// Re-export mock data from core/mock_data.ts (single source of truth).
+// Re-export mock data from common/mock_data.ts (single source of truth).
 // Mutable copies are used here because existing code mutates arrays.
 export const MOCK_METRICS: string[] = [...MOCK_METRICS_READONLY];
 export const MOCK_LABEL_NAMES: string[] = [...MOCK_LABEL_NAMES_READONLY];
@@ -788,15 +788,15 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
                   err.severity === 'error'
                     ? 'crossInACircleFilled'
                     : err.severity === 'warning'
-                    ? 'alert'
-                    : 'iInCircle'
+                      ? 'alert'
+                      : 'iInCircle'
                 }
                 color={
                   err.severity === 'error'
                     ? 'danger'
                     : err.severity === 'warning'
-                    ? 'warning'
-                    : 'subdued'
+                      ? 'warning'
+                      : 'subdued'
                 }
                 size="s"
               />

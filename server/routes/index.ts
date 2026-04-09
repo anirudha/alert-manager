@@ -7,14 +7,14 @@
  * OSD route adapter — wires framework-agnostic handlers to OSD's IRouter.
  */
 import { schema } from '@osd/config-schema';
-import { IRouter } from '../../../../src/core/server';
+import { IRouter } from 'opensearch-dashboards/server';
 import {
   DatasourceService,
   MultiBackendAlertService,
   SloService,
   SuppressionRuleService,
   Logger,
-} from '../../core';
+} from '../../common';
 import {
   handleListDatasources,
   handleGetDatasource,
@@ -57,7 +57,7 @@ import {
   handleGetLabelValues,
   handleGetMetricMetadata,
 } from './metadata_handlers';
-import type { PrometheusMetadataService } from '../../core/prometheus_metadata_service';
+import type { PrometheusMetadataService } from '../../common/prometheus_metadata_service';
 import { handleGetAlertmanagerConfig } from './alertmanager_handlers';
 
 export function defineRoutes(

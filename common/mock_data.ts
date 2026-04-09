@@ -7,8 +7,8 @@
  * Shared mock data for Prometheus metrics, labels, and label values.
  *
  * Extracted from `public/components/promql_editor.tsx` so that both the
- * PromQL editor (public/) and the mock backend (core/) can reference the
- * same data without a `core -> public` dependency.
+ * PromQL editor (public/) and the mock backend (common/) can reference the
+ * same data without a `common -> public` dependency.
  */
 
 export const MOCK_METRICS: readonly string[] = [

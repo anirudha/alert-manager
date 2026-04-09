@@ -39,7 +39,7 @@ jest.mock('../slo_listing', () => ({
 
 import { AlarmsPage } from '../alarms_page';
 import { AlarmsApiClient, HttpClient } from '../../services/alarms_client';
-import { Datasource } from '../../../core';
+import { Datasource } from '../../../common/types';
 
 // ---------------------------------------------------------------------------
 // Mock data

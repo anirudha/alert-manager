@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, waitFor, configure, fireEvent } from '@testing-library/react';
 import { AlertsDashboard } from '../alerts_dashboard';
-import type { Datasource, UnifiedAlert } from '../../../core';
+import type { Datasource, UnifiedAlert } from '../../../common/types';
 
 configure({ testIdAttribute: 'data-test-subj' });
 

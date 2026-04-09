@@ -10,9 +10,9 @@ import {
   CoreStart,
   Plugin,
   DEFAULT_NAV_GROUPS,
-} from '../../../src/core/public';
+} from 'opensearch-dashboards/public';
 import { AlarmsPluginSetup, AlarmsPluginStart, AppPluginStartDependencies } from './types';
-import { PLUGIN_NAME } from '../common';
+import { PLUGIN_NAME } from '../common/constants';
 import { renderApp } from './application';
 
 export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart> {

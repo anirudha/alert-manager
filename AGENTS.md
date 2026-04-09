@@ -144,13 +144,13 @@ When asked to review UX flows or features, you should:
 ### Reference Materials
 
 - `docs/slo-sli-guide.md` — SLO/SLI implementation guide (MWMBR, error budget, generated rules)
-- `core/types.ts` — Unified data model (alerts, rules, monitors) + `PrometheusMetadataProvider` interface
-- `core/slo_types.ts` — SLO/SLI domain types, `ISloStore` interface, MWMBR burn rate config
-- `core/slo_service.ts` — SLO lifecycle service (CRUD, status computation, store abstraction)
-- `core/slo_promql_generator.ts` — Generates Prometheus recording + alerting rules from SLO definitions
-- `core/slo_templates.ts` — SLO templates (HTTP/gRPC availability/latency), `detectMetricType()`, error budget calc, good events filter presets
-- `core/prometheus_metadata_service.ts` — Caching wrapper for Prometheus metadata with stale-while-revalidate
-- `core/alert_service.ts` — Backend-to-unified mapping logic
+- `common/types.ts` — Unified data model (alerts, rules, monitors) + `PrometheusMetadataProvider` interface
+- `common/slo_types.ts` — SLO/SLI domain types, `ISloStore` interface, MWMBR burn rate config
+- `common/slo_service.ts` — SLO lifecycle service (CRUD, status computation, store abstraction)
+- `common/slo_promql_generator.ts` — Generates Prometheus recording + alerting rules from SLO definitions
+- `common/slo_templates.ts` — SLO templates (HTTP/gRPC availability/latency), `detectMetricType()`, error budget calc, good events filter presets
+- `common/prometheus_metadata_service.ts` — Caching wrapper for Prometheus metadata with stale-while-revalidate
+- `common/alert_service.ts` — Backend-to-unified mapping logic
 
 ### Response Format
 
@@ -172,7 +172,7 @@ When reviewing flows or proposing changes, structure your response as:
 [Ordered list of improvements, from most impactful to least]
 
 ### Data Model Implications
-[Any changes needed to core/types.ts or the API layer]
+[Any changes needed to common/types.ts or the API layer]
 
 ### Warning Signs
 [Anti-patterns or design choices that will cause pain at scale]
@@ -216,11 +216,11 @@ You are **Sanjay**, a senior backend engineer specializing in TypeScript Node.js
 
 | File | Purpose |
 |------|---------|
-| `core/types.ts` | `PrometheusBackend`, `PrometheusMetadataProvider` interfaces, `Datasource` type |
-| `core/directquery_prometheus_backend.ts` | DirectQuery implementation -- follow `get()` pattern |
-| `core/prometheus_metadata_service.ts` | Caching wrapper with stale-while-revalidate + dsId-scoped keys |
-| `core/mock_backend.ts` | Mock backend for MOCK_MODE (implements both `PrometheusBackend` and `PrometheusMetadataProvider`) |
-| `core/mock_data.ts` | Shared mock metrics, labels, values (extracted from UI to avoid core->public dependency) |
+| `common/types.ts` | `PrometheusBackend`, `PrometheusMetadataProvider` interfaces, `Datasource` type |
+| `common/directquery_prometheus_backend.ts` | DirectQuery implementation -- follow `get()` pattern |
+| `common/prometheus_metadata_service.ts` | Caching wrapper with stale-while-revalidate + dsId-scoped keys |
+| `common/mock_backend.ts` | Mock backend for MOCK_MODE (implements both `PrometheusBackend` and `PrometheusMetadataProvider`) |
+| `common/mock_data.ts` | Shared mock metrics, labels, values (extracted from UI to avoid common->public dependency) |
 | `server/routes/slo_handlers.ts` | Handler pattern to follow (framework-agnostic) |
 | `server/routes/metadata_handlers.ts` | Metadata endpoint handlers |
 | `server/routes/index.ts` | OSD route wiring with `@osd/config-schema` |
@@ -286,13 +286,13 @@ You are **Chen**, a senior frontend engineer and open-source contributor with **
 
 When asked to review or implement code, you should:
 
-1. **Read the existing code first** — understand current patterns before suggesting changes. Check `core/types.ts` for the unified data model and `core/slo_types.ts` for the SLO domain model (including `ISloStore` interface).
+1. **Read the existing code first** — understand current patterns before suggesting changes. Check `common/types.ts` for the unified data model and `common/slo_types.ts` for the SLO domain model (including `ISloStore` interface).
 2. **Reference OUI documentation** — cite specific OUI components and their props. Note known OUI bugs (like the `<a href>` pagination issue).
 3. **Verify OSD plugin compatibility** — the plugin is fully implemented (`server/plugin.ts` has `setup()`/`start()` lifecycle, SavedObjects registration, route handlers). Ensure new code follows OSD conventions.
 4. **Understand the dual-mode architecture** — `standalone/components` is a symlink to `public/components/`. All UI is shared. `AlarmsApiClient` in `public/services/alarms_client.ts` handles mode-aware paths via `ApiPaths`. SLO components use the `SloApiClient` interface (defined in `slo_listing.tsx`).
 5. **Review for correctness, then style** — bugs and type safety first, then code organization, then naming conventions.
 6. **Suggest tests** — for every change, describe what tests should be written. The project has comprehensive test infrastructure:
-   - **Unit tests (Jest):** Two projects — `server` (node) and `components` (jsdom). 31 test files, 864 tests across `core/__tests__/`, `server/**/__tests__/`, and `public/**/__tests__/`. Coverage thresholds: 80% branches, 90% functions/lines/statements.
+   - **Unit tests (Jest):** Two projects — `server` (node) and `components` (jsdom). 31 test files, 864 tests across `common/__tests__/`, `server/**/__tests__/`, and `public/**/__tests__/`. Coverage thresholds: 80% branches, 90% functions/lines/statements.
    - **E2E tests (Cypress):** 5 spec files in `cypress/e2e/` covering navigation, alerts, rules, SLOs (33 tests including wizard+template+autocomplete), and suppression. 55 total tests. Supports dual mode: `standalone` (default, port 5603) and `osd` (OSD plugin, port 5601 with login and path rewriting via `CYPRESS_MODE=osd`).
    - Large render-heavy UI components (1000+ line files) are excluded from unit coverage and validated via Cypress E2E instead.
    - **EUI mock layer**: `public/__mocks__/eui_mock.tsx` provides lightweight stubs for OUI components. When adding new OUI components to the code (especially `EuiCard`, `EuiConfirmModal`, `EuiButtonGroup`), add a corresponding mock with the props needed for test queries (onClick, selectable, role attributes).
@@ -677,7 +677,7 @@ All agents (not just Rio) benefit from running commands. Examples:
 - **Chen**: `npm test` to verify component changes, `npm run test:coverage` to check thresholds
 - **Sanjay**: `npm test -- --testPathPattern=metadata` to run specific backend tests
 - **Kai**: `npm run e2e` for quick standalone E2E validation
-- **Jay**: Reading `core/slo_templates.ts` tests to verify domain logic
+- **Jay**: Reading `common/slo_templates.ts` tests to verify domain logic
 
 ### Runtime Type Guards for Optional Interfaces
 
@@ -709,11 +709,11 @@ When adding OUI components to production code, check if `public/__mocks__/eui_mo
 ### SLO Storage Backend
 
 ```
-ISloStore (interface in core/slo_types.ts)
-  ├─ InMemorySloStore (core/slo_store.ts) — standalone default
+ISloStore (interface in common/slo_types.ts)
+  ├─ InMemorySloStore (common/slo_store.ts) — standalone default
   └─ SavedObjectSloStore (server/slo_saved_object_store.ts) — OSD plugin, persists to OpenSearch
 
-SloService (core/slo_service.ts)
+SloService (common/slo_service.ts)
   ├─ Constructor accepts optional ISloStore (defaults to InMemorySloStore)
   ├─ setStore() hot-swaps backend at runtime (clears statusCache)
   └─ OSD plugin: setup() creates with InMemory → start() upgrades to SavedObjects
@@ -722,11 +722,11 @@ SloService (core/slo_service.ts)
 ### Prometheus Metadata Architecture
 
 ```
-PrometheusMetadataProvider (interface in core/types.ts)
-  ├─ DirectQueryPrometheusBackend (core/directquery_prometheus_backend.ts) — live data
-  └─ MockBackend (core/mock_backend.ts) — MOCK_MODE, uses core/mock_data.ts
+PrometheusMetadataProvider (interface in common/types.ts)
+  ├─ DirectQueryPrometheusBackend (common/directquery_prometheus_backend.ts) — live data
+  └─ MockBackend (common/mock_backend.ts) — MOCK_MODE, uses common/mock_data.ts
 
-PrometheusMetadataService (core/prometheus_metadata_service.ts)
+PrometheusMetadataService (common/prometheus_metadata_service.ts)
   ├─ Wraps any PrometheusMetadataProvider with caching
   ├─ Stale-while-revalidate: serve cached data, refresh in background
   ├─ dsId-scoped cache keys: `${dsId}:metricNames`, `${dsId}:labels:${metric}`
@@ -746,7 +746,7 @@ Frontend:
 ### SLO Template System
 
 ```
-core/slo_templates.ts
+common/slo_templates.ts
   ├─ SLO_TEMPLATES[] — HTTP Availability, HTTP Latency P99, gRPC Availability, gRPC Latency P99, Custom
   ├─ detectMetricType(name, metadata?) — metadata API type field → suffix heuristic fallback
   ├─ GOOD_EVENTS_FILTER_PRESETS — typed readonly array of common label matchers
@@ -788,7 +788,7 @@ standalone/client.tsx                    public/components/app.tsx
 ```
 Jest (unit tests) — 31 test files, 864 tests
   ├─ jest.config.js — two projects: server (node) + components (jsdom)
-  ├─ core/__tests__/ — 16 test files (services, validators, backends, metadata, templates)
+  ├─ common/__tests__/ — 16 test files (services, validators, backends, metadata, templates)
   ├─ server/**/__tests__/ — 5 test files (handlers, metadata handlers, saved object store)
   ├─ public/**/__tests__/ — 9 test files (components, API client)
   ├─ public/__mocks__/eui_mock.tsx — lightweight OUI component mocks (add new mocks here)
@@ -819,17 +819,17 @@ CI (.github/workflows/)
 
 | Area | File | Purpose |
 |------|------|---------|
-| **Core Types** | `core/types.ts` | `PrometheusBackend`, `PrometheusMetadataProvider`, `Datasource`, unified alert/rule types |
-| **SLO Types** | `core/slo_types.ts` | ISloStore, SloDefinition, SloInput, MWMBR tiers |
-| **SLO Service** | `core/slo_service.ts` | CRUD, status computation, store abstraction, seed data |
-| **SLO Rules** | `core/slo_promql_generator.ts` | Generates Prometheus recording + alerting rules |
-| **SLO Templates** | `core/slo_templates.ts` | Template definitions, `detectMetricType()`, error budget calc, filter presets |
-| **SLO Validation** | `core/slo_validators.ts` | Form validation for SLO inputs |
-| **Metadata Service** | `core/prometheus_metadata_service.ts` | Stale-while-revalidate caching for Prometheus metadata |
-| **Mock Data** | `core/mock_data.ts` | Shared mock metrics, labels, values (used by mock backend + promql editor) |
-| **DirectQuery Backend** | `core/directquery_prometheus_backend.ts` | Implements `PrometheusBackend` + `PrometheusMetadataProvider` |
-| **Mock Backend** | `core/mock_backend.ts` | MOCK_MODE backend (implements both interfaces) |
-| **In-Memory Store** | `core/slo_store.ts` | InMemorySloStore (standalone) |
+| **Core Types** | `common/types.ts` | `PrometheusBackend`, `PrometheusMetadataProvider`, `Datasource`, unified alert/rule types |
+| **SLO Types** | `common/slo_types.ts` | ISloStore, SloDefinition, SloInput, MWMBR tiers |
+| **SLO Service** | `common/slo_service.ts` | CRUD, status computation, store abstraction, seed data |
+| **SLO Rules** | `common/slo_promql_generator.ts` | Generates Prometheus recording + alerting rules |
+| **SLO Templates** | `common/slo_templates.ts` | Template definitions, `detectMetricType()`, error budget calc, filter presets |
+| **SLO Validation** | `common/slo_validators.ts` | Form validation for SLO inputs |
+| **Metadata Service** | `common/prometheus_metadata_service.ts` | Stale-while-revalidate caching for Prometheus metadata |
+| **Mock Data** | `common/mock_data.ts` | Shared mock metrics, labels, values (used by mock backend + promql editor) |
+| **DirectQuery Backend** | `common/directquery_prometheus_backend.ts` | Implements `PrometheusBackend` + `PrometheusMetadataProvider` |
+| **Mock Backend** | `common/mock_backend.ts` | MOCK_MODE backend (implements both interfaces) |
+| **In-Memory Store** | `common/slo_store.ts` | InMemorySloStore (standalone) |
 | **SavedObject Store** | `server/slo_saved_object_store.ts` | SavedObjectSloStore (OSD plugin) |
 | **OSD Plugin** | `server/plugin.ts` | Plugin lifecycle, `isMetadataProvider()` guard, store upgrade |
 | **OSD Routes** | `server/routes/index.ts` | OSD route adapter for all API endpoints |
@@ -844,5 +844,5 @@ CI (.github/workflows/)
 | **Preview Panel** | `public/components/slo_preview_panel.tsx` | Rule preview + live SLI value |
 | **EUI Mocks** | `public/__mocks__/eui_mock.tsx` | OUI component test mocks (add new ones here) |
 | **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build`; produces `build/alertManager-{version}.zip` |
-| **Type Stubs** | `stubs/` | OSD type stubs for Jest test execution |
+| **Server Mocks** | `server/__mocks__/osd_server.ts` | OSD server mock for Jest |
 | **SLO Guide** | `docs/slo-sli-guide.md` | SLO/SLI implementation guide |

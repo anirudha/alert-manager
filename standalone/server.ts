@@ -18,8 +18,8 @@ import {
   Logger,
   OpenSearchBackend,
   PrometheusBackend,
-} from '../core';
-import { MockOpenSearchBackend, MockPrometheusBackend } from '../core/testing';
+} from '../common';
+import { MockOpenSearchBackend, MockPrometheusBackend } from '../common/testing';
 import {
   handleListDatasources,
   handleGetDatasource,
@@ -80,9 +80,9 @@ import {
   handleGetAlertmanagerAlertGroups,
   handleGetAlertmanagerConfig,
 } from '../server/routes/alertmanager_handlers';
-import { SloService } from '../core/slo_service';
-import { PrometheusMetadataService } from '../core/prometheus_metadata_service';
-import type { PrometheusMetadataProvider } from '../core/types';
+import { SloService } from '../common/slo_service';
+import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
+import type { PrometheusMetadataProvider } from '../common/types';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE === 'true';

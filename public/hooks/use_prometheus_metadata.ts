@@ -18,7 +18,7 @@
 import { useReducer, useEffect, useRef, useCallback } from 'react';
 import type { EuiComboBoxOptionOption } from '@elastic/eui';
 import type { AlarmsApiClient } from '../services/alarms_client';
-import type { PrometheusMetricMetadata } from '../../core/types';
+import type { PrometheusMetricMetadata } from '../../common/types';
 
 // ============================================================================
 // Public interface

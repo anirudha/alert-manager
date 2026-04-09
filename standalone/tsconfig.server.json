@@ -5,6 +5,6 @@
     "outDir": "./dist",
     "strict": true
   },
-  "include": ["./server.ts", "../core/**/*.ts", "../server/routes/handlers.ts", "../server/routes/monitor_handlers.ts", "../server/routes/slo_handlers.ts", "../common/**/*.ts"],
+  "include": ["./server.ts", "../common/**/*.ts", "../server/routes/handlers.ts", "../server/routes/monitor_handlers.ts", "../server/routes/slo_handlers.ts"],
   "exclude": ["node_modules", "dist", "./**/*.tsx", "../**/__tests__/**"]
 }

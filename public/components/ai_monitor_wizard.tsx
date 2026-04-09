@@ -40,7 +40,7 @@ import {
   EuiFormRow,
 } from '@elastic/eui';
 import { MOCK_METRICS } from './promql_editor';
-import { UnifiedAlertSeverity } from '../../core';
+import { UnifiedAlertSeverity } from '../../common/types';
 
 // ============================================================================
 // OTEL Application Categories & Preconfigured Alert Templates

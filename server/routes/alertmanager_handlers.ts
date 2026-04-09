@@ -8,7 +8,7 @@
  * Each handler takes a PrometheusBackend and returns { status, body }.
  */
 import yaml from 'js-yaml';
-import { PrometheusBackend } from '../../core';
+import { PrometheusBackend } from '../../common';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Result = { status: number; body: any };
@@ -17,9 +17,7 @@ type Result = { status: number; body: any };
 // Alertmanager API v2 Handlers
 // ============================================================================
 
-export async function handleGetAlertmanagerAlerts(
-  promBackend: PrometheusBackend
-): Promise<Result> {
+export async function handleGetAlertmanagerAlerts(promBackend: PrometheusBackend): Promise<Result> {
   try {
     if (!promBackend.getAlertmanagerAlerts) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -76,9 +74,7 @@ export async function handleDeleteAlertmanagerSilence(
   }
 }
 
-export async function handleGetAlertmanagerStatus(
-  promBackend: PrometheusBackend
-): Promise<Result> {
+export async function handleGetAlertmanagerStatus(promBackend: PrometheusBackend): Promise<Result> {
   try {
     if (!promBackend.getAlertmanagerStatus) {
       return { status: 501, body: { error: 'Alertmanager not configured' } };
@@ -127,7 +123,9 @@ export async function handleGetAlertmanagerAlertGroups(
  * Shared by both standalone and OSD config endpoints.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function extractReceiverIntegrations(receiver: any): Array<{ type: string; summary: string }> {
+export function extractReceiverIntegrations(
+  receiver: any
+): Array<{ type: string; summary: string }> {
   const integrations: Array<{ type: string; summary: string }> = [];
   const configKeys = [
     'webhook_configs',
@@ -167,9 +165,7 @@ export function extractReceiverIntegrations(receiver: any): Array<{ type: string
  * Fetch Alertmanager status, parse the YAML config, and return structured data.
  * Merges the duplicated logic from standalone/server.ts and server/routes/index.ts.
  */
-export async function handleGetAlertmanagerConfig(
-  promBackend: PrometheusBackend
-): Promise<Result> {
+export async function handleGetAlertmanagerConfig(promBackend: PrometheusBackend): Promise<Result> {
   try {
     if (!promBackend.getAlertmanagerStatus) {
       return { status: 200, body: { available: false, error: 'Alertmanager not configured' } };
