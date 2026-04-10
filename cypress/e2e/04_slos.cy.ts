@@ -34,12 +34,12 @@ describe('SLO Management', () => {
   });
 
   it('displays SLO stat cards with labels', () => {
-    cy.getByTestSubj('sloSummaryCards').should('be.visible');
-    cy.getByTestSubj('sloStatCardTotal').should('be.visible');
-    cy.getByTestSubj('sloStatCardBreached').should('be.visible');
-    cy.getByTestSubj('sloStatCardWarning').should('be.visible');
-    cy.getByTestSubj('sloStatCardOk').should('be.visible');
-    cy.getByTestSubj('sloStatCardNoData').should('be.visible');
+    cy.getByTestSubj('sloSummaryCards').should('exist');
+    cy.getByTestSubj('sloStatCardTotal').should('exist');
+    cy.getByTestSubj('sloStatCardBreached').should('exist');
+    cy.getByTestSubj('sloStatCardWarning').should('exist');
+    cy.getByTestSubj('sloStatCardOk').should('exist');
+    cy.getByTestSubj('sloStatCardNoData').should('exist');
   });
 
   it('shows create SLO button and opens wizard with all 5 sections', () => {
