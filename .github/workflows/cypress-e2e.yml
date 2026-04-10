@@ -103,7 +103,7 @@ jobs:
 
       - name: Bootstrap OSD
         working-directory: /tmp/osd
-        run: yarn osd bootstrap
+        run: yarn osd bootstrap --single-version=ignore
 
       - name: Build plugin ZIP
         working-directory: /tmp/osd/plugins/alertManager
