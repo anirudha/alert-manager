@@ -37,7 +37,7 @@
   },
   "homepage": "https://github.com/opensearch-project/dashboards-observability#alert-manager",
   "dependencies": {
-    "echarts": "^5.6.0"
+    "echarts": "^6.0.0"
   },
   "devDependencies": {
     "@cypress/webpack-preprocessor": "^7.0.2",
