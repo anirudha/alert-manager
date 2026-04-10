@@ -52,7 +52,7 @@
     "cypress": "^13.6.0",
     "eslint-plugin-jest": "^27.0.0",
     "eslint-plugin-prettier": "^5.0.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
