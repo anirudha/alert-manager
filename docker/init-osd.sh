@@ -199,68 +199,103 @@ else
 fi
 
 # =============================================================================
-# Phase 7: Seed OpenSearch always-fire monitor
+# Phase 7: Seed Prometheus recording rules for synthetic metrics
+# =============================================================================
+# Recording rules generate queryable time-series data inside Cortex so that
+# the metadata APIs (metric names, labels, label values) and range queries
+# return data. This enables SLO wizard autocomplete and chart rendering.
+
+info "Seeding Cortex recording rules for synthetic metrics..."
+
+prom_metrics_code=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "${CORTEX_URL}/api/v1/rules/synthetic_metrics" \
+  -H 'Content-Type: application/yaml' \
+  -d 'name: synthetic_http_metrics
+interval: 15s
+rules:
+  # HTTP request counters (used by SLO availability wizard)
+  - record: http_requests_total
+    expr: vector(12345)
+    labels:
+      service: frontend
+      endpoint: /api/health
+      status_code: "200"
+      method: GET
+  - record: http_requests_total
+    expr: vector(23)
+    labels:
+      service: frontend
+      endpoint: /api/health
+      status_code: "500"
+      method: GET
+  - record: http_requests_total
+    expr: vector(8901)
+    labels:
+      service: checkout
+      endpoint: /api/checkout
+      status_code: "200"
+      method: POST
+  # HTTP latency histogram buckets (used by SLO latency p99 wizard)
+  - record: http_request_duration_seconds_bucket
+    expr: vector(950)
+    labels:
+      service: checkout
+      endpoint: /api/checkout
+      le: "0.1"
+  - record: http_request_duration_seconds_bucket
+    expr: vector(990)
+    labels:
+      service: checkout
+      endpoint: /api/checkout
+      le: "0.5"
+  - record: http_request_duration_seconds_bucket
+    expr: vector(998)
+    labels:
+      service: checkout
+      endpoint: /api/checkout
+      le: "1.0"
+  - record: http_request_duration_seconds_bucket
+    expr: vector(1000)
+    labels:
+      service: checkout
+      endpoint: /api/checkout
+      le: "+Inf"
+  # gRPC counters (used by SLO gRPC availability template)
+  - record: grpc_server_handled_total
+    expr: vector(5678)
+    labels:
+      grpc_service: payment.PaymentService
+      grpc_method: ProcessPayment
+      grpc_code: OK
+  - record: grpc_server_handled_total
+    expr: vector(12)
+    labels:
+      grpc_service: payment.PaymentService
+      grpc_method: ProcessPayment
+      grpc_code: Internal
+  # Node metrics (common infrastructure metrics for autocomplete)
+  - record: node_cpu_seconds_total
+    expr: vector(86400)
+    labels:
+      instance: node-1
+      mode: idle
+  - record: node_memory_MemAvailable_bytes
+    expr: vector(4294967296)
+    labels:
+      instance: node-1
+  - record: up
+    expr: vector(1)
+    labels:
+      job: prometheus
+      instance: cortex:9090
+' 2>/dev/null || echo "000")
+[ "$prom_metrics_code" = "202" ] || [ "$prom_metrics_code" = "200" ] && ok "Created synthetic metric recording rules" || warn "Recording rules returned HTTP $prom_metrics_code"
+
+# =============================================================================
+# Phase 8: Seed Prometheus alerting rules + OpenSearch monitors
 # =============================================================================
 
-info "Seeding OpenSearch alert test data..."
-
-OS_MONITOR_EXISTS=$(curl -sk -u "$AUTH" \
-  "${OS_URL}/_plugins/_alerting/monitors/_search" \
-  -H 'Content-Type: application/json' \
-  -d '{"size":100,"_source":["monitor.name"]}' 2>/dev/null \
-  | jq -r '[.hits.hits[]._source.name // empty] | if any(. == "Cypress E2E Always-Fire Monitor") then "yes" else "no" end' 2>/dev/null || echo "no")
-
-if [ "$OS_MONITOR_EXISTS" = "yes" ]; then
-  ok "OpenSearch monitor already exists -- skipping"
-else
-  # Monitor 1: Always-fire (provides alert data)
-  mon_code=$(curl -sk -o /dev/null -w "%{http_code}" \
-    -u "$AUTH" \
-    -X POST "${OS_URL}/_plugins/_alerting/monitors" \
-    -H 'Content-Type: application/json' \
-    -d '{
-      "type": "monitor",
-      "name": "Cypress E2E Always-Fire Monitor",
-      "monitor_type": "query_level_monitor",
-      "enabled": true,
-      "schedule": {"period": {"interval": 1, "unit": "MINUTES"}},
-      "inputs": [{"search": {"indices": ["*"], "query": {"size": 0, "query": {"match_all": {}}}}}],
-      "triggers": [{
-        "name": "Always fire (cypress)",
-        "severity": "3",
-        "condition": {"script": {"source": "return true", "lang": "painless"}},
-        "actions": []
-      }]
-    }' 2>/dev/null || echo "000")
-  [ "$mon_code" = "201" ] || [ "$mon_code" = "200" ] && ok "Created OpenSearch always-fire monitor" || warn "Monitor 1 returned HTTP $mon_code"
-
-  # Monitor 2: Error Rate monitor (matches "Error" search filter in Cypress tests)
-  mon2_code=$(curl -sk -o /dev/null -w "%{http_code}" \
-    -u "$AUTH" \
-    -X POST "${OS_URL}/_plugins/_alerting/monitors" \
-    -H 'Content-Type: application/json' \
-    -d '{
-      "type": "monitor",
-      "name": "High Error Rate",
-      "monitor_type": "query_level_monitor",
-      "enabled": true,
-      "schedule": {"period": {"interval": 1, "unit": "MINUTES"}},
-      "inputs": [{"search": {"indices": ["*"], "query": {"size": 0, "query": {"match_all": {}}}}}],
-      "triggers": [{
-        "name": "Error rate high (cypress)",
-        "severity": "2",
-        "condition": {"script": {"source": "return true", "lang": "painless"}},
-        "actions": []
-      }]
-    }' 2>/dev/null || echo "000")
-  [ "$mon2_code" = "201" ] || [ "$mon2_code" = "200" ] && ok "Created High Error Rate monitor" || warn "Monitor 2 returned HTTP $mon2_code"
-fi
-
-# =============================================================================
-# Phase 8: Seed Prometheus always-fire rules via Cortex Ruler API
-# =============================================================================
-
-info "Seeding Prometheus alert rules..."
+info "Seeding Prometheus alerting rules..."
 
 prom_code=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "${CORTEX_URL}/api/v1/rules/cypress_e2e" \
@@ -274,6 +309,7 @@ rules:
     labels:
       severity: warning
       team: cypress
+      service: frontend
     annotations:
       summary: Cypress E2E test alert always fires
   - alert: CypressCriticalAlert
@@ -282,28 +318,120 @@ rules:
     labels:
       severity: critical
       team: cypress
+      service: checkout
     annotations:
       summary: Cypress E2E critical test alert
+  - alert: HighErrorRate
+    expr: vector(1)
+    for: 0s
+    labels:
+      severity: warning
+      team: platform
+      service: frontend
+    annotations:
+      summary: Error rate above 5%
 ' 2>/dev/null || echo "000")
-[ "$prom_code" = "202" ] || [ "$prom_code" = "200" ] && ok "Created Prometheus always-fire rules" || warn "Prometheus rules returned HTTP $prom_code"
+[ "$prom_code" = "202" ] || [ "$prom_code" = "200" ] && ok "Created Prometheus alerting rules (3 alerts)" || warn "Alerting rules returned HTTP $prom_code"
+
+info "Seeding OpenSearch monitors..."
+
+# Helper: create monitor and return its ID
+create_monitor() {
+  local name="$1" severity="$2"
+  local response
+  response=$(curl -sk \
+    -u "$AUTH" \
+    -X POST "${OS_URL}/_plugins/_alerting/monitors" \
+    -H 'Content-Type: application/json' \
+    -d "{
+      \"type\": \"monitor\",
+      \"name\": \"${name}\",
+      \"monitor_type\": \"query_level_monitor\",
+      \"enabled\": true,
+      \"schedule\": {\"period\": {\"interval\": 1, \"unit\": \"MINUTES\"}},
+      \"inputs\": [{\"search\": {\"indices\": [\"*\"], \"query\": {\"size\": 0, \"query\": {\"match_all\": {}}}}}],
+      \"triggers\": [{
+        \"name\": \"${name} trigger\",
+        \"severity\": \"${severity}\",
+        \"condition\": {\"script\": {\"source\": \"return true\", \"lang\": \"painless\"}},
+        \"actions\": []
+      }]
+    }" 2>/dev/null)
+  echo "$response" | jq -r '._id // empty' 2>/dev/null
+}
+
+OS_MONITOR_EXISTS=$(curl -sk -u "$AUTH" \
+  "${OS_URL}/_plugins/_alerting/monitors/_search" \
+  -H 'Content-Type: application/json' \
+  -d '{"size":100,"_source":["monitor.name"]}' 2>/dev/null \
+  | jq -r '[.hits.hits[]._source.name // empty] | if any(. == "Cypress E2E Always-Fire Monitor") then "yes" else "no" end' 2>/dev/null || echo "no")
+
+MONITOR_IDS=""
+if [ "$OS_MONITOR_EXISTS" = "yes" ]; then
+  ok "OpenSearch monitors already exist -- skipping creation"
+  # Collect existing monitor IDs for execution
+  MONITOR_IDS=$(curl -sk -u "$AUTH" \
+    "${OS_URL}/_plugins/_alerting/monitors/_search" \
+    -H 'Content-Type: application/json' \
+    -d '{"size":100,"_source":["monitor.name"]}' 2>/dev/null \
+    | jq -r '.hits.hits[]._id' 2>/dev/null)
+else
+  id1=$(create_monitor "Cypress E2E Always-Fire Monitor" "3")
+  [ -n "$id1" ] && ok "Created: Cypress E2E Always-Fire Monitor ($id1)" || warn "Failed to create monitor 1"
+
+  id2=$(create_monitor "High Error Rate" "2")
+  [ -n "$id2" ] && ok "Created: High Error Rate ($id2)" || warn "Failed to create monitor 2"
+
+  MONITOR_IDS="$id1
+$id2"
+fi
 
 # =============================================================================
-# Phase 9: Wait for alerts to fire
+# Phase 9: Execute monitors immediately to fire alerts
 # =============================================================================
+# Instead of waiting 60-75s for the scheduled interval, use the _execute API
+# to trigger each monitor immediately. This fires alerts in seconds.
 
-info "Waiting for seeded alerts to fire (up to 75s)..."
-elapsed=0
-while [ $elapsed -lt 75 ]; do
-  alert_count=$(curl -sk -u "$AUTH" \
-    "${OS_URL}/_plugins/_alerting/monitors/alerts?size=1" 2>/dev/null \
-    | jq '.totalAlerts // 0' 2>/dev/null || echo "0")
-  if [ "$alert_count" -gt 0 ] 2>/dev/null; then
-    ok "OpenSearch alerts active ($alert_count found) after ${elapsed}s"
-    break
+info "Executing monitors to fire alerts immediately..."
+
+for mon_id in $MONITOR_IDS; do
+  [ -z "$mon_id" ] && continue
+  exec_code=$(curl -sk -o /dev/null -w "%{http_code}" \
+    -u "$AUTH" \
+    -X POST "${OS_URL}/_plugins/_alerting/monitors/${mon_id}/_execute" \
+    -H 'Content-Type: application/json' \
+    -d '{"dryrun": false}' 2>/dev/null || echo "000")
+  if [ "$exec_code" = "200" ]; then
+    ok "Executed monitor $mon_id"
+  else
+    warn "Monitor execute returned HTTP $exec_code for $mon_id"
   fi
-  sleep 5
-  elapsed=$((elapsed + 5))
 done
+
+# Brief pause for alert state to persist, then verify
+sleep 3
+
+# =============================================================================
+# Phase 10: Verify alerts from both datasources
+# =============================================================================
+
+info "Verifying alerts..."
+
+# Verify OpenSearch alerts
+os_alert_count=$(curl -sk -u "$AUTH" \
+  "${OS_URL}/_plugins/_alerting/monitors/alerts?size=1" 2>/dev/null \
+  | jq '.totalAlerts // 0' 2>/dev/null || echo "0")
+[ "$os_alert_count" -gt 0 ] 2>/dev/null && ok "OpenSearch alerts: $os_alert_count active" || warn "No OpenSearch alerts found"
+
+# Verify Prometheus rules are firing (via Cortex API directly)
+prom_firing=$(curl -s "${CORTEX_URL}/prometheus/api/v1/alerts" 2>/dev/null \
+  | jq '[.data.alerts[] | select(.state=="firing")] | length' 2>/dev/null || echo "0")
+[ "$prom_firing" -gt 0 ] 2>/dev/null && ok "Prometheus alerts: $prom_firing firing" || warn "No Prometheus alerts firing yet (Cortex ruler may need ~15s)"
+
+# Verify synthetic metrics are queryable
+metric_count=$(curl -s "${CORTEX_URL}/prometheus/api/v1/label/__name__/values" 2>/dev/null \
+  | jq '[.data[] | select(startswith("http_") or startswith("grpc_") or startswith("node_"))] | length' 2>/dev/null || echo "0")
+[ "$metric_count" -gt 0 ] 2>/dev/null && ok "Prometheus metrics: $metric_count synthetic metrics available" || warn "Synthetic metrics not yet available (recording rules may need ~15s)"
 
 # =============================================================================
 # Output workspace ID for CI script to capture
