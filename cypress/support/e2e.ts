@@ -8,6 +8,7 @@ import './commands';
 // Establish an authenticated session before each test (no-op in standalone mode).
 // cy.session() caches the session cookie so login only happens once per spec,
 // and cookies are automatically restored before each test.
+// Dev OSD (yarn start without --security) may not have /auth/login — skip auth if 404.
 beforeEach(() => {
   if (Cypress.env('mode') === 'osd') {
     cy.session('osd-admin', () => {
@@ -22,6 +23,12 @@ beforeEach(() => {
           username: 'admin',
           password: 'My_password_123!@#',
         },
+        failOnStatusCode: false,
+      }).then((res) => {
+        // 200 = security plugin active (Docker OSD), 404 = no security (dev OSD)
+        if (res.status !== 200 && res.status !== 404) {
+          throw new Error(`Auth login failed with status ${res.status}`);
+        }
       });
     });
   }

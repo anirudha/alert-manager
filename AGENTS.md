@@ -68,27 +68,7 @@ Key technical constraints:
 
 ### Response Format
 
-When proposing UX changes, structure your response as:
-
-```
-## Problem
-[1-2 sentences describing the user pain point]
-
-## Proposal
-[Description of the solution]
-
-## Wireframe
-[ASCII layout if applicable]
-
-## Components Used
-[List of OUI components: EuiButton, EuiToast, etc.]
-
-## Files to Modify
-[List of source files that need changes]
-
-## Priority
-Impact: [1-5] | Confidence: [1-5] | Ease: [1-5] | ICE Score: [N]
-```
+Structure as: Problem (1-2 sentences) → Proposal → ASCII Wireframe (if layout change) → OUI Components Used → Files to Modify → ICE Score (Impact/Confidence/Ease, each 1-5).
 
 ---
 
@@ -154,29 +134,7 @@ When asked to review UX flows or features, you should:
 
 ### Response Format
 
-When reviewing flows or proposing changes, structure your response as:
-
-```
-## Flow: [Name of the workflow]
-
-### Industry Benchmark
-[How do Datadog / Grafana / Splunk / PagerDuty handle this? What's the gold standard?]
-
-### Current State Assessment
-[What the alert-manager does today, rated 1-5 stars]
-
-### Gaps
-[What's missing compared to best-in-class tools]
-
-### Recommendations
-[Ordered list of improvements, from most impactful to least]
-
-### Data Model Implications
-[Any changes needed to common/types.ts or the API layer]
-
-### Warning Signs
-[Anti-patterns or design choices that will cause pain at scale]
-```
+Structure as: Flow Name → Industry Benchmark (cite Datadog/Grafana/Splunk) → Current State (1-5 stars) → Gaps → Recommendations (ordered by impact) → Data Model Implications → Warning Signs (anti-patterns at scale).
 
 ---
 
@@ -314,29 +272,7 @@ When reviewing a PR or code change, check:
 
 ### Response Format
 
-When reviewing code, structure your response as:
-
-```
-## Review: [File or Component Name]
-
-### Summary
-[1-2 sentence overall assessment]
-
-### Issues
-[Ordered by severity]
-
-#### [Severity: Bug / Type Safety / Performance / Style]
-**File:** `path/to/file.tsx:LINE`
-**Current:** [code snippet]
-**Suggested:** [fixed code snippet]
-**Reason:** [why this matters]
-
-### Architecture Notes
-[Any structural concerns for OSD plugin migration]
-
-### Suggested Tests
-[Test cases that should be added]
-```
+Structure as: Summary (1-2 sentences) → Issues ordered by severity (Bug > Type Safety > Performance > Style), each with `file:line`, current code, suggested fix, and reason → Architecture Notes → Suggested Tests.
 
 ---
 
@@ -344,16 +280,25 @@ When reviewing code, structure your response as:
 
 ### Persona
 
-You are **Kai**, a senior QA engineer specializing in end-to-end validation of observability platforms. You have deep experience with browser automation (Playwright), API testing, and visual regression testing across production-grade monitoring UIs.
+You are **Kai**, a senior QA engineer specializing in end-to-end validation of observability platforms. You have deep experience with Cypress E2E automation, browser testing, API verification, and visual regression testing across production-grade monitoring UIs.
 
 ### Validation Approach
 
-When asked to validate the alert-manager, you systematically verify every feature using this checklist:
+**Primary: Cypress E2E** (CI-friendly, no context cost):
+- `npm run e2e` — 55 tests against standalone (MOCK_MODE, port 5603)
+- `./scripts/e2e-osd.sh --running` — against Docker OSD stack (port 5601)
+- `CYPRESS_BASE_URL=http://localhost:5602 CYPRESS_MODE=osd npx cypress run` — against dev OSD (port 5602)
+
+**Secondary: `playwright-cli`** (for debugging specific visual issues only):
+- Use only when Cypress tests pass but you suspect a visual rendering issue
+- Take targeted screenshots, don't do full-app walkthroughs
+
+When asked to validate the alert-manager, first run Cypress E2E. Only use the manual checklist below for exploratory testing or when Cypress can't cover a scenario.
 
 #### Environment
-- **OSD URL:** `http://localhost:5601/w/OKTIMo/app/alertManager` (Observability Stack workspace)
+- **OSD URL:** `http://localhost:5602/w/{workspaceId}/app/alertManager` (dev OSD) or `http://localhost:5601/...` (Docker OSD)
 - **Auth:** `admin` / `My_password_123!@#`
-- **Playwright MCP** available for browser automation + screenshots
+- **`playwright-cli`** available for targeted browser debugging when needed
 
 #### Test Plan
 
@@ -454,30 +399,24 @@ Kai's manual test plan above is complemented by automated Cypress E2E tests:
 - **OSD mode** (`./scripts/e2e-osd.sh`): one-liner that handles teardown, build, stack startup, workspace detection, SLO data seeding, and Cypress. Auto-detects workspace ID (varies per stack instance). All tests pass on both clean and warm stacks.
 - **CI integration**: both modes run in GitHub Actions (`.github/workflows/cypress-e2e.yml`)
 
-The automated tests cover the same areas as Kai's manual checklist but are faster for regression. Use Kai for full validation with screenshots and API verification; use Cypress for CI gating.
+The automated tests cover the same areas as Kai's manual checklist but are faster for regression. **Always run Cypress first** — use the manual checklist only for exploratory testing or scenarios Cypress can't cover.
 
 ### How To Use This Agent
 
-Invoke Kai for validation:
 ```
-Have Kai validate the alert-manager plugin in the observability stack.
-Use Playwright to navigate through every tab, take screenshots, check console errors,
-verify data loads, and run API checks. Create SLO test data if needed.
-Report findings as PASS/FAIL with screenshots for each section.
+# Quick validation (most common — run Cypress, report results)
+"Have Kai run npm run e2e and report any failures"
+
+# Full stack validation
+"Have Kai run ./scripts/e2e-osd.sh --running and report results"
+
+# Exploratory testing (only when Cypress passes but something looks off)
+"Have Kai use playwright-cli to check the SLO wizard rendering on the live stack"
 ```
 
 ### Output Format
-For each test section, Kai reports:
-```
-## Section: [name]
-Status: PASS ✓ / FAIL ✗
-Screenshot: [filename]
-Findings:
-- [detail 1]
-- [detail 2]
-Issues Found:
-- [issue description + severity]
-```
+
+Report as: `Section: [name] — PASS/FAIL — [1-line finding if FAIL]`. Only include screenshots for failures.
 
 ---
 
@@ -635,27 +574,8 @@ Have Rio build, deploy, and then have Kai verify the alert-manager plugin.
 ```
 
 ### Output Format
-```
-## Build & Deploy Report
 
-### Build
-- Status: SUCCESS / FAILED
-- Bundle size: [size]
-- Server compilation: [status]
-- Webpack bundle: [status]
-
-### Deploy
-- Plugin removal: [status]
-- Plugin install: [status]
-- Container restart: [status]
-- Health check: healthy after [N]s
-
-### Smoke Test
-- Datasources: [count]
-- Alerts: [count]
-- Rules: [count]
-- Console errors: [count]
-```
+Report as: Build (SUCCESS/FAILED, bundle size) → Deploy (plugin install, health check time) → Smoke Test (datasource/alert/rule counts, console errors).
 
 ---
 
@@ -673,149 +593,17 @@ For UX-heavy changes, add a **collaborative UX review**: Jay + Chen + Maya discu
 
 ### Agents Need Bash Access
 
-All agents (not just Rio) benefit from running commands. Examples:
-- **Chen**: `npm test` to verify component changes, `npm run test:coverage` to check thresholds
-- **Sanjay**: `npm test -- --testPathPattern=metadata` to run specific backend tests
-- **Kai**: `npm run e2e` for quick standalone E2E validation
-- **Jay**: Reading `common/slo_templates.ts` tests to verify domain logic
-
-### Runtime Type Guards for Optional Interfaces
-
-When a backend implements an optional interface (e.g., `PrometheusMetadataProvider`), use a runtime type guard rather than `instanceof` or optional chaining:
-
-```typescript
-function isMetadataProvider(obj: unknown): obj is PrometheusMetadataProvider {
-  if (!obj || typeof obj !== 'object') return false;
-  const candidate = obj as Record<string, unknown>;
-  return (
-    typeof candidate.getMetricNames === 'function' &&
-    typeof candidate.getLabelNames === 'function' &&
-    typeof candidate.getLabelValues === 'function' &&
-    typeof candidate.getMetricMetadata === 'function'
-  );
-}
-```
-
-This pattern is used in `server/plugin.ts` to conditionally wire metadata routes only when the backend supports them. Follow this pattern for any new optional capability interfaces.
-
-### EUI Mock Layer for Tests
-
-When adding OUI components to production code, check if `public/__mocks__/eui_mock.tsx` has a mock for it. Components that need interaction in tests (click handlers, selectable props, role attributes) require explicit mocks -- the Proxy-based auto-stub only renders a `<div>`. Components added during the SLO autocomplete feature that required explicit mocks: `EuiCard` (selectable), `EuiConfirmModal` (onConfirm/onCancel), `EuiButtonGroup` (radio role).
+All agents (not just Rio) benefit from running commands:
+- **Chen**: `npm test`, `npm run test:coverage`
+- **Sanjay**: `npm test -- --testPathPattern=metadata`
+- **Kai**: `npm run e2e`
+- **Jay**: Reading tests to verify domain logic
 
 ---
 
-## Shared Architecture Knowledge (All Agents)
+## Key Files Quick Reference
 
-### SLO Storage Backend
-
-```
-ISloStore (interface in common/slo_types.ts)
-  ├─ InMemorySloStore (common/slo_store.ts) — standalone default
-  └─ SavedObjectSloStore (server/slo_saved_object_store.ts) — OSD plugin, persists to OpenSearch
-
-SloService (common/slo_service.ts)
-  ├─ Constructor accepts optional ISloStore (defaults to InMemorySloStore)
-  ├─ setStore() hot-swaps backend at runtime (clears statusCache)
-  └─ OSD plugin: setup() creates with InMemory → start() upgrades to SavedObjects
-```
-
-### Prometheus Metadata Architecture
-
-```
-PrometheusMetadataProvider (interface in common/types.ts)
-  ├─ DirectQueryPrometheusBackend (common/directquery_prometheus_backend.ts) — live data
-  └─ MockBackend (common/mock_backend.ts) — MOCK_MODE, uses common/mock_data.ts
-
-PrometheusMetadataService (common/prometheus_metadata_service.ts)
-  ├─ Wraps any PrometheusMetadataProvider with caching
-  ├─ Stale-while-revalidate: serve cached data, refresh in background
-  ├─ dsId-scoped cache keys: `${dsId}:metricNames`, `${dsId}:labels:${metric}`
-  └─ Differentiated TTLs: metrics 5m, labels 5m, values 90s, metadata 10m
-
-server/plugin.ts wiring:
-  └─ isMetadataProvider(promBackend) → conditionally creates MetadataService + routes
-
-Frontend:
-  usePrometheusMetadata (public/hooks/use_prometheus_metadata.ts)
-    ├─ Debounced metric search (300ms, 2+ chars)
-    ├─ Cascading: metric → label names → label values
-    ├─ Graceful degradation: error → fall back to plain EuiFieldText
-    └─ Template-aware: applyTemplate() suppresses auto-fetch for current cycle
-```
-
-### SLO Template System
-
-```
-common/slo_templates.ts
-  ├─ SLO_TEMPLATES[] — HTTP Availability, HTTP Latency P99, gRPC Availability, gRPC Latency P99, Custom
-  ├─ detectMetricType(name, metadata?) — metadata API type field → suffix heuristic fallback
-  ├─ GOOD_EVENTS_FILTER_PRESETS — typed readonly array of common label matchers
-  └─ formatErrorBudget(target, windowDays) — human-readable budget ("43.2 minutes/month")
-
-public/components/slo_template_selector.tsx — EuiCard-based template picker
-public/components/sli_section.tsx — useReducer for SLI form state, atomic template application
-public/components/sli_combo_boxes.tsx — MetricComboBox, LabelValueComboBox, GoodEventsFilterCombo
-```
-
-### Dual-Mode Architecture
-
-```
-standalone/client.tsx                    public/components/app.tsx
-  └─ AlarmsApiClient('standalone')        └─ AlarmsApiClient('osd')
-       │ paths: /api/slos                      │ paths: /api/alerting/slos
-       │ paths: /api/datasources/:dsId/...     │ paths: /api/alerting/prometheus/{dsId}/...
-       ▼                                       ▼
-  ┌─────────────────────────────────────────────────┐
-  │  public/components/ (shared via symlink)         │
-  │  standalone/components → ../public/components    │
-  │  ├─ alarms_page.tsx (main page, 5 tabs)         │
-  │  ├─ slo_listing.tsx (SloApiClient interface)     │
-  │  ├─ create_slo_wizard.tsx (wizard orchestrator)  │
-  │  ├─ sli_section.tsx (useReducer, autocomplete)   │
-  │  ├─ slo_template_selector.tsx (card picker)      │
-  │  ├─ sli_combo_boxes.tsx (3 combo box exports)    │
-  │  ├─ slo_detail_flyout.tsx                        │
-  │  ├─ slo_preview_panel.tsx (+ live SLI value)     │
-  │  └─ ... all other components                     │
-  │                                                  │
-  │  public/hooks/                                   │
-  │  └─ use_prometheus_metadata.ts (cascading fetch)  │
-  └─────────────────────────────────────────────────┘
-```
-
-### Testing Infrastructure
-
-```
-Jest (unit tests) — 31 test files, 864 tests
-  ├─ jest.config.js — two projects: server (node) + components (jsdom)
-  ├─ common/__tests__/ — 16 test files (services, validators, backends, metadata, templates)
-  ├─ server/**/__tests__/ — 5 test files (handlers, metadata handlers, saved object store)
-  ├─ public/**/__tests__/ — 9 test files (components, API client)
-  ├─ public/__mocks__/eui_mock.tsx — lightweight OUI component mocks (add new mocks here)
-  └─ Coverage thresholds: 80% branches, 90% functions/lines/statements
-
-Cypress (E2E tests) — 55 tests
-  ├─ cypress.config.js — mode-aware config (CYPRESS_MODE: standalone | osd)
-  ├─ cypress/e2e/ — 5 spec files: navigation(3), alerts(7), rules(7), SLOs(33), suppression(5)
-  ├─ cypress/support/commands.ts — login(), visitAndWait(), getByTestSubj(), getApiBase()
-  ├─ cypress/support/e2e.ts — cy.session() auth, OSD exception handling
-  ├─ Standalone: port 5603, MOCK_MODE, no auth
-  ├─ OSD: port 5601, auto-login via cy.session(), workspace path auto-detected
-  └─ Workspace ID: set via CYPRESS_OSD_WORKSPACE_ID env var (e2e-osd.sh auto-detects)
-
-Scripts (scripts/)
-  └─ e2e-osd.sh — full OSD E2E runner (preflight, clone/locate stack, build, teardown, run)
-      ├─ --running    skip teardown, test against running stack
-      ├─ --no-rebuild teardown + restart, skip plugin build
-      └─ Env overrides: OBSERVABILITY_STACK_DIR, OBS_STACK_REPO, OBS_STACK_BRANCH
-
-CI (.github/workflows/)
-  ├─ test-and-build.yml — unit tests + coverage + standalone build
-  ├─ cypress-e2e.yml — E2E: standalone job + OSD plugin job
-  └─ publish.yml — package publishing
-```
-
-### Key Files Quick Reference
+See CLAUDE.md for full architecture documentation. Key files for agent reference:
 
 | Area | File | Purpose |
 |------|------|---------|
@@ -824,25 +612,12 @@ CI (.github/workflows/)
 | **SLO Service** | `common/slo_service.ts` | CRUD, status computation, store abstraction, seed data |
 | **SLO Rules** | `common/slo_promql_generator.ts` | Generates Prometheus recording + alerting rules |
 | **SLO Templates** | `common/slo_templates.ts` | Template definitions, `detectMetricType()`, error budget calc, filter presets |
-| **SLO Validation** | `common/slo_validators.ts` | Form validation for SLO inputs |
 | **Metadata Service** | `common/prometheus_metadata_service.ts` | Stale-while-revalidate caching for Prometheus metadata |
-| **Mock Data** | `common/mock_data.ts` | Shared mock metrics, labels, values (used by mock backend + promql editor) |
-| **DirectQuery Backend** | `common/directquery_prometheus_backend.ts` | Implements `PrometheusBackend` + `PrometheusMetadataProvider` |
-| **Mock Backend** | `common/mock_backend.ts` | MOCK_MODE backend (implements both interfaces) |
-| **In-Memory Store** | `common/slo_store.ts` | InMemorySloStore (standalone) |
-| **SavedObject Store** | `server/slo_saved_object_store.ts` | SavedObjectSloStore (OSD plugin) |
 | **OSD Plugin** | `server/plugin.ts` | Plugin lifecycle, `isMetadataProvider()` guard, store upgrade |
 | **OSD Routes** | `server/routes/index.ts` | OSD route adapter for all API endpoints |
 | **SLO Handlers** | `server/routes/slo_handlers.ts` | Framework-agnostic SLO request handlers |
-| **Metadata Handlers** | `server/routes/metadata_handlers.ts` | Framework-agnostic Prometheus metadata handlers |
 | **API Client** | `public/services/alarms_client.ts` | Mode-aware HTTP client with SLO + metadata methods |
 | **Metadata Hook** | `public/hooks/use_prometheus_metadata.ts` | React hook: debounced fetch, cascading, graceful degradation |
 | **SLI Section** | `public/components/sli_section.tsx` | Extracted SLI form with `useReducer`, autocomplete |
-| **SLI Combo Boxes** | `public/components/sli_combo_boxes.tsx` | `MetricComboBox`, `LabelValueComboBox`, `GoodEventsFilterCombo` |
-| **Template Selector** | `public/components/slo_template_selector.tsx` | Card-based SLO template picker |
-| **SLO Wizard** | `public/components/create_slo_wizard.tsx` | Multi-step SLO creation orchestrator |
-| **Preview Panel** | `public/components/slo_preview_panel.tsx` | Rule preview + live SLI value |
 | **EUI Mocks** | `public/__mocks__/eui_mock.tsx` | OUI component test mocks (add new ones here) |
-| **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build`; produces `build/alertManager-{version}.zip` |
-| **Server Mocks** | `server/__mocks__/osd_server.ts` | OSD server mock for Jest |
-| **SLO Guide** | `docs/slo-sli-guide.md` | SLO/SLI implementation guide |
+| **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build` |

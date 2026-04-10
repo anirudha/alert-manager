@@ -33,8 +33,13 @@ describe('SLO Management', () => {
     cy.get('body').should('contain.text', 'Filter');
   });
 
-  it('displays stat cards area', () => {
-    cy.get('body').should('be.visible');
+  it('displays SLO stat cards with labels', () => {
+    cy.getByTestSubj('sloSummaryCards').should('be.visible');
+    cy.getByTestSubj('sloStatCardTotal').should('be.visible');
+    cy.getByTestSubj('sloStatCardBreached').should('be.visible');
+    cy.getByTestSubj('sloStatCardWarning').should('be.visible');
+    cy.getByTestSubj('sloStatCardOk').should('be.visible');
+    cy.getByTestSubj('sloStatCardNoData').should('be.visible');
   });
 
   it('shows create SLO button and opens wizard with all 5 sections', () => {
@@ -70,8 +75,9 @@ describe('SLO Management', () => {
     cy.get('table', { timeout: 30000 }).should('exist');
   });
 
-  it('displays charts in the SLO listing', () => {
-    cy.get('body').should('be.visible');
+  it('displays chart containers in the SLO listing', () => {
+    // ECharts render on canvas — verify at least one chart container exists
+    cy.get('canvas').should('have.length.greaterThan', 0);
   });
 
   // ==========================================================================
