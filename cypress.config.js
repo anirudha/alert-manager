@@ -10,7 +10,7 @@ const isOsd = mode === 'osd';
 
 module.exports = {
   e2e: {
-    baseUrl: isOsd ? 'http://localhost:5601' : 'http://localhost:5603',
+    baseUrl: isOsd ? 'http://localhost:5602' : 'http://localhost:5603',
     viewportWidth: 1440,
     viewportHeight: 900,
     // Allow 1 retry: handles the first-spec cold start on a fresh OSD stack.
