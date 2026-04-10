@@ -116,7 +116,7 @@ Cypress.Commands.add('ensureLoaded', () => {
         // Not on the plugin page, or hit an error page — do a fresh visit.
         cy.request({
           method: 'POST',
-          url: 'http://localhost:5601/auth/login',
+          url: `${Cypress.config('baseUrl')}/auth/login`,
           headers: { 'osd-xsrf': 'osd-fetch', 'Content-Type': 'application/json' },
           body: { username: 'admin', password: 'My_password_123!@#' },
           failOnStatusCode: false,
@@ -141,7 +141,7 @@ Cypress.Commands.add('login', () => {
   }
   cy.request({
     method: 'POST',
-    url: 'http://localhost:5601/auth/login',
+    url: `${Cypress.config('baseUrl')}/auth/login`,
     headers: {
       'osd-xsrf': 'osd-fetch',
       'Content-Type': 'application/json',

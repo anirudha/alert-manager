@@ -559,7 +559,7 @@ info "Running Cypress E2E tests (OSD mode)..."
 cd "$ALERT_MANAGER_DIR"
 rm -rf cypress/screenshots
 
-CYPRESS_MODE=osd npx cypress run --browser chrome
+CYPRESS_BASE_URL=http://localhost:5601 CYPRESS_MODE=osd npx cypress run --browser chrome
 
 echo ""
 echo -e "${GREEN}${BOLD}=== All OSD E2E tests passed ===${NC}"

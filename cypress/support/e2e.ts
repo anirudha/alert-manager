@@ -13,7 +13,7 @@ beforeEach(() => {
     cy.session('osd-admin', () => {
       cy.request({
         method: 'POST',
-        url: 'http://localhost:5601/auth/login',
+        url: `${Cypress.config('baseUrl')}/auth/login`,
         headers: {
           'osd-xsrf': 'osd-fetch',
           'Content-Type': 'application/json',
