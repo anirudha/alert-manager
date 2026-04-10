@@ -74,6 +74,8 @@ module.exports = {
     '!public/components/slo_listing.tsx',
     '!public/components/create_slo_wizard.tsx',
     '!public/components/create_monitor.tsx',
+    '!public/components/create_logs_monitor.tsx',
+    '!public/components/create_metrics_monitor.tsx',
     '!public/components/ai_monitor_wizard.tsx',
     '!public/components/alert_detail_flyout.tsx',
     '!public/components/monitor_detail_flyout.tsx',

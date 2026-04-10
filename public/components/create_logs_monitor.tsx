@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Create Logs Monitor — flyout form based on the Logs alert spec.
  * Supports four monitor types: Query Level, Bucket Level, Document Level,

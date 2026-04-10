@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /**
  * Create Metrics Monitor — flyout form for Prometheus alerting rules.
  * Sections: Monitor Details, Query (PromQL + datasource + metric browser),
