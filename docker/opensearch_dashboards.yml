@@ -1,0 +1,21 @@
+# Minimal OSD config for CI E2E testing
+# Hardcoded values (no template substitution needed)
+
+server.host: "0.0.0.0"
+server.port: 5601
+server.cors: true
+
+opensearch.hosts: ["https://opensearch:9200"]
+opensearch.username: "admin"
+opensearch.password: "My_password_123!@#"
+opensearch.ssl.verificationMode: none
+
+opensearch_security.multitenancy.enabled: false
+
+# Required for Alert Manager plugin workspace + datasource support
+workspace.enabled: true
+data_source.enabled: true
+data_source.ssl.verificationMode: none
+
+# Relax CSP for CI (no user-facing security concern)
+csp.strict: false

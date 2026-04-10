@@ -54,14 +54,94 @@ jobs:
           path: cypress/screenshots/
           retention-days: 7
 
-  # NOTE: OSD plugin E2E (e2e-osd) is not run in CI because GitHub Actions'
-  # standard runners (2 vCPU, 7GB RAM) cannot load the full observability stack
-  # (OpenSearch + OSD with 30+ plugins + Cortex + Alertmanager) fast enough for
-  # Cypress timeouts. OSD loads all plugin bundles sequentially on every page,
-  # taking 60s+ on standard runners.
-  #
-  # Run OSD E2E locally instead:
-  #   ./scripts/e2e-osd.sh              # full teardown + rebuild + test (32/32 in ~36s)
-  #   ./scripts/e2e-osd.sh --running    # re-run against existing stack
-  #
-  # See: https://github.com/anirudha/alert-manager/issues/15
+  e2e-osd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      # --- Build OSD plugin ZIP ---
+      # The plugin must be built inside the OSD monorepo because
+      # @osd/optimizer and @osd/plugin-helpers require the monorepo context.
+
+      - name: Cache OSD monorepo
+        uses: actions/cache@v4
+        id: osd-cache
+        with:
+          path: /tmp/osd
+          key: osd-monorepo-3.6.0-${{ runner.os }}
+
+      - name: Clone OSD monorepo
+        if: steps.osd-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch 3.6.0 \
+            https://github.com/opensearch-project/OpenSearch-Dashboards.git \
+            /tmp/osd
+
+      - name: Symlink plugin into OSD
+        run: |
+          mkdir -p /tmp/osd/plugins
+          rm -rf /tmp/osd/plugins/alertManager
+          ln -s "$GITHUB_WORKSPACE" /tmp/osd/plugins/alertManager
+
+      - name: Cache OSD node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/osd/node_modules
+            /tmp/osd/.yarn-local-mirror
+            ~/.yarn/berry/cache
+          key: osd-deps-3.6.0-${{ runner.os }}-${{ hashFiles('/tmp/osd/yarn.lock') }}
+          restore-keys: |
+            osd-deps-3.6.0-${{ runner.os }}-
+
+      - name: Bootstrap OSD
+        working-directory: /tmp/osd
+        run: yarn osd bootstrap
+
+      - name: Build plugin ZIP
+        working-directory: /tmp/osd/plugins/alertManager
+        run: yarn plugin-helpers build --opensearch-dashboards-version 3.6.0
+
+      - name: Verify plugin ZIP
+        run: |
+          ZIP=$(ls -1t build/alertManager-*.zip 2>/dev/null | head -1)
+          if [ -z "$ZIP" ]; then echo "ERROR: No plugin ZIP found in build/" && exit 1; fi
+          echo "Plugin ZIP: $ZIP ($(du -h "$ZIP" | cut -f1))"
+          echo "ALERT_MANAGER_PLUGIN_ZIP=$GITHUB_WORKSPACE/$ZIP" >> "$GITHUB_ENV"
+
+      # --- Install Cypress dependencies ---
+
+      - name: Install root dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Create parent tsconfig stub
+        run: |
+          mkdir -p ../../
+          echo '{"compilerOptions":{"target":"ES2020","module":"commonjs","moduleResolution":"node","esModuleInterop":true,"skipLibCheck":true,"jsx":"react","ignoreDeprecations":"5.0"}}' > ../../tsconfig.json
+
+      # --- Run E2E against slim Docker stack ---
+
+      - name: Run OSD E2E tests
+        run: ./scripts/e2e-ci.sh
+
+      - name: Upload Cypress screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cypress-screenshots-osd
+          path: cypress/screenshots/
+          retention-days: 7
+
+      - name: Upload Docker logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-logs-osd
+          path: docker-logs/
+          retention-days: 7
