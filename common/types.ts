@@ -339,6 +339,7 @@ export interface OpenSearchBackend {
   ): Promise<OSMonitor | null>;
   deleteMonitor(ds: Datasource, monitorId: string): Promise<boolean>;
   runMonitor(ds: Datasource, monitorId: string, dryRun?: boolean): Promise<unknown>;
+  searchQuery(ds: Datasource, indices: string[], body: Record<string, unknown>): Promise<unknown>;
 
   // Alerts
   getAlerts(ds: Datasource): Promise<{ alerts: OSAlert[]; totalAlerts: number }>;

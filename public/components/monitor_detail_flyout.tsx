@@ -33,6 +33,7 @@ import {
   EuiCodeBlock,
   EuiIcon,
   EuiLoadingContent,
+  EuiStat,
 } from '@elastic/eui';
 import {
   UnifiedRule,
@@ -76,6 +77,30 @@ const STATE_COLORS: Record<string, string> = {
 };
 
 // ============================================================================
+// Condition humanizer — translates Painless scripts into readable text
+// ============================================================================
+
+function humanizeCondition(condition: string): React.ReactNode {
+  const trimmed = condition.trim();
+
+  // "return true" → "Always trigger"
+  if (/^return\s+true\s*;?\s*$/.test(trimmed)) {
+    return 'Always trigger';
+  }
+
+  // ctx.results[0].hits.total.value <op> N → "Document count <op> N"
+  const docCountMatch = trimmed.match(
+    /ctx\.results\[0]\.hits\.total\.value\s*(>=|<=|!=|==|>|<)\s*([\d.]+)/
+  );
+  if (docCountMatch) {
+    return `Document count ${docCountMatch[1]} ${docCountMatch[2]}`;
+  }
+
+  // Anything else: show the raw condition in a code style
+  return <code>{condition}</code>;
+}
+
+// ============================================================================
 // SVG Line Graph for condition preview
 // ============================================================================
 
@@ -83,8 +108,11 @@ const ConditionPreviewGraph: React.FC<{
   data: Array<{ timestamp: number; value: number }>;
   threshold?: { operator: string; value: number; unit?: string };
 }> = ({ data, threshold }) => {
+  // Handle sparse data: show a stat card instead of a chart for 1-2 data points
+  const isSparse = data && data.length > 0 && data.length <= 2;
+
   const spec = useMemo((): EChartsOption | null => {
-    if (!data || data.length === 0) return null;
+    if (!data || data.length === 0 || isSparse) return null;
 
     const timestamps = data.map((d) =>
       new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -143,9 +171,9 @@ const ConditionPreviewGraph: React.FC<{
       },
       series,
     };
-  }, [data, threshold]);
+  }, [data, threshold, isSparse]);
 
-  if (!spec)
+  if (!data || data.length === 0)
     return (
       <EuiText size="s" color="subdued">
         <em>
@@ -155,7 +183,23 @@ const ConditionPreviewGraph: React.FC<{
       </EuiText>
     );
 
-  return <EchartsRender spec={spec} height={180} />;
+  if (isSparse) {
+    const latestPoint = data[data.length - 1];
+    const formattedValue = Number.isInteger(latestPoint.value)
+      ? String(latestPoint.value)
+      : latestPoint.value.toFixed(2);
+    return (
+      <EuiPanel color="subdued" paddingSize="m">
+        <EuiStat title={formattedValue} description="Latest evaluated value" titleSize="l" />
+        <EuiSpacer size="xs" />
+        <EuiText size="xs" color="subdued">
+          <em>Limited evaluation data — showing latest value</em>
+        </EuiText>
+      </EuiPanel>
+    );
+  }
+
+  return <EchartsRender spec={spec!} height={180} />;
 };
 
 // ============================================================================
@@ -469,7 +513,7 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
                   <>
                     <EuiSpacer size="s" />
                     <EuiText size="xs" color="subdued">
-                      Condition: {monitor.condition}
+                      Condition: {humanizeCondition(monitor.condition)}
                     </EuiText>
                   </>
                 )}
