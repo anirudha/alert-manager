@@ -198,7 +198,9 @@ cd "$REPO_DIR"
 rm -rf cypress/screenshots
 
 BROWSER="${CYPRESS_BROWSER:-chrome}"
-CYPRESS_MODE=osd npx cypress run --browser "$BROWSER"
+# Override baseUrl: cypress.config.js defaults OSD mode to port 5602 (local dev),
+# but the Docker stack runs OSD on port 5601.
+CYPRESS_MODE=osd CYPRESS_BASE_URL=http://localhost:5601 npx cypress run --browser "$BROWSER"
 
 echo ""
 echo -e "${GREEN}${BOLD}=== All OSD E2E tests passed ===${NC}"
