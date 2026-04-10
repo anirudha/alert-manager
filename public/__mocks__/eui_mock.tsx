@@ -177,7 +177,16 @@ export const EuiFlyout = stub('EuiFlyout');
 export const EuiFlyoutHeader = stub('EuiFlyoutHeader');
 export const EuiFlyoutBody = stub('EuiFlyoutBody');
 export const EuiFlyoutFooter = stub('EuiFlyoutFooter');
-export const EuiPopover = stub('EuiPopover');
+export const EuiPopover: React.FC<Props & { button?: React.ReactNode; isOpen?: boolean }> = ({
+  children,
+  button,
+  'data-test-subj': testSubj,
+}) => (
+  <div data-eui="EuiPopover" data-test-subj={testSubj}>
+    {button}
+    {children}
+  </div>
+);
 export const EuiContextMenuPanel = stub('EuiContextMenuPanel');
 export const EuiContextMenuItem = stub('EuiContextMenuItem');
 export const EuiCard: React.FC<

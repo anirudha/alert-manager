@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, waitFor, configure, fireEvent } from '@testing-library/react';
 import { MonitorsTable } from '../monitors_table';
-import type { Datasource, UnifiedRule } from '../../../common/types';
+import { Datasource, UnifiedRule } from '../../../common/types';
 
 configure({ testIdAttribute: 'data-test-subj' });
 
