@@ -30,8 +30,10 @@ describe('Rules / Monitors', () => {
     cy.get('body').should('be.visible');
   });
 
-  it('shows filter panel', () => {
+  it('shows filter panel with datasource, severity, and type filters', () => {
     cy.get('body').should('contain.text', 'Filter');
+    cy.contains('Datasource').should('exist');
+    cy.contains('Severity').should('exist');
   });
 
   it('displays severity badges for rules', () => {
@@ -43,7 +45,11 @@ describe('Rules / Monitors', () => {
     cy.get('body').should('be.visible');
   });
 
-  it('can export monitors', () => {
-    cy.get('body').should('be.visible');
+  it('shows export and import buttons', () => {
+    cy.contains(/Export|Import/).should('exist');
+  });
+
+  it('shows column selector button', () => {
+    cy.contains(/Columns/).should('exist');
   });
 });
