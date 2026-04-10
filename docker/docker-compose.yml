@@ -1,0 +1,154 @@
+# =============================================================================
+# Slim Docker Compose for Alert Manager OSD plugin E2E testing
+#
+# 3 services + 1 init container:
+#   - opensearch:  Search & alerting backend
+#   - opensearch-dashboards:  UI shell with stripped plugins for fast loading
+#   - cortex:  Prometheus-compatible metrics + Ruler API for alerting rules
+#   - osd-init:  Workspace creation, datasource registration, test data seeding
+#
+# Usage:
+#   ALERT_MANAGER_PLUGIN_ZIP=./build/alertManager-3.6.0.zip docker compose up -d
+#
+# The init container exits after setup. Check logs for WORKSPACE_ID:
+#   docker logs osd-init 2>&1 | grep WORKSPACE_ID=
+# =============================================================================
+
+x-default-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "2"
+
+networks:
+  e2e-network:
+    driver: bridge
+
+volumes:
+  opensearch-data:
+  cortex-data:
+
+services:
+  # ---------------------------------------------------------------------------
+  # OpenSearch - Search engine, alerting, saved objects, DirectQuery
+  # ---------------------------------------------------------------------------
+  opensearch:
+    image: opensearchstaging/opensearch:3.6.0
+    container_name: opensearch
+    environment:
+      - cluster.name=e2e-cluster
+      - node.name=e2e-node
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=My_password_123!@#"
+      - plugins.query.datasources.encryption.masterkey=BTqK4Ytdz67La1kShIKV3Pu9
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - e2e-network
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: >
+        curl -sk -u 'admin:My_password_123!@#' https://localhost:9200/_cluster/health
+        | grep -E '"status":"(green|yellow)"'
+      start_period: 120s
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # Cortex - Prometheus-compatible metrics + Ruler API for rule CRUD
+  # ---------------------------------------------------------------------------
+  cortex:
+    image: cortexproject/cortex:v1.18.1
+    container_name: cortex
+    command: ["-config.file=/etc/cortex/cortex.yml"]
+    volumes:
+      - ./cortex-config.yml:/etc/cortex/cortex.yml:ro
+      - cortex-data:/data
+    ports:
+      - "9090:9090"
+    networks:
+      - e2e-network
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/ready || exit 1"]
+      start_period: 15s
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # OpenSearch Dashboards - UI shell with stripped plugins + alertManager
+  # ---------------------------------------------------------------------------
+  opensearch-dashboards:
+    image: opensearchstaging/opensearch-dashboards:3.6.0
+    container_name: opensearch-dashboards
+    entrypoint: ["/bin/bash", "/tmp/osd-entrypoint.sh"]
+    environment:
+      - ALERT_MANAGER_MOCK_MODE=false
+      - OPENSEARCH_URL=https://opensearch:9200
+      - "OPENSEARCH_USER=admin"
+      - "OPENSEARCH_PASSWORD=My_password_123!@#"
+    volumes:
+      - ./osd-entrypoint.sh:/tmp/osd-entrypoint.sh:ro
+      - ./opensearch_dashboards.yml:/tmp/opensearch_dashboards.yml:ro
+      - ${ALERT_MANAGER_PLUGIN_ZIP:-/dev/null}:/tmp/alertManager.zip
+    ports:
+      - "5601:5601"
+    networks:
+      - e2e-network
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2048m
+    healthcheck:
+      test: >
+        curl -f -u 'admin:My_password_123!@#' http://localhost:5601/api/status || exit 1
+      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # Init container - workspace, datasource, test data seeding
+  # ---------------------------------------------------------------------------
+  osd-init:
+    image: alpine:3.20
+    container_name: osd-init
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache curl jq > /dev/null 2>&1 && /tmp/init-osd.sh"]
+    volumes:
+      - ./init-osd.sh:/tmp/init-osd.sh:ro
+    networks:
+      - e2e-network
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      opensearch-dashboards:
+        condition: service_healthy
+      cortex:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging

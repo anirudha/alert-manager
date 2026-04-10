@@ -39,6 +39,8 @@ npm run e2e                       # Cypress E2E against standalone (MOCK_MODE, p
 ./scripts/e2e-osd.sh              # Full OSD E2E: teardown + rebuild + clean stack + Cypress
 ./scripts/e2e-osd.sh --running    # OSD E2E against already-running stack (no teardown)
 ./scripts/e2e-osd.sh --no-rebuild # OSD E2E: teardown + restart, skip plugin build
+./scripts/e2e-ci.sh               # OSD E2E with slim Docker stack (CI-friendly, no external deps)
+./scripts/e2e-ci.sh --running     # Re-run against already-running slim stack
 npm run build:standalone          # Build standalone server
 yarn plugin-helpers build         # Build OSD plugin zip (uses standard OSD optimizer)
 ./build.sh                        # Thin wrapper: auto-detects OSD version + runs plugin-helpers build
@@ -75,6 +77,7 @@ yarn start --config config/opensearch_dashboards.dev.yml
 - `server/` -- OSD plugin server (routes, saved objects, plugin lifecycle)
 - `standalone/` -- Express server with its own `package.json` and build
 - `server/__mocks__/` -- OSD server mock for Jest (mirrors `public/__mocks__/osd_core.ts` pattern)
+- `docker/` -- Slim Docker Compose stack for CI E2E (OpenSearch + OSD + Cortex, no external deps)
 
 **API paths differ by mode**:
 - Standalone: `/api/slos`, `/api/alerts`, etc.
@@ -125,6 +128,8 @@ npm run e2e                       # Builds standalone, starts with MOCK_MODE, ru
 ```bash
 ./scripts/e2e-osd.sh              # One-liner: teardown + build + clean stack + Cypress
 ./scripts/e2e-osd.sh --running    # Re-run against already-running stack
+./scripts/e2e-ci.sh               # Slim Docker stack (no external deps, CI-friendly)
+./scripts/e2e-ci.sh --running     # Re-run against running slim stack
 ```
 
 The `e2e-osd.sh` script handles everything for any contributor:
@@ -187,5 +192,5 @@ OBS_STACK_REPO=https://github.com/user/fork.git OBS_STACK_BRANCH=my-branch ./scr
 | Workflow | Purpose |
 |----------|---------|
 | `test-and-build.yml` | Unit tests + coverage + standalone build (Node 18 + 20) |
-| `cypress-e2e.yml` | Cypress E2E: standalone job + OSD plugin job |
+| `cypress-e2e.yml` | Cypress E2E: standalone job + OSD plugin job (slim Docker stack) |
 | `publish.yml` | Package publishing |

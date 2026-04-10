@@ -1,0 +1,63 @@
+# Cortex - Single-process mode for CI E2E testing
+# Provides Prometheus-compatible query API + Ruler API for rule CRUD
+# Adapted from observability-stack cortex.yaml (no alertmanager service needed)
+
+target: all
+
+# Disable multi-tenancy (no X-Scope-OrgID header required)
+auth_enabled: false
+
+server:
+  http_listen_port: 9090
+  grpc_listen_port: 9095
+
+distributor:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+ingester:
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    address: 127.0.0.1
+    final_sleep: 0s
+
+storage:
+  engine: blocks
+
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/blocks
+  tsdb:
+    dir: /data/tsdb
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+
+ruler:
+  enable_api: true
+  ring:
+    kvstore:
+      store: inmemory
+    instance_addr: 127.0.0.1
+
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/ruler-storage
+
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    kvstore:
+      store: inmemory
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
