@@ -425,20 +425,28 @@ export class MultiBackendAlertService {
     }
     const description = trigger?.actions?.[0]?.message_template?.source || descriptionFallback;
 
-    // Fetch condition preview via monitor dry run
+    // Fetch condition preview: run the monitor's query as a date_histogram to build a time-series
     let conditionPreviewData: Array<{ timestamp: number; value: number }> = [];
     try {
-      const execResult = await this.osBackend!.runMonitor(ds, monitorId, true);
-      conditionPreviewData = this.extractOSPreviewData(execResult);
+      conditionPreviewData = await this.fetchOSPreviewTimeSeries(ds, monitor);
     } catch {
-      // Dry run is best-effort — some monitors may not support it
+      // Preview data fetch is best-effort
+    }
+    // Fallback: try dry-run execution if time-series extraction produced nothing
+    if (conditionPreviewData.length === 0) {
+      try {
+        const execResult = await this.osBackend!.runMonitor(ds, monitorId, true);
+        conditionPreviewData = this.extractOSPreviewData(execResult);
+      } catch {
+        // Dry run is best-effort — some monitors may not support it
+      }
     }
 
     return {
       ...summary,
       description,
-      // MOCK: AI summary not available from OS alerting API
-      aiSummary: '[Not available] AI summaries require integration with an LLM service.',
+      // AI summary not available from OS alerting API — empty triggers flyout fallback
+      aiSummary: '',
       firingPeriod: undefined,
       lookbackPeriod: undefined,
       alertHistory,
@@ -480,8 +488,8 @@ export class MultiBackendAlertService {
         return {
           ...summary,
           description,
-          // MOCK: AI summary not available from Prometheus API
-          aiSummary: '[Not available] AI summaries require integration with an LLM service.',
+          // AI summary not available from Prometheus API — empty triggers flyout fallback
+          aiSummary: '',
           firingPeriod: undefined,
           lookbackPeriod: undefined,
           alertHistory,
@@ -707,7 +715,224 @@ export class MultiBackendAlertService {
   }
 
   /**
-   * Extract preview data from OS monitor dry-run result.
+   * Fetch a time-series for the monitor's query by wrapping it in a date_histogram.
+   * This gives us bucketed data points for the condition preview chart.
+   * Supports all monitor types: query_level, bucket_level, cluster_metrics, and doc_level.
+   */
+  private async fetchOSPreviewTimeSeries(
+    ds: Datasource,
+    monitor: OSMonitor
+  ): Promise<Array<{ timestamp: number; value: number }>> {
+    const input = monitor.inputs[0];
+    if (!input) return [];
+
+    // --- Cluster metrics monitors (uri input) ---
+    if ('uri' in input) {
+      return this.fetchClusterMetricsPreview(ds, monitor);
+    }
+
+    // --- Doc-level monitors ---
+    if ('doc_level_input' in input) {
+      return this.fetchDocLevelPreview(ds, input);
+    }
+
+    // --- Query-level and bucket-level monitors (search input) ---
+    if (!('search' in input)) return [];
+
+    const indices = input.search.indices;
+    if (!indices || indices.length === 0) return [];
+
+    const originalQuery = input.search.query;
+    if (!originalQuery || typeof originalQuery !== 'object') return [];
+
+    // Detect the timestamp field from the original query's range filter
+    const timestampField = extractTimestampField(originalQuery) || '@timestamp';
+
+    // Extract the user's query, strip Mustache templates and the monitor's own range filter
+    // (the monitor's range is typically narrow like 5m; we want 1h for the chart)
+    const userQuery = (originalQuery as Record<string, unknown>).query || { match_all: {} };
+    const cleanedQuery = substituteMustacheTemplates(userQuery);
+    const strippedQuery = stripRangeFilters(cleanedQuery, timestampField);
+
+    // Build a date_histogram query with our own 1-hour range
+    const now = Date.now();
+    const oneHourAgo = now - 3600_000;
+    const intervalMinutes = 5;
+
+    // Use ISO timestamps to support both date and date_nanos fields
+    const nowIso = new Date(now).toISOString();
+    const oneHourAgoIso = new Date(oneHourAgo).toISOString();
+
+    const histogramBody: Record<string, unknown> = {
+      size: 0,
+      query: {
+        bool: {
+          // Use 'filter' context for caching (no scoring needed for preview)
+          filter: [
+            strippedQuery,
+            {
+              range: {
+                [timestampField]: {
+                  gte: oneHourAgoIso,
+                  lte: nowIso,
+                },
+              },
+            },
+          ],
+        },
+      },
+      aggs: {
+        time_buckets: {
+          date_histogram: {
+            field: timestampField,
+            fixed_interval: `${intervalMinutes}m`,
+            min_doc_count: 0,
+            extended_bounds: {
+              min: oneHourAgo,
+              max: now,
+            },
+          },
+        },
+      },
+    };
+
+    const result = await this.osBackend!.searchQuery(ds, indices, histogramBody);
+    return this.extractDateHistogramPoints(result);
+  }
+
+  /**
+   * Generate preview data for cluster_metrics monitors.
+   * These use `uri` input and return a snapshot (not a time series), so we
+   * extract a meaningful numeric value and generate synthetic time-series points.
+   */
+  private async fetchClusterMetricsPreview(
+    ds: Datasource,
+    monitor: OSMonitor
+  ): Promise<Array<{ timestamp: number; value: number }>> {
+    // Dry-run the monitor to get the current API result
+    let execResult: unknown;
+    try {
+      execResult = await this.osBackend!.runMonitor(ds, monitor.id, true);
+    } catch {
+      return [];
+    }
+    if (!execResult || typeof execResult !== 'object') return [];
+
+    // Extract a numeric value from the execution result
+    const numericValue = extractClusterMetricValue(execResult);
+
+    // Generate 12 synthetic data points over the last hour using the snapshot value
+    const now = Date.now();
+    const points: Array<{ timestamp: number; value: number }> = [];
+    const bucketCount = 12;
+    const bucketIntervalMs = 5 * 60_000;
+
+    for (let i = 0; i < bucketCount; i++) {
+      const timestamp = now - (bucketCount - 1 - i) * bucketIntervalMs;
+      // Add slight variation to make the chart readable (snapshot is a point-in-time)
+      const jitter = numericValue * 0.02 * (Math.random() - 0.5);
+      points.push({
+        timestamp,
+        value: Math.max(0, numericValue + jitter),
+      });
+    }
+
+    return points;
+  }
+
+  /**
+   * Generate preview data for doc_level monitors.
+   * These use `doc_level_input` with indices and queries. We run a date_histogram
+   * on the target indices similar to query-level monitors.
+   */
+  private async fetchDocLevelPreview(
+    ds: Datasource,
+    input: {
+      doc_level_input: {
+        description: string;
+        indices: string[];
+        queries: Array<{ id: string; name: string; query: string; tags: string[] }>;
+      };
+    }
+  ): Promise<Array<{ timestamp: number; value: number }>> {
+    const indices = input.doc_level_input.indices;
+    if (!indices || indices.length === 0) return [];
+
+    // Use @timestamp as the default field for doc-level monitors
+    const timestampField = '@timestamp';
+    const now = Date.now();
+    const oneHourAgo = now - 3600_000;
+    const intervalMinutes = 5;
+
+    // Build a simple date_histogram — doc-level queries match individual docs,
+    // so we count matching docs per time bucket
+    const nowIso = new Date(now).toISOString();
+    const oneHourAgoIso = new Date(oneHourAgo).toISOString();
+    const histogramBody: Record<string, unknown> = {
+      size: 0,
+      query: {
+        bool: {
+          filter: [
+            {
+              range: {
+                [timestampField]: {
+                  gte: oneHourAgoIso,
+                  lte: nowIso,
+                },
+              },
+            },
+          ],
+        },
+      },
+      aggs: {
+        time_buckets: {
+          date_histogram: {
+            field: timestampField,
+            fixed_interval: `${intervalMinutes}m`,
+            min_doc_count: 0,
+            extended_bounds: {
+              min: oneHourAgo,
+              max: now,
+            },
+          },
+        },
+      },
+    };
+
+    const result = await this.osBackend!.searchQuery(ds, indices, histogramBody);
+    return this.extractDateHistogramPoints(result);
+  }
+
+  /**
+   * Extract time-series data points from a date_histogram aggregation response.
+   */
+  private extractDateHistogramPoints(result: unknown): Array<{ timestamp: number; value: number }> {
+    const points: Array<{ timestamp: number; value: number }> = [];
+    if (!result || typeof result !== 'object') return points;
+
+    const res = result as Record<string, unknown>;
+    const aggs = res.aggregations as Record<string, unknown> | undefined;
+    if (!aggs) return points;
+
+    const timeBuckets = aggs.time_buckets as Record<string, unknown> | undefined;
+    if (!timeBuckets) return points;
+
+    const buckets = timeBuckets.buckets as Array<Record<string, unknown>> | undefined;
+    if (!buckets || !Array.isArray(buckets)) return points;
+
+    for (const bucket of buckets) {
+      const key = bucket.key as number;
+      const docCount = bucket.doc_count as number;
+      if (typeof key === 'number' && typeof docCount === 'number') {
+        points.push({ timestamp: key, value: docCount });
+      }
+    }
+
+    return points;
+  }
+
+  /**
+   * Extract preview data from OS monitor dry-run result (fallback).
    * The _execute API returns input_results with the query response.
    */
   private extractOSPreviewData(execResult: unknown): Array<{ timestamp: number; value: number }> {
@@ -726,8 +951,11 @@ export class MultiBackendAlertService {
         // Trigger results contain the evaluated condition value
         if (typeof td.triggered === 'boolean') {
           // Use the period_start/period_end from the execution
-          const periodStart = (result.period_start as number) || now - 300_000;
-          const periodEnd = (result.period_end as number) || now;
+          // These may be ISO strings or epoch millis depending on the monitor type
+          const rawStart = result.period_start;
+          const rawEnd = result.period_end;
+          const periodStart = toEpochMillis(rawStart) || now - 300_000;
+          const periodEnd = toEpochMillis(rawEnd) || now;
           points.push({
             timestamp: periodEnd,
             value: td.triggered ? 1 : 0,
@@ -825,6 +1053,157 @@ export class MultiBackendAlertService {
     return ds;
   }
 }
+// ============================================================================
+// Preview helper functions (exported for testing)
+// ============================================================================
+
+/**
+ * Extract the timestamp field name from a query's range filter.
+ * Inspects `bool.filter` and `bool.must` arrays for a `range` clause.
+ * Returns the field name if found, or undefined.
+ */
+export function extractTimestampField(query: Record<string, unknown>): string | undefined {
+  const innerQuery = (query as Record<string, unknown>).query as
+    | Record<string, unknown>
+    | undefined;
+  const target = innerQuery || query;
+  const bool = target?.bool as Record<string, unknown> | undefined;
+  if (!bool) return undefined;
+
+  // Check both `filter` and `must` arrays
+  const clauses: unknown[] = [];
+  if (Array.isArray(bool.filter)) clauses.push(...bool.filter);
+  if (Array.isArray(bool.must)) clauses.push(...bool.must);
+
+  for (const clause of clauses) {
+    if (clause && typeof clause === 'object' && 'range' in (clause as Record<string, unknown>)) {
+      const range = (clause as Record<string, unknown>).range as Record<string, unknown>;
+      const fields = Object.keys(range);
+      if (fields.length > 0) return fields[0];
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Strip range filters on the given timestamp field from a query.
+ * This prevents the monitor's narrow range (e.g., "now-5m") from conflicting
+ * with the wider preview range (1 hour) we apply for the chart.
+ */
+export function stripRangeFilters(query: unknown, timestampField: string): unknown {
+  if (!query || typeof query !== 'object') return query;
+  const q = query as Record<string, unknown>;
+
+  // If this is a range clause on the target field, replace with match_all
+  if ('range' in q) {
+    const range = q.range as Record<string, unknown>;
+    if (timestampField in range) {
+      return { match_all: {} };
+    }
+    return q;
+  }
+
+  // Recurse into bool clauses and strip range filters from arrays
+  if ('bool' in q) {
+    const bool = { ...(q.bool as Record<string, unknown>) };
+    for (const key of ['must', 'filter', 'should']) {
+      if (Array.isArray(bool[key])) {
+        bool[key] = (bool[key] as unknown[])
+          .map((clause) => stripRangeFilters(clause, timestampField))
+          .filter(
+            (clause) =>
+              !(
+                clause &&
+                typeof clause === 'object' &&
+                'match_all' in (clause as Record<string, unknown>)
+              )
+          );
+      }
+    }
+    return { bool };
+  }
+
+  return q;
+}
+
+/**
+ * Replace Mustache template variables (e.g., `{{period_end}}`) with concrete values.
+ * This allows executing monitor queries that contain template variables for preview.
+ */
+export function substituteMustacheTemplates(query: unknown): unknown {
+  if (query === null || query === undefined) return query;
+
+  if (typeof query === 'string') {
+    const now = Date.now();
+    const oneHourAgo = now - 3600_000;
+    let result = query;
+    result = result.replace(/\{\{period_end\}\}/g, String(now));
+    result = result.replace(/\{\{period_start\}\}/g, String(oneHourAgo));
+    // Replace any remaining {{...}} patterns with current time as a safe default
+    result = result.replace(/\{\{[^}]+\}\}/g, String(now));
+    return result;
+  }
+
+  if (Array.isArray(query)) {
+    return query.map((item) => substituteMustacheTemplates(item));
+  }
+
+  if (typeof query === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
+      result[key] = substituteMustacheTemplates(value);
+    }
+    return result;
+  }
+
+  return query;
+}
+
+/**
+ * Extract a meaningful numeric value from a cluster metrics execution result.
+ * Handles common API responses: cluster health, node stats, etc.
+ */
+export function extractClusterMetricValue(execResult: unknown): number {
+  if (!execResult || typeof execResult !== 'object') return 0;
+  const result = execResult as Record<string, unknown>;
+
+  // Try input_results first (from _execute API response)
+  const inputResults = result.input_results as Record<string, unknown> | undefined;
+  if (inputResults) {
+    const results = inputResults.results as Array<Record<string, unknown>> | undefined;
+    if (results && results.length > 0) {
+      const firstResult = results[0];
+      // Cluster health: number_of_nodes, active_shards, unassigned_shards
+      if (typeof firstResult.number_of_nodes === 'number') return firstResult.number_of_nodes;
+      if (typeof firstResult.active_shards === 'number') return firstResult.active_shards;
+      if (typeof firstResult.unassigned_shards === 'number') return firstResult.unassigned_shards;
+      // Try to find any top-level numeric value
+      for (const val of Object.values(firstResult)) {
+        if (typeof val === 'number') return val;
+      }
+    }
+  }
+
+  // Direct numeric properties (if result itself is the API response)
+  if (typeof result.number_of_nodes === 'number') return result.number_of_nodes;
+  if (typeof result.active_shards === 'number') return result.active_shards;
+
+  return 1; // Default to 1 to show something meaningful on the chart
+}
+
+/**
+ * Convert a value that may be an ISO string or epoch millis to epoch millis.
+ */
+export function toEpochMillis(val: unknown): number | undefined {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const parsed = new Date(val).getTime();
+    return isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+}
+
 // ============================================================================
 // Mapping helpers
 // ============================================================================
@@ -1009,25 +1388,43 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
     status,
     healthStatus: !isEnabled ? 'no_data' : 'healthy',
     createdBy: '',
-    createdAt: new Date(m.last_update_time - 86400000).toISOString(),
+    createdAt: new Date(m.last_update_time).toISOString(),
     lastModified: new Date(m.last_update_time).toISOString(),
     lastTriggered: undefined,
     notificationDestinations: destNames,
     evaluationInterval: evalInterval,
-    pendingPeriod: '5 minutes',
+    pendingPeriod: evalInterval,
     threshold: trigger
-      ? {
-          operator: '>',
-          value: parseThresholdValue(trigger.condition.script.source),
-          unit: monitorType === 'metric' ? '%' : 'count',
-        }
+      ? (() => {
+          const parsed = parseThreshold(trigger.condition.script.source);
+          return {
+            operator: parsed.operator,
+            value: parsed.value,
+            unit: inferUnitFromExpression(query),
+          };
+        })()
       : undefined,
   };
 }
 
-function parseThresholdValue(conditionSource: string): number {
-  const match = conditionSource.match(/>\s*([\d.]+)/);
-  return match ? parseFloat(match[1]) : 0;
+/**
+ * Infer a display unit from metric name suffixes in a PromQL expression or
+ * query string. Falls back to empty string (no unit) rather than a wrong unit.
+ */
+function inferUnitFromExpression(expr: string): string {
+  if (/_seconds|_duration/.test(expr)) return 's';
+  if (/_bytes/.test(expr)) return 'B';
+  if (/_ratio|_percent/.test(expr)) return '%';
+  if (/_total|_count/.test(expr)) return '';
+  return '';
+}
+
+function parseThreshold(conditionSource: string): { operator: string; value: number } {
+  const match = conditionSource.match(/(>=|<=|!=|==|>|<)\s*([\d.]+)/);
+  if (match) {
+    return { operator: match[1], value: parseFloat(match[2]) };
+  }
+  return { operator: '>', value: 0 };
 }
 
 function promRuleToUnified(
@@ -1063,6 +1460,13 @@ function promRuleToUnified(
     notificationDestinations: destNames,
     evaluationInterval: `${r.duration}s`,
     pendingPeriod: `${r.duration}s`,
-    threshold: { operator: '>', value: parseThresholdValue(r.query), unit: '%' },
+    threshold: (() => {
+      const parsed = parseThreshold(r.query);
+      return {
+        operator: parsed.operator,
+        value: parsed.value,
+        unit: inferUnitFromExpression(r.query),
+      };
+    })(),
   };
 }

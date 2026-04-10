@@ -170,6 +170,16 @@ export class HttpOpenSearchBackend implements OpenSearchBackend {
     return resp.body;
   }
 
+  async searchQuery(
+    ds: Datasource,
+    indices: string[],
+    body: Record<string, unknown>
+  ): Promise<unknown> {
+    const indexPattern = indices.join(',');
+    const resp = await this.req<unknown>(ds, 'POST', `/${indexPattern}/_search`, body);
+    return resp.body;
+  }
+
   // =========================================================================
   // Alerts
   // =========================================================================

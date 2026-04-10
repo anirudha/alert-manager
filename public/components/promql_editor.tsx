@@ -570,6 +570,8 @@ export interface PromQLEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   height?: number;
+  showLineNumbers?: boolean;
+  hideToolbar?: boolean;
 }
 
 export const PromQLEditor: React.FC<PromQLEditorProps> = ({
@@ -577,6 +579,8 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
   onChange,
   placeholder = 'Enter PromQL query...',
   height = 120,
+  showLineNumbers = false,
+  hideToolbar = false,
 }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -666,6 +670,9 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
   const errorCount = errors.filter((e) => e.severity === 'error').length;
   const warnCount = errors.filter((e) => e.severity === 'warning').length;
 
+  const lineCount = Math.max((value || '').split('\n').length, 1);
+  const gutterWidth = showLineNumbers ? 36 : 0;
+
   return (
     <div style={{ position: 'relative' }}>
       {/* Editor container */}
@@ -675,105 +682,139 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
           border: `1px solid ${errorCount > 0 ? '#BD271E' : '#D3DAE6'}`,
           borderRadius: 4,
           overflow: 'hidden',
+          display: 'flex',
         }}
       >
-        {/* Syntax highlight overlay */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: '8px 12px',
-            fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
-            fontSize: 13,
-            lineHeight: '20px',
-            whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word',
-            pointerEvents: 'none',
-            overflow: 'auto',
-            color: 'transparent',
-          }}
-        >
-          {value ? (
-            renderHighlighted(value)
-          ) : (
-            <span style={{ color: '#98A2B3' }}>{placeholder}</span>
-          )}
+        {/* Line number gutter */}
+        {showLineNumbers && (
+          <div
+            aria-hidden="true"
+            style={{
+              width: gutterWidth,
+              minWidth: gutterWidth,
+              padding: '8px 4px 8px 0',
+              fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
+              fontSize: 13,
+              lineHeight: '20px',
+              textAlign: 'right',
+              color: '#98A2B3',
+              userSelect: 'none',
+              borderRight: '1px solid #D3DAE6',
+              background: '#F5F7FA',
+              flexShrink: 0,
+            }}
+          >
+            {Array.from({ length: lineCount }, (_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+        )}
+        <div style={{ position: 'relative', flex: 1 }}>
+          {/* Syntax highlight overlay */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              padding: '8px 12px',
+              fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
+              fontSize: 13,
+              lineHeight: '20px',
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word',
+              pointerEvents: 'none',
+              overflow: 'auto',
+              color: 'transparent',
+            }}
+          >
+            {value ? (
+              renderHighlighted(value)
+            ) : (
+              <span style={{ color: '#98A2B3' }}>{placeholder}</span>
+            )}
+          </div>
+          {/* Actual textarea */}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={handleChange}
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            onFocus={() => {
+              if (value) {
+                const cursorPos = textareaRef.current?.selectionStart || 0;
+                setFuncHint(getFunctionHint(value, cursorPos));
+              }
+            }}
+            placeholder=""
+            spellCheck={false}
+            aria-label="PromQL query editor"
+            style={{
+              width: '100%',
+              height,
+              resize: 'vertical',
+              border: 'none',
+              outline: 'none',
+              padding: '8px 12px',
+              fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
+              fontSize: 13,
+              lineHeight: '20px',
+              background: 'transparent',
+              color: 'transparent',
+              caretColor: '#343741',
+              position: 'relative',
+              zIndex: 1,
+            }}
+          />
         </div>
-        {/* Actual textarea */}
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleChange}
-          onClick={handleClick}
-          onKeyDown={handleKeyDown}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-          onFocus={() => {
-            if (value) {
-              const cursorPos = textareaRef.current?.selectionStart || 0;
-              setFuncHint(getFunctionHint(value, cursorPos));
-            }
-          }}
-          placeholder=""
-          spellCheck={false}
-          aria-label="PromQL query editor"
-          style={{
-            width: '100%',
-            height,
-            resize: 'vertical',
-            border: 'none',
-            outline: 'none',
-            padding: '8px 12px',
-            fontFamily: "'SFMono-Regular', 'Menlo', 'Monaco', monospace",
-            fontSize: 13,
-            lineHeight: '20px',
-            background: 'transparent',
-            color: 'transparent',
-            caretColor: '#343741',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        />
       </div>
 
       {/* Toolbar */}
-      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} style={{ marginTop: 4 }}>
-        <EuiFlexItem grow={false}>
-          <EuiToolTip content="Format query">
-            <EuiButtonEmpty
-              size="xs"
-              iconType="editorCodeBlock"
-              onClick={handlePrettify}
-              isDisabled={!value}
-            >
-              Prettify
-            </EuiButtonEmpty>
-          </EuiToolTip>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiText size="xs" color="subdued">
-            Ctrl+Space for suggestions
-          </EuiText>
-        </EuiFlexItem>
-        <EuiFlexItem />
-        {errorCount > 0 && (
+      {!hideToolbar && (
+        <EuiFlexGroup
+          gutterSize="s"
+          alignItems="center"
+          responsive={false}
+          style={{ marginTop: 4 }}
+        >
           <EuiFlexItem grow={false}>
-            <EuiBadge color="danger">
-              {errorCount} error{errorCount > 1 ? 's' : ''}
-            </EuiBadge>
+            <EuiToolTip content="Format query">
+              <EuiButtonEmpty
+                size="xs"
+                iconType="editorCodeBlock"
+                onClick={handlePrettify}
+                isDisabled={!value}
+              >
+                Prettify
+              </EuiButtonEmpty>
+            </EuiToolTip>
           </EuiFlexItem>
-        )}
-        {warnCount > 0 && (
           <EuiFlexItem grow={false}>
-            <EuiBadge color="warning">
-              {warnCount} warning{warnCount > 1 ? 's' : ''}
-            </EuiBadge>
+            <EuiText size="xs" color="subdued">
+              Ctrl+Space for suggestions
+            </EuiText>
           </EuiFlexItem>
-        )}
-      </EuiFlexGroup>
+          <EuiFlexItem />
+          {errorCount > 0 && (
+            <EuiFlexItem grow={false}>
+              <EuiBadge color="danger">
+                {errorCount} error{errorCount > 1 ? 's' : ''}
+              </EuiBadge>
+            </EuiFlexItem>
+          )}
+          {warnCount > 0 && (
+            <EuiFlexItem grow={false}>
+              <EuiBadge color="warning">
+                {warnCount} warning{warnCount > 1 ? 's' : ''}
+              </EuiBadge>
+            </EuiFlexItem>
+          )}
+        </EuiFlexGroup>
+      )}
 
       {/* Validation messages */}
       {errors.length > 0 && (

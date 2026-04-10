@@ -27,6 +27,8 @@ import { AlertsDashboard } from './alerts_dashboard';
 import { AlertDetailFlyout } from './alert_detail_flyout';
 import { NotificationRoutingPanel } from './notification_routing_panel';
 import { SuppressionRulesPanel } from './suppression_rules_panel';
+import { CreateLogsMonitor, LogsMonitorFormState } from './create_logs_monitor';
+import { CreateMetricsMonitor, MetricsMonitorFormState } from './create_metrics_monitor';
 import SloListing from './slo_listing';
 import { AlarmsApiClient, HttpClient } from '../services/alarms_client';
 
@@ -71,6 +73,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const [deletedRuleIds, setDeletedRuleIds] = useState<Set<string>>(new Set());
   const [showCreateMonitor, setShowCreateMonitor] = useState(false);
+  const [createMonitorType, setCreateMonitorType] = useState<
+    'logs' | 'prometheus' | 'metrics' | null
+  >(null);
   const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
   const [toasts, setToasts] = useState<
     Array<{ id: string; title: string; color: string; text?: string }>
@@ -310,14 +315,28 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       succeeded.forEach((id) => next.add(id));
       return next;
     });
+    if (succeeded.length > 0) {
+      setRulesTotal((prev) => Math.max(0, prev - succeeded.length));
+    }
   };
 
   const handleSilenceRule = async (id: string) => {
     const rule = rules.find((r) => r.id === id);
+    const toggleStatus = () =>
+      setRules((prev) =>
+        prev.map((r) => {
+          if (r.id === id) {
+            const newStatus: 'active' | 'muted' = r.status === 'muted' ? 'active' : 'muted';
+            return { ...r, status: newStatus };
+          }
+          return r;
+        })
+      );
     if (rule && rule.status === 'muted') {
       try {
         await apiClient.deleteSuppressionRule(id);
         addToast('Monitor unmuted');
+        toggleStatus();
       } catch (e: unknown) {
         addToast('Failed to unmute monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
@@ -334,19 +353,11 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           enabled: true,
         });
         addToast('Monitor muted for 1 hour');
+        toggleStatus();
       } catch (e: unknown) {
         addToast('Failed to mute monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
     }
-    setRules((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          const newStatus: 'active' | 'muted' = r.status === 'muted' ? 'active' : 'muted';
-          return { ...r, status: newStatus };
-        }
-        return r;
-      })
-    );
   };
 
   const handleCloneRule = async (monitor: UnifiedRule) => {
@@ -361,10 +372,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     try {
       await apiClient.createMonitor(clone);
       addToast('Monitor cloned');
+      setRules((prev) => [clone, ...prev]);
     } catch (e: unknown) {
       addToast('Failed to clone monitor', 'danger', e instanceof Error ? e.message : String(e));
     }
-    setRules((prev) => [clone, ...prev]);
   };
 
   const handleImportMonitors = async (configs: Array<Record<string, unknown>>) => {
@@ -504,29 +515,251 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     try {
       await apiClient.createMonitor(formState);
       addToast('Monitor created successfully');
+      setRules((prev) => [newRule, ...prev]);
+      setRulesTotal((prev) => prev + 1);
+      setShowCreateMonitor(false);
     } catch (e: unknown) {
       addToast('Failed to create monitor', 'danger', e instanceof Error ? e.message : String(e));
     }
-    setRules((prev) => [newRule, ...prev]);
-    setShowCreateMonitor(false);
   };
 
   const handleBatchCreateMonitors = async (forms: MonitorFormState[]) => {
-    const newRules = forms.map((f, i) => formStateToRule(f, i));
-    let succeeded = 0;
-    for (const f of forms) {
+    const succeededRules: UnifiedRule[] = [];
+    for (let i = 0; i < forms.length; i++) {
       try {
-        await apiClient.createMonitor(f);
-        succeeded++;
+        await apiClient.createMonitor(forms[i]);
+        succeededRules.push(formStateToRule(forms[i], i));
       } catch (e: unknown) {
         addToast('Failed to create monitor', 'danger', e instanceof Error ? e.message : String(e));
       }
     }
-    if (succeeded > 0) {
-      addToast(succeeded + ' monitor(s) created successfully');
+    if (succeededRules.length > 0) {
+      addToast(succeededRules.length + ' monitor(s) created successfully');
+      setRules((prev) => [...succeededRules, ...prev]);
+      setRulesTotal((prev) => prev + succeededRules.length);
     }
-    setRules((prev) => [...newRules, ...prev]);
     // Don't close flyout — AI wizard shows its own summary step and "Done" button
+  };
+
+  // ---- Form-to-API transformation helpers ----
+
+  const mapUnit = (unit: string): string => {
+    const lower = unit.toLowerCase().replace(/\(s\)$/, '');
+    if (lower === 'minute') return 'MINUTES';
+    if (lower === 'hour') return 'HOURS';
+    if (lower === 'day') return 'DAYS';
+    return 'MINUTES';
+  };
+
+  const mapSeverity = (severity: string): '1' | '2' | '3' | '4' | '5' => {
+    const map: Record<string, '1' | '2' | '3' | '4' | '5'> = {
+      critical: '1',
+      high: '2',
+      medium: '3',
+      low: '4',
+      info: '5',
+    };
+    return map[severity] || '3';
+  };
+
+  const buildConditionScript = (trigger: {
+    conditionOperator: string;
+    conditionValue: number;
+  }): string => {
+    const opMap: Record<string, string> = {
+      is_greater_than: '>',
+      is_less_than: '<',
+      is_equal_to: '==',
+      is_greater_equal: '>=',
+      is_less_equal: '<=',
+      is_not_equal: '!=',
+    };
+    const op = opMap[trigger.conditionOperator] || '>';
+    return `ctx.results[0].hits.total.value ${op} ${trigger.conditionValue}`;
+  };
+
+  const parseQuery = (query: string): Record<string, unknown> => {
+    try {
+      return JSON.parse(query);
+    } catch {
+      return { query_string: { query } };
+    }
+  };
+
+  const transformLogsFormToPayload = (form: LogsMonitorFormState): Record<string, unknown> => ({
+    type: 'monitor',
+    name: form.monitorName,
+    enabled: true,
+    schedule: {
+      period: { interval: form.runEveryValue, unit: mapUnit(form.runEveryUnit) },
+    },
+    inputs: [
+      {
+        search: {
+          indices: [form.selectedDatasource],
+          query: { size: 0, query: parseQuery(form.query) },
+        },
+      },
+    ],
+    triggers: form.triggers.map((t) => ({
+      name: t.name,
+      severity: mapSeverity(t.severityLevel),
+      condition: {
+        script: { source: buildConditionScript(t), lang: 'painless' },
+      },
+      actions: t.actions.map((a) => ({
+        name: a.name,
+        destination_id: a.notificationChannel,
+        message_template: { source: a.message || '' },
+        subject_template: { source: a.subject || '' },
+        throttle_enabled: t.suppressEnabled,
+        throttle: t.suppressEnabled
+          ? { value: t.suppressExpiry, unit: mapUnit(t.suppressExpiryUnit) }
+          : undefined,
+      })),
+    })),
+  });
+
+  const transformMetricsFormToPayload = (
+    form: MetricsMonitorFormState
+  ): Record<string, unknown> => ({
+    name: form.monitorName,
+    rules: [
+      {
+        alert: form.monitorName,
+        expr: `${form.query} ${form.operator} ${form.thresholdValue}`,
+        for: form.forDuration,
+        labels: Object.fromEntries(
+          form.labels.filter((l) => l.key && l.value).map((l) => [l.key, l.value])
+        ),
+        annotations: Object.fromEntries(
+          form.annotations.filter((a) => a.key && a.value).map((a) => [a.key, a.value])
+        ),
+      },
+    ],
+  });
+
+  const handleCreateLogsMonitor = async (logsForm: LogsMonitorFormState) => {
+    const now = new Date().toISOString();
+    const allActions = logsForm.triggers.flatMap((t) => t.actions);
+    const rawSev = logsForm.triggers[0]?.severityLevel || 'medium';
+    const logsSeverity = (
+      ['critical', 'high', 'medium', 'low', 'info'].includes(rawSev) ? rawSev : 'medium'
+    ) as 'critical' | 'high' | 'medium' | 'low' | 'info';
+    const newRule: UnifiedRule = {
+      id: `new-logs-${Date.now()}`,
+      datasourceId: selectedDsIds[0] || 'ds-1',
+      datasourceType: 'opensearch',
+      name: logsForm.monitorName,
+      enabled: true,
+      severity: logsSeverity,
+      query:
+        logsForm.monitorType === 'cluster_metrics' ? logsForm.clusterMetricsApi : logsForm.query,
+      condition: logsForm.triggers
+        .map((t) => `${t.conditionOperator} ${t.conditionValue}`)
+        .join(', '),
+      labels: { monitorType: logsForm.monitorType },
+      annotations: { description: logsForm.description },
+      monitorType: 'log',
+      status: 'active',
+      healthStatus: 'healthy',
+      createdBy: 'current-user',
+      createdAt: now,
+      lastModified: now,
+      notificationDestinations: allActions.map((a) => a.name),
+      description: logsForm.description,
+      aiSummary: 'Newly created logs monitor.',
+      evaluationInterval: `${logsForm.runEveryValue} ${logsForm.runEveryUnit}`,
+      pendingPeriod: '5 minutes',
+      threshold: logsForm.triggers[0]
+        ? {
+            operator: logsForm.triggers[0].conditionOperator,
+            value: logsForm.triggers[0].conditionValue,
+            unit: '',
+          }
+        : undefined,
+      alertHistory: [],
+      conditionPreviewData: [],
+      notificationRouting: [],
+      suppressionRules: [],
+      raw: {} as any,
+    };
+    try {
+      await apiClient.createMonitor(transformLogsFormToPayload(logsForm), selectedDsIds[0]);
+      addToast('Logs monitor created successfully');
+      setRules((prev) => [newRule, ...prev]);
+      setRulesTotal((prev) => prev + 1);
+      setCreateMonitorType(null);
+    } catch (e: unknown) {
+      addToast(
+        'Failed to create logs monitor',
+        'danger',
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+  };
+
+  const handleCreateMetricsMonitor = async (metricsForm: MetricsMonitorFormState) => {
+    const now = new Date().toISOString();
+    const severityLabel = metricsForm.labels.find((l) => l.key === 'severity');
+    const rawSeverity = severityLabel?.value || 'medium';
+    const condition = `${metricsForm.operator} ${metricsForm.thresholdValue}`;
+    const labelsObj: Record<string, string> = {};
+    for (const l of metricsForm.labels) {
+      if (l.key && l.value) labelsObj[l.key] = l.value;
+    }
+    const annotationsObj: Record<string, string> = {};
+    for (const a of metricsForm.annotations) {
+      if (a.key && a.value) annotationsObj[a.key] = a.value;
+    }
+    const newRule: UnifiedRule = {
+      id: `new-metrics-${Date.now()}`,
+      datasourceId: metricsForm.datasourceId || selectedDsIds[0] || 'ds-2',
+      datasourceType: 'prometheus',
+      name: metricsForm.monitorName,
+      enabled: true,
+      severity: (['critical', 'high', 'medium', 'low', 'info'].includes(rawSeverity)
+        ? rawSeverity
+        : 'medium') as 'critical' | 'high' | 'medium' | 'low' | 'info',
+      query: metricsForm.query,
+      condition,
+      labels: labelsObj,
+      annotations: annotationsObj,
+      monitorType: 'metric',
+      status: 'active',
+      healthStatus: 'healthy',
+      createdBy: 'current-user',
+      createdAt: now,
+      lastModified: now,
+      notificationDestinations: metricsForm.actions.map((a) => a.name),
+      description: metricsForm.description,
+      aiSummary: 'Newly created metrics monitor.',
+      evaluationInterval: metricsForm.evalInterval,
+      pendingPeriod: metricsForm.pendingPeriod,
+      firingPeriod: metricsForm.firingPeriod,
+      threshold: { operator: metricsForm.operator, value: metricsForm.thresholdValue, unit: '' },
+      alertHistory: [],
+      conditionPreviewData: [],
+      notificationRouting: [],
+      suppressionRules: [],
+      raw: {} as any,
+    };
+    try {
+      await apiClient.createMonitor(
+        transformMetricsFormToPayload(metricsForm),
+        metricsForm.datasourceId
+      );
+      addToast('Metrics monitor created successfully');
+      setRules((prev) => [newRule, ...prev]);
+      setRulesTotal((prev) => prev + 1);
+      setCreateMonitorType(null);
+    } catch (e: unknown) {
+      addToast(
+        'Failed to create metrics monitor',
+        'danger',
+        e instanceof Error ? e.message : String(e)
+      );
+    }
   };
 
   // ---- Render ----
@@ -569,7 +802,15 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           onSilence={handleSilenceRule}
           onClone={handleCloneRule}
           onImport={handleImportMonitors}
-          onCreateMonitor={() => setShowCreateMonitor(true)}
+          onCreateMonitor={(type) => {
+            if (type === 'logs') {
+              setShowCreateMonitor(false);
+              setCreateMonitorType('logs');
+            } else if (type === 'metrics') {
+              setShowCreateMonitor(false);
+              setCreateMonitorType('metrics');
+            }
+          }}
           workspaceOptions={workspaceOptions}
           loadingWorkspaces={loadingWorkspaces}
           selectedDsIds={selectedDsIds}
@@ -644,7 +885,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
           </EuiCallOut>
         )}
 
-        <div aria-live="polite" className="ouiScreenReaderOnly">
+        <div aria-live="polite" className="euiScreenReaderOnly">
           {`Showing ${tabs.find((t) => t.id === activeTab)?.name ?? activeTab} tab`}
         </div>
         {renderTable()}
@@ -655,6 +896,18 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             onCancel={() => setShowCreateMonitor(false)}
             datasources={creatableDatasources}
             selectedDsIds={selectedDsIds}
+          />
+        )}
+        {createMonitorType === 'logs' && (
+          <CreateLogsMonitor
+            onCancel={() => setCreateMonitorType(null)}
+            onSave={handleCreateLogsMonitor}
+          />
+        )}
+        {createMonitorType === 'metrics' && (
+          <CreateMetricsMonitor
+            onCancel={() => setCreateMonitorType(null)}
+            onSave={handleCreateMetricsMonitor}
           />
         )}
         {selectedAlert && (

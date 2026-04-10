@@ -36,6 +36,14 @@ jest.mock('../slo_listing', () => ({
   __esModule: true,
   default: () => <div data-test-subj="slo-listing">SloListing</div>,
 }));
+jest.mock('../create_logs_monitor', () => ({
+  CreateLogsMonitor: () => <div data-test-subj="create-logs-monitor">CreateLogsMonitor</div>,
+}));
+jest.mock('../create_metrics_monitor', () => ({
+  CreateMetricsMonitor: () => (
+    <div data-test-subj="create-metrics-monitor">CreateMetricsMonitor</div>
+  ),
+}));
 
 import { AlarmsPage } from '../alarms_page';
 import { AlarmsApiClient, HttpClient } from '../../services/alarms_client';

@@ -76,8 +76,83 @@ export class MockOpenSearchBackend implements OpenSearchBackend {
     return this.monitors.get(ds.id)?.delete(monitorId) ?? false;
   }
 
-  async runMonitor(_ds: Datasource, _monitorId: string, _dryRun?: boolean): Promise<any> {
-    return { ok: true };
+  async runMonitor(ds: Datasource, monitorId: string, _dryRun?: boolean): Promise<unknown> {
+    // Return a realistic execution result based on monitor type
+    const monitor = this.monitors.get(ds.id)?.get(monitorId);
+    if (monitor) {
+      const input = monitor.inputs[0];
+      if (input && 'uri' in input) {
+        // Cluster metrics monitor — simulate API result
+        if (input.uri.api_type === 'CLUSTER_HEALTH') {
+          return {
+            input_results: {
+              results: [
+                {
+                  cluster_name: 'opensearch-cluster',
+                  status: 'yellow',
+                  number_of_nodes: 5,
+                  active_primary_shards: 42,
+                  active_shards: 84,
+                  unassigned_shards: 3,
+                  number_of_pending_tasks: 0,
+                },
+              ],
+            },
+            trigger_results: {
+              [monitor.triggers[0]?.id || 'trigger-1']: { triggered: true },
+            },
+            period_start: new Date(Date.now() - 60_000).toISOString(),
+            period_end: new Date().toISOString(),
+          };
+        }
+        // Other cluster metrics (nodes stats, etc.)
+        return {
+          input_results: {
+            results: [{ number_of_nodes: 5 }],
+          },
+          trigger_results: {
+            [monitor.triggers[0]?.id || 'trigger-1']: { triggered: false },
+          },
+          period_start: new Date(Date.now() - 60_000).toISOString(),
+          period_end: new Date().toISOString(),
+        };
+      }
+    }
+    return {
+      input_results: {
+        results: [{ hits: { total: { value: 25 }, hits: [] } }],
+      },
+      trigger_results: {},
+      period_start: Date.now() - 300_000,
+      period_end: Date.now(),
+    };
+  }
+
+  async searchQuery(
+    _ds: Datasource,
+    _indices: string[],
+    _body: Record<string, unknown>
+  ): Promise<unknown> {
+    // Generate 12 realistic time-series buckets over the last hour
+    const now = Date.now();
+    const bucketIntervalMs = 5 * 60_000; // 5-minute buckets
+    const bucketCount = 12;
+    const buckets = Array.from({ length: bucketCount }, (_, i) => {
+      const key = now - (bucketCount - 1 - i) * bucketIntervalMs;
+      // Simulate varying doc counts with a realistic pattern
+      const baseValue = 15 + Math.floor(Math.sin(i * 0.8) * 10 + Math.random() * 5);
+      return {
+        key,
+        key_as_string: new Date(key).toISOString(),
+        doc_count: Math.max(0, baseValue),
+      };
+    });
+    return {
+      hits: { total: { value: buckets.reduce((sum, b) => sum + b.doc_count, 0) }, hits: [] },
+      aggregations: {
+        time_buckets: { buckets },
+      },
+    };
   }
 
   // --- Alerts ---
