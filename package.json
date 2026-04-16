@@ -41,7 +41,7 @@
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
-    "@cypress/webpack-preprocessor": "^7.0.2",
+    "@cypress/webpack-preprocessor": "^7.1.0",
     "@testing-library/dom": "^8.11.3",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^14.0.0",
