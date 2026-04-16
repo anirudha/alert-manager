@@ -43,7 +43,7 @@
   "devDependencies": {
     "@cypress/webpack-preprocessor": "^7.0.2",
     "@testing-library/dom": "^8.11.3",
-    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.0.0",
     "@types/jest": "^29.5.0",
     "@types/node": "~20.10.5",
