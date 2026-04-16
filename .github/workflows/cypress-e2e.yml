@@ -71,7 +71,7 @@ jobs:
       # @osd/optimizer and @osd/plugin-helpers require the monorepo context.
 
       - name: Cache OSD monorepo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: osd-cache
         with:
           path: /tmp/osd
@@ -91,7 +91,7 @@ jobs:
           cp -r "$GITHUB_WORKSPACE" /tmp/osd/plugins/alertManager
 
       - name: Cache OSD node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /tmp/osd/node_modules
