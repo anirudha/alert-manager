@@ -4,7 +4,7 @@
  */
 
 /**
- * Alertmanager route handlers — shared between standalone and OSD plugin.
+ * Alertmanager route handlers for the OSD plugin.
  * Each handler takes a PrometheusBackend and returns { status, body }.
  */
 import yaml from 'js-yaml';
@@ -123,7 +123,7 @@ export async function handleGetAlertmanagerAlertGroups(
 
 /**
  * Extract integration types from a receiver's *_configs keys.
- * Shared by both standalone and OSD config endpoints.
+ * Shared config parsing helper.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractReceiverIntegrations(
@@ -166,7 +166,6 @@ export function extractReceiverIntegrations(
 
 /**
  * Fetch Alertmanager status, parse the YAML config, and return structured data.
- * Merges the duplicated logic from standalone/server.ts and server/routes/index.ts.
  */
 export async function handleGetAlertmanagerConfig(
   promBackend: PrometheusBackend

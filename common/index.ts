@@ -6,7 +6,7 @@
 /**
  * Common module exports
  */
-export { PLUGIN_ID, PLUGIN_NAME, API_BASE } from './constants';
+export { PLUGIN_ID, PLUGIN_NAME } from './constants';
 
 export * from './types';
 export { InMemoryDatasourceService } from './datasource_service';
@@ -14,7 +14,6 @@ export { MultiBackendAlertService } from './alert_service';
 export { HttpOpenSearchBackend } from './opensearch_backend';
 export { DirectQueryPrometheusBackend } from './directquery_prometheus_backend';
 export type { DirectQueryConfig } from './directquery_prometheus_backend';
-export { HttpClient, buildAuthFromDatasource } from './http_client';
 export { parseDuration, formatDuration, validateMonitorForm } from './validators';
 export type {
   MonitorFormState,
@@ -33,7 +32,6 @@ export { matchesSearch, matchesFilters, sortRules, filterAlerts, emptyFilters } 
 export type { FilterState } from './filter';
 export * from './slo_types';
 export { SloService } from './slo_service';
-export { InMemorySloStore } from './slo_store';
 export {
   generateSloRuleGroup,
   sanitizeName,

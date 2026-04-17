@@ -15,18 +15,6 @@ jest.mock('../echarts_render', () => ({
     <div data-test-subj="chart-stub">{JSON.stringify(spec?.series?.[0]?.data?.length ?? 0)}</div>
   ),
 }));
-jest.mock('../table_pagination', () => ({
-  TablePagination: ({ total, page, pageSize, onPageChange, onPageSizeChange }: any) => (
-    <div data-test-subj="pagination">
-      <span>
-        Page {page} of {Math.ceil((total || 1) / (pageSize || 10))}
-      </span>
-      <button onClick={() => onPageChange?.(page + 1)}>Next</button>
-      <button onClick={() => onPageSizeChange?.(20)}>Size20</button>
-    </div>
-  ),
-}));
-
 // ---------------------------------------------------------------------------
 // Mock data — comprehensive set exercising all severity/state combinations
 // ---------------------------------------------------------------------------
@@ -127,8 +115,6 @@ const defaultProps = {
   onViewDetail: jest.fn(),
   onAcknowledge: jest.fn(),
   onSilence: jest.fn(),
-  workspaceOptions: [] as Datasource[],
-  loadingWorkspaces: false,
   selectedDsIds: ['ds-1', 'ds-2'],
   onDatasourceChange: jest.fn(),
 };
@@ -202,19 +188,6 @@ describe('AlertsDashboard', () => {
     render(<AlertsDashboard {...defaultProps} />);
     const health = document.querySelectorAll('[data-eui="EuiHealth"]');
     expect(health.length).toBeGreaterThan(0);
-  });
-
-  it('renders pagination component', () => {
-    render(<AlertsDashboard {...defaultProps} />);
-    expect(document.querySelector('[data-test-subj="pagination"]')).toBeDefined();
-  });
-
-  it('renders with workspace options', () => {
-    const ws: Datasource[] = [
-      { id: 'ws-1', name: 'WS', type: 'prometheus', url: '', enabled: true },
-    ];
-    render(<AlertsDashboard {...defaultProps} workspaceOptions={ws} />);
-    expect(document.querySelector('[data-eui]')).toBeDefined();
   });
 
   it('renders buttons for actions', () => {

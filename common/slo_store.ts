@@ -6,8 +6,8 @@
 /**
  * In-memory implementation of ISloStore.
  *
- * Used by the standalone Express server and as the default store when
- * no persistent backend is available. Data is lost on process restart.
+ * Default in-memory store used when no persistent backend is available.
+ * Data is lost on process restart.
  */
 
 import type { SloDefinition, ISloStore } from './slo_types';

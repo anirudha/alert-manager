@@ -128,9 +128,8 @@ function createMockApiClient(
   datasources = mockDatasources
 ): AlarmsApiClient {
   const client = createMockHttpClient();
-  const apiClient = new AlarmsApiClient(client, 'standalone');
+  const apiClient = new AlarmsApiClient(client);
   jest.spyOn(apiClient, 'listDatasources').mockResolvedValue(datasources);
-  jest.spyOn(apiClient, 'listWorkspaces').mockResolvedValue([]);
   jest.spyOn(apiClient, 'listAlertsPaginated').mockResolvedValue({
     results: alerts as any,
     total: alerts.length,
@@ -278,14 +277,6 @@ describe('AlarmsPage', () => {
     render(<AlarmsPage apiClient={apiClient} />);
     await waitFor(() => {
       expect(screen.getByText(/AlertsDashboard\(2\)/)).toBeDefined();
-    });
-  });
-
-  it('calls listWorkspaces for prometheus datasources', async () => {
-    const apiClient = createMockApiClient();
-    render(<AlarmsPage apiClient={apiClient} />);
-    await waitFor(() => {
-      expect(apiClient.listWorkspaces).toHaveBeenCalled();
     });
   });
 

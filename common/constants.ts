@@ -5,4 +5,3 @@
 
 export const PLUGIN_ID = 'alertManager';
 export const PLUGIN_NAME = 'Alert Manager';
-export const API_BASE = '/api/alert_manager';

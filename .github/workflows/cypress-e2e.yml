@@ -7,53 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  e2e-standalone:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 20
-
-      - name: Install root dependencies
-        run: npm install --legacy-peer-deps
-
-      # Create a minimal parent tsconfig.json stub.
-      # The plugin's tsconfig.json extends ../../tsconfig.json (the OSD monorepo root)
-      # which doesn't exist when running standalone. This stub satisfies the extends chain.
-      - name: Create parent tsconfig stub
-        run: |
-          mkdir -p ../../
-          echo '{"compilerOptions":{"target":"ES2020","module":"commonjs","moduleResolution":"node","esModuleInterop":true,"skipLibCheck":true,"jsx":"react","ignoreDeprecations":"5.0"}}' > ../../tsconfig.json
-
-      - name: Install standalone dependencies
-        working-directory: standalone
-        run: npm install --legacy-peer-deps
-
-      - name: Build standalone
-        working-directory: standalone
-        run: npm run build
-
-      - name: Start standalone server (MOCK_MODE)
-        run: MOCK_MODE=true node standalone/dist/standalone/server.js &
-
-      - name: Wait for server
-        run: npx wait-on http://localhost:5603 --timeout 30000
-
-      - name: Run Cypress tests
-        run: npx cypress run --browser chrome
-
-      - name: Upload screenshots on failure
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cypress-screenshots-standalone
-          path: cypress/screenshots/
-          retention-days: 7
-
   e2e-osd:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -61,7 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Node 22 required: start-server-and-test@3.x needs ^22 || >=24
       - uses: actions/setup-node@v6
         with:
           node-version: 22

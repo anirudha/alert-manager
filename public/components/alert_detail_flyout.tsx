@@ -32,21 +32,7 @@ import {
 } from '@elastic/eui';
 import { UnifiedAlert, Datasource } from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'primary',
-  low: 'subdued',
-  info: 'default',
-};
-const STATE_COLORS: Record<string, string> = {
-  active: 'danger',
-  pending: 'warning',
-  acknowledged: 'primary',
-  resolved: 'success',
-  error: 'danger',
-};
+import { SEVERITY_COLORS, STATE_COLORS } from './shared_constants';
 
 /** Internal label keys filtered from the Labels accordion display. */
 const INTERNAL_LABEL_KEYS = new Set([
@@ -96,10 +82,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   }, [alert.datasourceId, alert.id, apiClient]);
 
   // Merge detail data over summary — detail has `raw` and potentially richer labels
-  const mergedAlert = detailData ? { ...alert, ...detailData } : alert;
-  // Re-alias so the rest of the component works unchanged
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const alertData = mergedAlert;
+  const alertData = detailData ? { ...alert, ...detailData } : alert;
 
   const dsName =
     datasources.find((d) => d.id === alert.datasourceId)?.name || alert.datasourceId || '\u2014';

@@ -50,7 +50,7 @@ describe('Alerts Dashboard', () => {
     // ECharts render on canvas — verify containers exist with non-zero dimensions
     cy.get('canvas').should('have.length.greaterThan', 0);
 
-    // Verify pagination controls
-    cy.getByTestSubj('alertManager-pagination-rowsPerPage').should('exist');
+    // Verify EUI built-in pagination controls
+    cy.get('[data-test-subj="tablePaginationPopoverButton"]').should('exist');
   });
 });

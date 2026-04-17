@@ -15,13 +15,6 @@ jest.mock('../echarts_render', () => ({
     <div data-test-subj="chart">{JSON.stringify(spec?.series?.[0]?.data?.length ?? 0)}</div>
   ),
 }));
-jest.mock('../table_pagination', () => ({
-  TablePagination: ({ total, page }: any) => (
-    <div data-test-subj="pagination">
-      page={page} total={total}
-    </div>
-  ),
-}));
 jest.mock('../slo_detail_flyout', () => ({
   SloDetailFlyout: () => null,
 }));
@@ -219,14 +212,6 @@ describe('SloListing', () => {
     render(<SloListing apiClient={api} />);
     await waitFor(() => {
       expect(document.querySelector('[data-eui]')).toBeDefined();
-    });
-  });
-
-  it('renders pagination', async () => {
-    const api = createMockApiClient();
-    render(<SloListing apiClient={api} />);
-    await waitFor(() => {
-      expect(document.querySelector('[data-test-subj="pagination"]')).toBeDefined();
     });
   });
 

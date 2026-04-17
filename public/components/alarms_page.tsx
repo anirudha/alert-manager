@@ -7,7 +7,7 @@
  * Alert Manager UI — single-datasource selection with server-side pagination.
  * Prometheus datasources are decomposed into selectable workspaces.
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   EuiPage,
   EuiPageBody,
@@ -53,8 +53,6 @@ const DEFAULT_PAGE_SIZE = 1000;
 export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [activeTab, setActiveTab] = useState<TabId>('alerts');
   const [datasources, setDatasources] = useState<Datasource[]>([]);
-  const [workspaceOptions, setWorkspaceOptions] = useState<Datasource[]>([]);
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
   const [selectedDsIds, setSelectedDsIds] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,22 +89,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
 
   const visibleRules = rules.filter((r) => !deletedRuleIds.has(r.id));
 
-  // All selectable datasources for the create form: non-prometheus + workspace entries
-  const creatableDatasources = useMemo(() => {
-    const result: Datasource[] = [];
-    for (const ds of datasources) {
-      if (ds.type !== 'prometheus') {
-        result.push(ds);
-      }
-    }
-    // Add workspace-scoped entries for Prometheus
-    for (const ws of workspaceOptions) {
-      result.push(ws);
-    }
-    return result;
-  }, [datasources, workspaceOptions]);
-
-  // ---- Load datasources and discover workspaces on mount ----
+  // ---- Load datasources on mount ----
 
   useEffect(() => {
     (async () => {
@@ -114,37 +97,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         const ds = await apiClient.listDatasources();
         setDatasources(ds || []);
 
-        // Discover workspaces for all Prometheus datasources
-        const promDs = (ds || []).filter((d) => d.type === 'prometheus');
-        const nonPromIds = (ds || []).filter((d) => d.type !== 'prometheus').map((d) => d.id);
-
-        if (promDs.length > 0) {
-          setLoadingWorkspaces(true);
-          const allWs: Datasource[] = [];
-          for (const pds of promDs) {
-            try {
-              const ws = await apiClient.listWorkspaces(pds.id);
-              allWs.push(...ws);
-            } catch (e: unknown) {
-              addToast(
-                'Failed to discover workspaces',
-                'warning',
-                e instanceof Error ? e.message : String(e)
-              );
-            }
-          }
-          setWorkspaceOptions(allWs);
-          setLoadingWorkspaces(false);
-
-          // Auto-select all datasources: non-prometheus + first prometheus workspace
-          const prodWs = allWs.find((w) => w.workspaceName === 'production') || allWs[0];
-          const autoIds = [...nonPromIds, ...(prodWs ? [prodWs.id] : [])];
-          if (autoIds.length > 0) {
-            setSelectedDsIds(autoIds);
-          }
-        } else if (nonPromIds.length > 0) {
-          // No Prometheus datasources — auto-select all OpenSearch datasources
-          setSelectedDsIds(nonPromIds);
+        // Auto-select all datasources
+        const allIds = (ds || []).map((d) => d.id);
+        if (allIds.length > 0) {
+          setSelectedDsIds(allIds);
         }
       } catch (e: unknown) {
         console.error('Failed to load datasources', e);
@@ -446,10 +402,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         formState.monitorType === 'ppl_monitor'
           ? ('metric' as const)
           : formState.monitorType === 'bucket_level_monitor'
-            ? ('infrastructure' as const)
-            : formState.monitorType === 'doc_level_monitor'
-              ? ('log' as const)
-              : ('metric' as const);
+          ? ('infrastructure' as const)
+          : formState.monitorType === 'doc_level_monitor'
+          ? ('log' as const)
+          : ('metric' as const);
 
       // PPL monitors have Prometheus-like labels/annotations
       const labelsObj: Record<string, string> = {};
@@ -783,8 +739,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             onViewDetail={(alert) => setSelectedAlert(alert)}
             onAcknowledge={handleAcknowledgeAlert}
             onSilence={handleSilenceAlert}
-            workspaceOptions={workspaceOptions}
-            loadingWorkspaces={loadingWorkspaces}
             selectedDsIds={selectedDsIds}
             onDatasourceChange={handleDatasourceChange}
           />
@@ -811,8 +765,6 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
               setCreateMonitorType('metrics');
             }
           }}
-          workspaceOptions={workspaceOptions}
-          loadingWorkspaces={loadingWorkspaces}
           selectedDsIds={selectedDsIds}
           onDatasourceChange={handleDatasourceChange}
         />
@@ -894,7 +846,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             onSave={handleCreateMonitor}
             onBatchSave={handleBatchCreateMonitors}
             onCancel={() => setShowCreateMonitor(false)}
-            datasources={creatableDatasources}
+            datasources={datasources}
             selectedDsIds={selectedDsIds}
           />
         )}

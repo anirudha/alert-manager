@@ -30,5 +30,5 @@ module.exports = {
     ],
     '@typescript-eslint/no-explicit-any': 'error',
   },
-  ignorePatterns: ['standalone/dist/**', 'standalone/node_modules/**', 'dist/**', 'target/**'],
+  ignorePatterns: ['dist/**', 'target/**'],
 };

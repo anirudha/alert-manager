@@ -23,7 +23,6 @@ import {
   Logger as AlarmsLogger,
   PrometheusMetadataProvider,
 } from '../common';
-import { MockOpenSearchBackend, MockPrometheusBackend } from '../common/testing';
 import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
 import { SavedObjectSloStore } from './slo_saved_object_store';
 import { readFileSync } from 'fs';
@@ -38,7 +37,6 @@ function readOsdConfigCredentials(
   logger: Logger
 ): { url?: string; username: string; password: string } | undefined {
   try {
-    // Find --config arg in process.argv
     const args = process.argv;
     let configPath: string | undefined;
     for (let i = 0; i < args.length; i++) {
@@ -61,7 +59,6 @@ function readOsdConfigCredentials(
     const raw = readFileSync(absPath, 'utf-8');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- YAML config has dynamic/unknown shape
     const cfg = yaml.load(raw) as Record<string, any>;
-    // OSD YAML uses flat dotted keys (e.g. "opensearch.username") not nested objects
     const user = cfg?.['opensearch.username'] ?? cfg?.opensearch?.username;
     const pass = cfg?.['opensearch.password'] ?? cfg?.opensearch?.password;
     if (user && pass) {
@@ -131,136 +128,95 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     const datasourceService = new InMemoryDatasourceService(logger);
     const alertService = new MultiBackendAlertService(datasourceService, logger);
 
-    // Use mock backends only when explicitly enabled via environment variable.
-    // In production (inside OSD), real backends should be registered by the
-    // consuming application or configured via opensearch_dashboards.yml.
-    const mockMode = process.env.ALERT_MANAGER_MOCK_MODE === 'true';
-
-    // SLO service (always available, mock mode seeds sample data).
-    // Starts with InMemorySloStore; upgraded to SavedObjectSloStore in start().
-    const sloService = new SloService(logger, mockMode);
+    // SLO service — starts with InMemorySloStore, upgraded to SavedObjectSloStore in start().
+    const sloService = new SloService(logger);
     this.sloService = sloService;
 
-    if (mockMode) {
-      this.logger.info('alertManager: Running in MOCK mode');
-      const osBackend = new MockOpenSearchBackend(logger);
-      const promBackend = new MockPrometheusBackend(logger);
-      alertService.registerOpenSearch(osBackend);
-      alertService.registerPrometheus(promBackend);
+    this.logger.info('alertManager: Running in LIVE mode — register backends via API');
 
-      datasourceService.seed([
-        {
-          name: 'Mock OpenSearch',
-          type: 'opensearch',
-          url: 'http://localhost:9200',
-          enabled: true,
-        },
-        {
-          name: 'Mock Prometheus',
-          type: 'prometheus',
-          url: 'http://localhost:9090',
-          enabled: true,
-        },
-      ]);
+    // Resolve OpenSearch credentials. Priority:
+    //  1. Env vars OPENSEARCH_USER / OPENSEARCH_PASSWORD (Docker, CI)
+    //  2. OSD config file via --config arg (local dev with `yarn start`)
+    //  3. Fallback to admin/admin
+    const envUser = process.env.OPENSEARCH_USER;
+    const envPass = process.env.OPENSEARCH_PASSWORD;
 
-      // Seed SLO mock data for Prometheus datasource
-      sloService.seed('ds-2').catch((err: unknown) => {
+    let osUrl: string;
+    let osAuth: { username: string; password: string };
+
+    if (envUser && envPass) {
+      osUrl = process.env.OPENSEARCH_URL || 'https://localhost:9200';
+      osAuth = { username: envUser, password: envPass };
+    } else {
+      const configCreds = readOsdConfigCredentials(this.logger);
+      osUrl = process.env.OPENSEARCH_URL || configCreds?.url || 'https://localhost:9200';
+      osAuth = configCreds
+        ? { username: configCreds.username, password: configCreds.password }
+        : { username: 'admin', password: 'admin' };
+    }
+
+    const osBackend = new HttpOpenSearchBackend(logger);
+    const promBackend = new DirectQueryPrometheusBackend(logger, {
+      opensearchUrl: osUrl,
+      auth: osAuth,
+    });
+
+    alertService.registerOpenSearch(osBackend);
+    alertService.registerPrometheus(promBackend);
+
+    // Auto-seed an OpenSearch datasource with auth so HttpOpenSearchBackend
+    // can call alerting APIs without relying on env vars
+    datasourceService.seed([
+      {
+        name: 'OpenSearch Cluster',
+        type: 'opensearch',
+        url: osUrl,
+        enabled: true,
+        auth: {
+          type: 'basic' as const,
+          credentials: { username: osAuth.username, password: osAuth.password },
+        },
+      },
+    ]);
+
+    // Auto-discover Prometheus datasources from the OpenSearch SQL plugin
+    // (async — runs after setup returns, routes are already registered)
+    promBackend
+      .discoverDatasources()
+      .then(async (discovered) => {
+        if (discovered.length > 0) {
+          this.logger.info(
+            `alertManager: Auto-discovered ${
+              discovered.length
+            } Prometheus datasource(s): ${discovered.map((d) => d.name).join(', ')}`
+          );
+          datasourceService.seed(discovered);
+          // Set first Prometheus datasource as default for Alertmanager operations
+          const allDs = await datasourceService.list();
+          const promDs = allDs.find((d) => d.type === 'prometheus');
+          if (promDs) {
+            promBackend.setDefaultDatasource(promDs);
+            this.logger.info(
+              `alertManager: Default Prometheus datasource set to ${promDs.name} (${promDs.id})`
+            );
+          }
+        } else {
+          this.logger.warn(
+            'alertManager: No Prometheus datasources found in OpenSearch SQL plugin'
+          );
+        }
+      })
+      .catch((err: unknown) => {
         this.logger.warn(
-          `alertManager: Failed to seed SLO mock data: ${
+          `alertManager: Failed to auto-discover Prometheus datasources: ${
             err instanceof Error ? err.message : String(err)
           }`
         );
       });
-    } else {
-      this.logger.info('alertManager: Running in LIVE mode — register backends via API');
-
-      // Resolve OpenSearch credentials. Priority:
-      //  1. Env vars OPENSEARCH_USER / OPENSEARCH_PASSWORD (Docker, CI)
-      //  2. OSD config file via --config arg (local dev with `yarn start`)
-      //  3. Fallback to admin/admin
-      const envUser = process.env.OPENSEARCH_USER;
-      const envPass = process.env.OPENSEARCH_PASSWORD;
-
-      let osUrl: string;
-      let osAuth: { username: string; password: string };
-
-      if (envUser && envPass) {
-        osUrl = process.env.OPENSEARCH_URL || 'https://localhost:9200';
-        osAuth = { username: envUser, password: envPass };
-      } else {
-        const configCreds = readOsdConfigCredentials(this.logger);
-        osUrl = process.env.OPENSEARCH_URL || configCreds?.url || 'https://localhost:9200';
-        osAuth = configCreds
-          ? { username: configCreds.username, password: configCreds.password }
-          : { username: 'admin', password: 'admin' };
-      }
-
-      const osBackend = new HttpOpenSearchBackend(logger);
-      const promBackend = new DirectQueryPrometheusBackend(logger, {
-        opensearchUrl: osUrl,
-        auth: osAuth,
-      });
-
-      alertService.registerOpenSearch(osBackend);
-      alertService.registerPrometheus(promBackend);
-
-      // Auto-seed an OpenSearch datasource with auth so HttpOpenSearchBackend
-      // can call alerting APIs without relying on env vars
-      datasourceService.seed([
-        {
-          name: 'OpenSearch Cluster',
-          type: 'opensearch',
-          url: osUrl,
-          enabled: true,
-          auth: {
-            type: 'basic' as const,
-            credentials: { username: osAuth.username, password: osAuth.password },
-          },
-        },
-      ]);
-
-      // Auto-discover Prometheus datasources from the OpenSearch SQL plugin
-      // (async — runs after setup returns, routes are already registered)
-      promBackend
-        .discoverDatasources()
-        .then(async (discovered) => {
-          if (discovered.length > 0) {
-            this.logger.info(
-              `alertManager: Auto-discovered ${
-                discovered.length
-              } Prometheus datasource(s): ${discovered.map((d) => d.name).join(', ')}`
-            );
-            datasourceService.seed(discovered);
-            // Set first Prometheus datasource as default for Alertmanager operations
-            // After seeding, look up the first Prometheus datasource by type
-            const allDs = await datasourceService.list();
-            const promDs = allDs.find((d) => d.type === 'prometheus');
-            if (promDs) {
-              promBackend.setDefaultDatasource(promDs);
-              this.logger.info(
-                `alertManager: Default Prometheus datasource set to ${promDs.name} (${promDs.id})`
-              );
-            }
-          } else {
-            this.logger.warn(
-              'alertManager: No Prometheus datasources found in OpenSearch SQL plugin'
-            );
-          }
-        })
-        .catch((err: unknown) => {
-          this.logger.warn(
-            `alertManager: Failed to auto-discover Prometheus datasources: ${
-              err instanceof Error ? err.message : String(err)
-            }`
-          );
-        });
-    }
 
     const suppressionService = new SuppressionRuleService();
 
     // Create metadata service if the Prometheus backend supports metadata discovery.
-    // Both MockPrometheusBackend and DirectQueryPrometheusBackend implement
-    // PrometheusMetadataProvider, so this will work in both mock and live modes.
     let metadataService: PrometheusMetadataService | undefined;
     const promBackendRef = alertService.getPrometheusBackend();
     if (promBackendRef && isMetadataProvider(promBackendRef)) {
@@ -291,18 +247,6 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
         const repository = core.savedObjects.createInternalRepository(['slo-definition']);
         this.sloService.setStore(new SavedObjectSloStore(repository));
         this.logger.info('alertManager: SLO storage upgraded to SavedObjects');
-
-        // Re-seed if in mock mode — InMemory data was lost during the store swap
-        const mockMode = process.env.ALERT_MANAGER_MOCK_MODE === 'true';
-        if (mockMode) {
-          this.sloService.seed('ds-2').catch((err: unknown) => {
-            this.logger.warn(
-              `alertManager: Failed to re-seed SLO data after store upgrade: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
-          });
-        }
       } catch (err: unknown) {
         this.logger.warn(
           `alertManager: Failed to create SavedObjectSloStore, using in-memory fallback: ${

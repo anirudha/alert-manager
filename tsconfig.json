@@ -12,6 +12,5 @@
     "public/**/*.tsx",
     "server/**/*.ts",
     "../../typings/**/*"
-  ],
-  "exclude": ["standalone/**/*"]
+  ]
 }
