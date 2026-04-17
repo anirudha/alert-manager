@@ -281,12 +281,12 @@ function generateBurnRateAlerts(slo: SloDefinition): GeneratedRule[] {
       i === 0
         ? 'Page'
         : i === 1
-        ? 'Ticket'
-        : i === 2
-        ? 'Log'
-        : i === 3
-        ? 'Monitor'
-        : `Tier${i + 1}`;
+          ? 'Ticket'
+          : i === 2
+            ? 'Log'
+            : i === 3
+              ? 'Monitor'
+              : `Tier${i + 1}`;
     const alertName = `SLO_BurnRate_${tierLabel}_${sanitized}_${hash}`;
 
     const expr =

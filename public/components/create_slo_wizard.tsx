@@ -433,10 +433,10 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
       sliState.sliType === 'availability'
         ? 'Availability'
         : sliState.sliType === 'latency_p99'
-        ? 'p99 Latency'
-        : sliState.sliType === 'latency_p90'
-        ? 'p90 Latency'
-        : 'p50 Latency';
+          ? 'p99 Latency'
+          : sliState.sliType === 'latency_p90'
+            ? 'p90 Latency'
+            : 'p50 Latency';
     const parts = [sliState.service, sliState.operation, typeName].filter(Boolean);
     return parts.length >= 2 ? parts.join(' — ') : '';
   }, [sliState.service, sliState.operation, sliState.sliType]);

@@ -402,10 +402,10 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
         formState.monitorType === 'ppl_monitor'
           ? ('metric' as const)
           : formState.monitorType === 'bucket_level_monitor'
-          ? ('infrastructure' as const)
-          : formState.monitorType === 'doc_level_monitor'
-          ? ('log' as const)
-          : ('metric' as const);
+            ? ('infrastructure' as const)
+            : formState.monitorType === 'doc_level_monitor'
+              ? ('log' as const)
+              : ('metric' as const);
 
       // PPL monitors have Prometheus-like labels/annotations
       const labelsObj: Record<string, string> = {};

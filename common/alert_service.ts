@@ -41,7 +41,10 @@ const DEFAULT_MAX_RESULTS = 5_000;
 
 /** Typed timeout error for reliable detection without string matching. */
 class TimeoutError extends Error {
-  constructor(message: string, public readonly timeoutMs: number) {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number
+  ) {
     super(message);
     this.name = 'TimeoutError';
   }
@@ -1361,7 +1364,7 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
     monitorType = 'infrastructure';
   } else {
     // query-level: derive from index patterns
-    const indices = input && 'search' in input ? input.search.indices ?? [] : [];
+    const indices = input && 'search' in input ? (input.search.indices ?? []) : [];
     if (indices.some((i) => i.startsWith('logs-') || i.startsWith('ss4o_logs'))) {
       monitorType = 'log';
     } else if (indices.some((i) => i.startsWith('otel-v1-apm') || i.startsWith('ss4o_traces'))) {

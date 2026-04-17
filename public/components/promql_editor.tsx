@@ -829,15 +829,15 @@ export const PromQLEditor: React.FC<PromQLEditorProps> = ({
                   err.severity === 'error'
                     ? 'crossInACircleFilled'
                     : err.severity === 'warning'
-                    ? 'alert'
-                    : 'iInCircle'
+                      ? 'alert'
+                      : 'iInCircle'
                 }
                 color={
                   err.severity === 'error'
                     ? 'danger'
                     : err.severity === 'warning'
-                    ? 'warning'
-                    : 'subdued'
+                      ? 'warning'
+                      : 'subdued'
                 }
                 size="s"
               />

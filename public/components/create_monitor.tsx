@@ -1056,10 +1056,10 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({
     (backendType === 'prometheus'
       ? promForm.query.trim() !== '' && !hasQueryErrors
       : osForm.monitorType === 'ppl_monitor'
-      ? osForm.query.trim() !== ''
-      : osForm.monitorType === 'cluster_metrics_monitor'
-      ? osForm.clusterMetricsApiType.trim() !== ''
-      : osForm.indices.trim() !== '' && osForm.triggerCondition.trim() !== '');
+        ? osForm.query.trim() !== ''
+        : osForm.monitorType === 'cluster_metrics_monitor'
+          ? osForm.clusterMetricsApiType.trim() !== ''
+          : osForm.indices.trim() !== '' && osForm.triggerCondition.trim() !== '');
 
   const handleSave = () => {
     setHasSubmitted(true);

@@ -38,7 +38,10 @@ export class SloService {
   private statusCache: Map<string, { status: SloLiveStatus; expiresAt: number }> = new Map();
   private readonly STATUS_CACHE_TTL_MS = 60_000; // 60 seconds
 
-  constructor(private readonly logger: Logger, store?: ISloStore) {
+  constructor(
+    private readonly logger: Logger,
+    store?: ISloStore
+  ) {
     this.store = store ?? new InMemorySloStore();
   }
 
