@@ -339,7 +339,7 @@ export const DEFAULT_MWMBR_TIERS: readonly BurnRateConfig[] = [
  * Storage backend abstraction for SLO definitions.
  *
  * Implementations:
- *  - `InMemorySloStore` — default, used by standalone server
+ *  - `InMemorySloStore` — transient bootstrap store, used until SavedObjectSloStore is ready
  *  - `SavedObjectSloStore` — persists to OpenSearch via OSD Saved Objects
  */
 export interface ISloStore {

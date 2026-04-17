@@ -7,7 +7,7 @@
  * Single source-of-truth HTTP client for the Alert Manager API.
  *
  * Features:
- *  - Mode-aware paths (OSD `/api/alerting/...` vs standalone `/api/...`)
+ *  - OSD paths (`/api/alerting/...`)
  *  - Response caching with 30s TTL
  *  - Request deduplication for concurrent calls
  *  - Full CRUD: monitors, suppression rules, alert actions, SLOs
@@ -167,29 +167,6 @@ const OSD_PATHS: ApiPaths = {
     `/api/alerting/prometheus/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
 };
 
-const STANDALONE_PATHS: ApiPaths = {
-  datasources: '/api/datasources',
-  alerts: '/api/paginated/alerts',
-  rules: '/api/paginated/rules',
-  slos: '/api/slos',
-  monitors: (_dsId) => '/api/monitors',
-  suppressionRules: '/api/suppression-rules',
-  alertmanagerConfig: '/api/alertmanager/config',
-  acknowledgeAlert: (id) => `/api/alerts/${encodeURIComponent(id)}/acknowledge`,
-  silenceAlert: (id) => `/api/alerts/${encodeURIComponent(id)}/silence`,
-  alertDetail: (dsId, alertId) =>
-    `/api/alerts/${encodeURIComponent(dsId)}/${encodeURIComponent(alertId)}`,
-  ruleDetail: (dsId, ruleId) =>
-    `/api/rules/${encodeURIComponent(dsId)}/${encodeURIComponent(ruleId)}`,
-  metricNames: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/metrics`,
-  labelNames: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/labels`,
-  labelValues: (dsId, label) =>
-    `/api/datasources/${encodeURIComponent(dsId)}/metadata/label-values/${encodeURIComponent(
-      label
-    )}`,
-  metricMetadata: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
-};
-
 // ---------------------------------------------------------------------------
 // Cache
 // ---------------------------------------------------------------------------
@@ -206,16 +183,11 @@ const CACHE_TTL_MS = 30_000;
 // ---------------------------------------------------------------------------
 
 export class AlarmsApiClient {
-  private readonly paths: ApiPaths;
+  private readonly paths: ApiPaths = OSD_PATHS;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private readonly inFlight = new Map<string, Promise<unknown>>();
 
-  constructor(
-    private readonly http: HttpClient,
-    private readonly mode: 'osd' | 'standalone' = 'osd'
-  ) {
-    this.paths = mode === 'standalone' ? STANDALONE_PATHS : OSD_PATHS;
-  }
+  constructor(private readonly http: HttpClient) {}
 
   /** Expose raw HTTP client for components that need direct API access. */
   get rawHttp(): HttpClient {
@@ -227,14 +199,6 @@ export class AlarmsApiClient {
   async listDatasources(): Promise<Datasource[]> {
     const res = await this.cachedGet<{ datasources: Datasource[] }>(this.paths.datasources);
     return res.datasources ?? [];
-  }
-
-  async listWorkspaces(dsId: string): Promise<Datasource[]> {
-    if (this.mode === 'osd') return []; // auto-discovered server-side
-    const res = await this.http.get<{ workspaces: Datasource[] }>(
-      `${this.paths.datasources}/${dsId}/workspaces`
-    );
-    return res.workspaces ?? [];
   }
 
   // ---- Alerts (paginated) -------------------------------------------------
@@ -249,7 +213,7 @@ export class AlarmsApiClient {
     const res = await this.http.get<{
       results?: UnifiedAlertSummary[];
       alerts?: UnifiedAlertSummary[];
-    }>(this.paths.alerts, this.mode === 'osd' ? { query } : undefined);
+    }>(this.paths.alerts, { query });
     const items = res.results ?? res.alerts ?? [];
     return { results: items, total: items.length, page: 1, pageSize: items.length, hasMore: false };
   }
@@ -266,7 +230,7 @@ export class AlarmsApiClient {
     const res = await this.http.get<{
       results?: UnifiedRuleSummary[];
       rules?: UnifiedRuleSummary[];
-    }>(this.paths.rules, this.mode === 'osd' ? { query } : undefined);
+    }>(this.paths.rules, { query });
     const items = res.results ?? res.rules ?? [];
     return { results: items, total: items.length, page: 1, pageSize: items.length, hasMore: false };
   }
@@ -357,24 +321,16 @@ export class AlarmsApiClient {
     search?: string
   ): Promise<{ metrics: string[]; total: number; truncated: boolean }> {
     if (search) {
-      // OSD HTTP client double-encodes ? in paths — use { query } option in OSD mode
-      if (this.mode === 'osd') {
-        return this.http.get(this.paths.metricNames(dsId), { query: { search } });
-      }
-      const path = `${this.paths.metricNames(dsId)}?search=${encodeURIComponent(search)}`;
-      return this.http.get(path);
+      return this.http.get(this.paths.metricNames(dsId), { query: { search } });
     }
     return this.cachedGet(this.paths.metricNames(dsId));
   }
 
   async getLabelNames(dsId: string, metric?: string): Promise<{ labels: string[] }> {
-    if (metric && this.mode === 'osd') {
+    if (metric) {
       return this.http.get(this.paths.labelNames(dsId), { query: { metric } });
     }
-    const path = metric
-      ? `${this.paths.labelNames(dsId)}?metric=${encodeURIComponent(metric)}`
-      : this.paths.labelNames(dsId);
-    return this.cachedGet(path);
+    return this.cachedGet(this.paths.labelNames(dsId));
   }
 
   async getLabelValues(
@@ -382,13 +338,10 @@ export class AlarmsApiClient {
     labelName: string,
     selector?: string
   ): Promise<{ values: string[]; total: number; truncated: boolean }> {
-    if (selector && this.mode === 'osd') {
+    if (selector) {
       return this.http.get(this.paths.labelValues(dsId, labelName), { query: { selector } });
     }
-    const path = selector
-      ? `${this.paths.labelValues(dsId, labelName)}?selector=${encodeURIComponent(selector)}`
-      : this.paths.labelValues(dsId, labelName);
-    return this.cachedGet(path);
+    return this.cachedGet(this.paths.labelValues(dsId, labelName));
   }
 
   async getMetricMetadata(dsId: string): Promise<{ metadata: PrometheusMetricMetadata[] }> {

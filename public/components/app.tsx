@@ -16,7 +16,6 @@ import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/
 import { PLUGIN_ID } from '../../common';
 import { AlarmsPage } from './alarms_page';
 import { AlarmsApiClient } from '../services/alarms_client';
-import { AlertManagerErrorBoundary } from './error_boundary';
 
 interface AlarmsAppDeps {
   basename: string;
@@ -44,18 +43,16 @@ export const AlarmsApp = ({ basename, notifications, http, navigation }: AlarmsA
   return (
     <Router basename={basename}>
       <I18nProvider>
-        <AlertManagerErrorBoundary>
-          <>
-            {navigation?.ui?.TopNavMenu && (
-              <navigation.ui.TopNavMenu
-                appName={PLUGIN_ID}
-                showSearchBar={false}
-                useDefaultBehaviors={true}
-              />
-            )}
-            <AlarmsPage apiClient={apiClient} />
-          </>
-        </AlertManagerErrorBoundary>
+        <>
+          {navigation?.ui?.TopNavMenu && (
+            <navigation.ui.TopNavMenu
+              appName={PLUGIN_ID}
+              showSearchBar={false}
+              useDefaultBehaviors={true}
+            />
+          )}
+          <AlarmsPage apiClient={apiClient} />
+        </>
       </I18nProvider>
     </Router>
   );

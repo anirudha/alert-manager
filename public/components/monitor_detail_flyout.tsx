@@ -46,35 +46,7 @@ import {
 } from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
 
-// ============================================================================
-// Color maps
-// ============================================================================
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'primary',
-  low: 'subdued',
-  info: 'default',
-};
-const STATUS_COLORS: Record<string, string> = {
-  active: 'danger',
-  pending: 'warning',
-  muted: 'default',
-  disabled: 'subdued',
-};
-const HEALTH_COLORS: Record<string, string> = {
-  healthy: 'success',
-  failing: 'danger',
-  no_data: 'subdued',
-};
-const STATE_COLORS: Record<string, string> = {
-  active: 'danger',
-  pending: 'warning',
-  acknowledged: 'primary',
-  resolved: 'success',
-  error: 'danger',
-};
+import { SEVERITY_COLORS, STATE_COLORS, STATUS_COLORS, HEALTH_COLORS } from './shared_constants';
 
 // ============================================================================
 // Condition humanizer — translates Painless scripts into readable text

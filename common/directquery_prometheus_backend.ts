@@ -65,12 +65,12 @@ export class DirectQueryPrometheusBackend implements PrometheusBackend, Promethe
 
   constructor(
     private readonly logger: Logger,
-    config: DirectQueryConfig
+    config?: DirectQueryConfig
   ) {
     this.http = new HttpClient(logger);
-    this.baseUrl = config.opensearchUrl.replace(/\/+$/, '');
-    this.defaultAuth = config.auth;
-    this.defaultRejectUnauthorized = config.rejectUnauthorized ?? false;
+    this.baseUrl = (config?.opensearchUrl ?? 'https://localhost:9200').replace(/\/+$/, '');
+    this.defaultAuth = config?.auth;
+    this.defaultRejectUnauthorized = config?.rejectUnauthorized ?? false;
 
     this.logger.info(`DirectQuery Prometheus backend configured: OpenSearch=${this.baseUrl}`);
   }

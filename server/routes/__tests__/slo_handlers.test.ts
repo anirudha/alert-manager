@@ -28,7 +28,7 @@ const mockLogger: Logger = {
 };
 
 function createService(): SloService {
-  return new SloService(mockLogger, true /* mockMode */);
+  return new SloService(mockLogger);
 }
 
 function makeValidInput(overrides: Partial<SloInput> = {}): SloInput {

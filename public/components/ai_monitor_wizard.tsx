@@ -532,13 +532,7 @@ function countAvailableTemplates(cat: ApplicationCategory): { available: number;
 // Severity helpers
 // ============================================================================
 
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'primary',
-  low: 'subdued',
-  info: 'default',
-};
+import { SEVERITY_COLORS } from './shared_constants';
 
 const SEVERITY_ORDER: Record<string, number> = {
   critical: 0,

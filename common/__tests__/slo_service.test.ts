@@ -47,7 +47,7 @@ describe('SloService', () => {
   let service: SloService;
 
   beforeEach(() => {
-    service = new SloService(mockLogger, true);
+    service = new SloService(mockLogger);
     jest.clearAllMocks();
   });
 
@@ -228,38 +228,6 @@ describe('SloService', () => {
   // --------------------------------------------------------------------------
   // Seed
   // --------------------------------------------------------------------------
-
-  describe('seed', () => {
-    it('seeds 9 SLOs in mock mode', async () => {
-      await service.seed('ds-prom-1');
-      const result = await service.list();
-      expect(result.length).toBe(9);
-    });
-
-    it('does not seed when mockMode is false', async () => {
-      const productionService = new SloService(mockLogger, false);
-      await productionService.seed('ds-prom-1');
-      const result = await productionService.list();
-      expect(result.length).toBe(0);
-      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('mockMode is false'));
-    });
-
-    it('does not double-seed the same datasource', async () => {
-      await service.seed('ds-prom-1');
-      await service.seed('ds-prom-1');
-      const result = await service.list();
-      expect(result.length).toBe(9);
-    });
-
-    it('seeded SLOs have populated generatedRuleNames', async () => {
-      await service.seed('ds-prom-1');
-      const result = await service.list();
-      for (const slo of result) {
-        const full = await service.get(slo.id);
-        expect(full!.generatedRuleNames.length).toBeGreaterThan(0);
-      }
-    });
-  });
 
   // --------------------------------------------------------------------------
   // Preview

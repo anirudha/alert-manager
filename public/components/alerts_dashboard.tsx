@@ -24,7 +24,6 @@ import {
   EuiButtonEmpty,
   EuiResizableContainer,
 } from '@elastic/eui';
-import { TablePagination } from './table_pagination';
 import { UnifiedAlert, Datasource } from '../../common';
 import { filterAlerts } from '../../common/filter';
 import {
@@ -65,10 +64,6 @@ const STATE_HEALTH: Record<string, string> = {
   error: 'danger',
   silenced: 'default',
 };
-
-// ============================================================================
-// Custom Pagination — replaces OUI's broken <a href="#"> pagination buttons
-// ============================================================================
 
 // ============================================================================
 // Helpers
@@ -173,9 +168,6 @@ export interface AlertsDashboardProps {
   onViewDetail: (alert: UnifiedAlert) => void;
   onAcknowledge: (alertId: string) => void;
   onSilence: (alertId: string) => void;
-  /** Workspace-scoped entries for Prometheus datasources */
-  workspaceOptions: Datasource[];
-  loadingWorkspaces: boolean;
   /** Currently selected datasource IDs */
   selectedDsIds: string[];
   /** Callback when datasource selection changes */
@@ -189,8 +181,6 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   onViewDetail,
   onAcknowledge,
   onSilence,
-  workspaceOptions,
-  loadingWorkspaces,
   selectedDsIds,
   onDatasourceChange,
 }) => {
@@ -205,30 +195,10 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   const { toggleFacetCollapse, isCollapsed: isFacetCollapsed } = useFacetCollapse();
 
   // Build selectable datasource entries for the filter facet
-  const datasourceEntries = useMemo(() => {
-    const entries: Array<{ id: string; label: string }> = [];
-    // Non-prometheus datasources
-    for (const ds of datasources) {
-      if (ds.type !== 'prometheus') {
-        entries.push({ id: ds.id, label: ds.name });
-      }
-    }
-    // Prometheus workspace-scoped entries
-    for (const ws of workspaceOptions) {
-      const parent = datasources.find((d) => d.id === ws.parentDatasourceId);
-      const label = parent ? `${parent.name} / ${ws.workspaceName || ws.name}` : ws.name;
-      entries.push({ id: ws.id, label });
-    }
-    // Fallback: prometheus datasources with no workspaces
-    if (workspaceOptions.length === 0 && !loadingWorkspaces) {
-      for (const ds of datasources) {
-        if (ds.type === 'prometheus') {
-          entries.push({ id: ds.id, label: ds.name });
-        }
-      }
-    }
-    return entries;
-  }, [datasources, workspaceOptions, loadingWorkspaces]);
+  const datasourceEntries = useMemo(
+    () => datasources.map((ds) => ({ id: ds.id, label: ds.name })),
+    [datasources]
+  );
 
   // Unique values for facets
   const uniqueSeverities = useMemo(
@@ -343,12 +313,6 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
   useEffect(() => {
     setPageIndex(0);
   }, [filteredAlerts.length]);
-
-  // EuiBasicTable does NOT slice items internally — we must pass the correct page slice.
-  const paginatedAlerts = useMemo(() => {
-    const start = pageIndex * pageSize;
-    return filteredAlerts.slice(start, start + pageSize);
-  }, [filteredAlerts, pageIndex, pageSize]);
 
   const onTableSort = (col: { field: string; direction: 'asc' | 'desc' }) => {
     setSortField(col.field);
@@ -782,16 +746,26 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
               </EuiText>
               <EuiSpacer size="s" />
               <EuiBasicTable
-                items={paginatedAlerts}
+                items={filteredAlerts}
                 columns={columns}
                 loading={loading}
+                pagination={{
+                  pageIndex,
+                  pageSize,
+                  totalItemCount: filteredAlerts.length,
+                  pageSizeOptions: [10, 20, 50, 100],
+                }}
                 sorting={{
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable sort field type
                   sort: { field: sortField as any, direction: sortDirection },
                 }}
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable onChange criteria shape
-                onChange={({ sort }: any) => {
+                onChange={({ sort, page }: any) => {
                   if (sort) onTableSort(sort);
+                  if (page) {
+                    setPageIndex(page.index);
+                    setPageSize(page.size);
+                  }
                 }}
                 noItemsMessage={
                   searchQuery ||
@@ -802,19 +776,6 @@ export const AlertsDashboard: React.FC<AlertsDashboardProps> = ({
                     : 'No alerts'
                 }
               />
-              {filteredAlerts.length > 0 && (
-                <>
-                  <EuiSpacer size="m" />
-                  <TablePagination
-                    pageIndex={pageIndex}
-                    pageSize={pageSize}
-                    totalItemCount={filteredAlerts.length}
-                    pageSizeOptions={[10, 20, 50, 100]}
-                    onChangePage={setPageIndex}
-                    onChangePageSize={setPageSize}
-                  />
-                </>
-              )}
             </EuiPanel>
           </EuiResizablePanel>
         </>

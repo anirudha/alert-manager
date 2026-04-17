@@ -70,7 +70,7 @@ export function defineRoutes(
   metadataService?: PrometheusMetadataService
 ) {
   // Datasource routes
-  router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
+  router.get({ path: '/api/alerting/datasources', validate: {} }, async (_ctx, _req, res) => {
     const result = await handleListDatasources(datasourceService);
     return res.ok({ body: result.body });
   });
@@ -383,7 +383,7 @@ export function defineRoutes(
   // ===========================================================================
 
   router.get(
-    { path: '/api/alerting/alertmanager/config', validate: false },
+    { path: '/api/alerting/alertmanager/config', validate: {} },
     async (_ctx, _req, res) => {
       const promBackend = alertService.getPrometheusBackend?.();
       if (!promBackend) {
@@ -400,7 +400,7 @@ export function defineRoutes(
 
   if (suppressionService) {
     router.get(
-      { path: '/api/alerting/suppression-rules', validate: false },
+      { path: '/api/alerting/suppression-rules', validate: {} },
       async (_ctx, _req, res) => {
         const result = handleListSuppressionRules(suppressionService);
         return res.ok({ body: result.body });

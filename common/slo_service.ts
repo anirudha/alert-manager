@@ -7,8 +7,7 @@
  * SLO lifecycle service — manages CRUD operations for SLO definitions
  * and computes live status from stored data.
  *
- * In standalone/mock mode, data is stored in memory.
- * In OSD plugin mode, data would be stored as Saved Objects.
+ * Data is stored as Saved Objects in OSD plugin mode.
  */
 
 import type {
@@ -22,7 +21,6 @@ import type {
   GeneratedRuleGroup,
   ISloStore,
 } from './slo_types';
-import { DEFAULT_MWMBR_TIERS } from './slo_types';
 import { generateSloRuleGroup, sanitizeName, shortHash } from './slo_promql_generator';
 import { validateSloFormFull } from './slo_validators';
 import { InMemorySloStore } from './slo_store';
@@ -42,7 +40,6 @@ export class SloService {
 
   constructor(
     private readonly logger: Logger,
-    private readonly mockMode: boolean = false,
     store?: ISloStore
   ) {
     this.store = store ?? new InMemorySloStore();
@@ -257,7 +254,7 @@ export class SloService {
     const fetched = await Promise.all(uncachedIds.map((id) => this.get(id)));
     for (let i = 0; i < uncachedIds.length; i++) {
       const slo = fetched[i];
-      const status = slo ? this.computeMockStatus(slo) : this.noDataStatus(uncachedIds[i]);
+      const status = slo ? this.computeStatus(slo) : this.noDataStatus(uncachedIds[i]);
       this.statusCache.set(uncachedIds[i], { status, expiresAt: now + this.STATUS_CACHE_TTL_MS });
       cached.set(uncachedIds[i], status);
     }
@@ -280,32 +277,17 @@ export class SloService {
   }
 
   /**
-   * Compute **mock** status from the SLO definition.
+   * Compute status from the SLO definition.
    *
-   * **This is mock-only.** In a production implementation this method should
-   * be replaced with live Prometheus queries:
-   *   1. `slo:sli_error:ratio_rate_<window>` → current error ratio
-   *   2. Attainment = 1 − error_ratio
-   *   3. Budget remaining = 1 − (error_ratio / error_budget)
+   * TODO: Replace with live Prometheus queries in production:
+   *   1. `slo:sli_error:ratio_rate_<window>` -> current error ratio
+   *   2. Attainment = 1 - error_ratio
+   *   3. Budget remaining = 1 - (error_ratio / error_budget)
    *   4. Derive {@link SloStatus} from attainment + budget thresholds
    *
-   * For seeded SLOs it returns pre-set mock values; for user-created SLOs
-   * it simulates a healthy state (50 % budget remaining).
+   * Currently returns a default healthy state as a placeholder.
    */
-  private computeMockStatus(slo: SloDefinition): SloLiveStatus {
-    // For seeded SLOs, use the attached mock status data.
-    // For user-created SLOs, simulate a healthy state.
-    const mockData = (slo as SloDefinitionWithMockStatus).__mockStatus;
-    if (mockData) {
-      return {
-        sloId: slo.id,
-        ...mockData,
-        ruleCount: slo.generatedRuleNames.length,
-        computedAt: new Date().toISOString(),
-      };
-    }
-
-    // Default: healthy
+  private computeStatus(slo: SloDefinition): SloLiveStatus {
     const errorBudget = 1 - slo.target;
     const attainment = slo.target + errorBudget * 0.5; // Halfway through budget
     return {
@@ -338,348 +320,4 @@ export class SloService {
       status,
     };
   }
-
-  // --------------------------------------------------------------------------
-  // Seed Mock Data
-  // --------------------------------------------------------------------------
-
-  async seed(dsId: string): Promise<void> {
-    if (!this.mockMode) {
-      this.logger.warn('SloService.seed() called but mockMode is false — skipping');
-      return;
-    }
-
-    // Check if already seeded
-    const existing = await this.store.list(dsId);
-    if (existing.length > 0) return;
-
-    const now = new Date().toISOString();
-    const sloData = getSeedData(dsId, now);
-
-    for (const slo of sloData) {
-      // Generate rules
-      const ruleGroup = generateSloRuleGroup(slo);
-      slo.generatedRuleNames = ruleGroup.rules.map((r) => r.name);
-      await this.store.save(slo);
-    }
-
-    this.logger.info(`Seeded ${sloData.length} SLOs for datasource ${dsId}`);
-  }
-}
-
-// ============================================================================
-// Mock Status Extension (for seeded SLOs only)
-// ============================================================================
-
-interface MockStatusData {
-  currentValue: number;
-  attainment: number;
-  errorBudgetRemaining: number;
-  status: SloStatus;
-  firingCount: number;
-}
-
-interface SloDefinitionWithMockStatus extends SloDefinition {
-  __mockStatus?: MockStatusData;
-}
-
-// ============================================================================
-// Seed Data — 9 SLOs matching the listing mockup
-// ============================================================================
-
-function getSeedData(dsId: string, now: string): SloDefinitionWithMockStatus[] {
-  const base: Pick<
-    SloDefinition,
-    | 'datasourceId'
-    | 'rulerNamespace'
-    | 'generatedRuleNames'
-    | 'version'
-    | 'createdAt'
-    | 'createdBy'
-    | 'updatedAt'
-    | 'updatedBy'
-  > = {
-    datasourceId: dsId,
-    rulerNamespace: 'slo-generated',
-    generatedRuleNames: [],
-    version: 1,
-    createdAt: now,
-    createdBy: 'seed',
-    updatedAt: now,
-    updatedBy: 'seed',
-  };
-
-  const defaultAlarms = {
-    sliHealth: { enabled: true },
-    attainmentBreach: { enabled: true },
-    budgetWarning: { enabled: true },
-  };
-
-  return [
-    {
-      ...base,
-      id: 'slo-seed-001',
-      name: 'Pet Clinic Availability',
-      sli: {
-        type: 'availability',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_requests_total',
-        goodEventsFilter: 'status_code!~"5.."',
-        service: { labelName: 'service', labelValue: 'pet-clinic-frontend' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/customer/owners' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '1d' },
-      burnRates: [...DEFAULT_MWMBR_TIERS],
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'platform', env: 'prod' },
-      ruleGroupName: `slo:pet_clinic_availability_${shortHash('slo-seed-001')}`,
-      __mockStatus: {
-        currentValue: 0.9997,
-        attainment: 0.9997,
-        errorBudgetRemaining: 0.93,
-        status: 'ok',
-        firingCount: 0,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-002',
-      name: 'Payment Service Reliability',
-      sli: {
-        type: 'availability',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_requests_total',
-        goodEventsFilter: 'status_code!~"5.."',
-        service: { labelName: 'service', labelValue: 'payment-service' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/payments/process' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '7d' },
-      burnRates: DEFAULT_MWMBR_TIERS.slice(0, 2),
-      alarms: {
-        sliHealth: { enabled: true },
-        attainmentBreach: { enabled: true },
-        budgetWarning: { enabled: false },
-      },
-      exclusionWindows: [],
-      tags: { team: 'payments' },
-      ruleGroupName: `slo:payment_service_reliability_${shortHash('slo-seed-002')}`,
-      __mockStatus: {
-        currentValue: 0.9982,
-        attainment: 0.9982,
-        errorBudgetRemaining: -1.8,
-        status: 'breached',
-        firingCount: 2,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-003',
-      name: 'Checkout p99 Latency',
-      sli: {
-        type: 'latency_p99',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_request_duration_seconds_bucket',
-        latencyThreshold: 0.5,
-        service: { labelName: 'service', labelValue: 'checkout-service' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/checkout' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '1d' },
-      burnRates: DEFAULT_MWMBR_TIERS.slice(0, 2),
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'commerce' },
-      ruleGroupName: `slo:checkout_p99_latency_${shortHash('slo-seed-003')}`,
-      __mockStatus: {
-        currentValue: 0.412,
-        attainment: 0.9985,
-        errorBudgetRemaining: 0.76,
-        status: 'ok',
-        firingCount: 0,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-004',
-      name: 'Inventory Service Availability',
-      sli: {
-        type: 'availability',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_requests_total',
-        goodEventsFilter: 'status_code!~"5.."',
-        service: { labelName: 'service', labelValue: 'inventory-service' },
-        operation: { labelName: 'endpoint', labelValue: 'GET /api/inventory' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '1d' },
-      burnRates: [...DEFAULT_MWMBR_TIERS],
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'supply' },
-      ruleGroupName: `slo:inventory_service_availability_${shortHash('slo-seed-004')}`,
-      __mockStatus: {
-        currentValue: 0.9991,
-        attainment: 0.9991,
-        errorBudgetRemaining: 0.22,
-        status: 'warning',
-        firingCount: 1,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-005',
-      name: 'Auth Service p90 Latency',
-      sli: {
-        type: 'latency_p90',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_request_duration_seconds_bucket',
-        latencyThreshold: 0.1,
-        service: { labelName: 'service', labelValue: 'auth-service' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/auth/token' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '7d' },
-      burnRates: DEFAULT_MWMBR_TIERS.slice(0, 2),
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'identity' },
-      ruleGroupName: `slo:auth_service_p90_latency_${shortHash('slo-seed-005')}`,
-      __mockStatus: {
-        currentValue: 0.045,
-        attainment: 0.9996,
-        errorBudgetRemaining: 0.88,
-        status: 'ok',
-        firingCount: 0,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-006',
-      name: 'Search Service Availability',
-      sli: {
-        type: 'availability',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_requests_total',
-        goodEventsFilter: 'status_code!~"5.."',
-        service: { labelName: 'service', labelValue: 'search-service' },
-        operation: { labelName: 'endpoint', labelValue: 'GET /api/search' },
-      },
-      target: 0.995,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '1d' },
-      burnRates: DEFAULT_MWMBR_TIERS.slice(0, 2),
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: {},
-      ruleGroupName: `slo:search_service_availability_${shortHash('slo-seed-006')}`,
-      __mockStatus: {
-        currentValue: 0,
-        attainment: 0,
-        errorBudgetRemaining: 0,
-        status: 'no_data',
-        firingCount: 0,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-007',
-      name: 'Order Processing Availability',
-      sli: {
-        type: 'availability',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_requests_total',
-        goodEventsFilter: 'status_code!~"5.."',
-        service: { labelName: 'service', labelValue: 'order-service' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/orders' },
-      },
-      target: 0.9995,
-      budgetWarningThreshold: 0.25,
-      window: { type: 'rolling', duration: '7d' },
-      burnRates: [...DEFAULT_MWMBR_TIERS],
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'commerce', env: 'prod' },
-      ruleGroupName: `slo:order_processing_availability_${shortHash('slo-seed-007')}`,
-      __mockStatus: {
-        currentValue: 0.9999,
-        attainment: 0.9999,
-        errorBudgetRemaining: 0.97,
-        status: 'ok',
-        firingCount: 0,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-008',
-      name: 'Notification Service p99 Latency',
-      sli: {
-        type: 'latency_p99',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_request_duration_seconds_bucket',
-        latencyThreshold: 1.0,
-        service: { labelName: 'service', labelValue: 'notification-service' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/notifications/send' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '1d' },
-      burnRates: DEFAULT_MWMBR_TIERS.slice(0, 2),
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'platform' },
-      ruleGroupName: `slo:notification_service_p99_latency_${shortHash('slo-seed-008')}`,
-      __mockStatus: {
-        currentValue: 0.89,
-        attainment: 0.9975,
-        errorBudgetRemaining: 0.35,
-        status: 'warning',
-        firingCount: 0,
-      },
-    },
-    {
-      ...base,
-      id: 'slo-seed-009',
-      name: 'Cart Service Availability',
-      sli: {
-        type: 'availability',
-        calcMethod: 'good_requests',
-        sourceType: 'service_operation',
-        metric: 'http_requests_total',
-        goodEventsFilter: 'status_code!~"5.."',
-        service: { labelName: 'service', labelValue: 'cart-service' },
-        operation: { labelName: 'endpoint', labelValue: 'POST /api/cart/add' },
-      },
-      target: 0.999,
-      budgetWarningThreshold: 0.3,
-      window: { type: 'rolling', duration: '1d' },
-      burnRates: [...DEFAULT_MWMBR_TIERS],
-      alarms: defaultAlarms,
-      exclusionWindows: [],
-      tags: { team: 'commerce' },
-      ruleGroupName: `slo:cart_service_availability_${shortHash('slo-seed-009')}`,
-      __mockStatus: {
-        currentValue: 0.9995,
-        attainment: 0.9995,
-        errorBudgetRemaining: 0.5,
-        status: 'ok',
-        firingCount: 0,
-      },
-    },
-  ] as SloDefinitionWithMockStatus[];
 }

@@ -14,7 +14,7 @@
  *  - Main panel: EuiPanel hasBorder wrapping Create button, search bar,
  *    stat cards, count row, and table
  *  - Single-line name column with truncation (operation in detail flyout)
- *  - Matching TablePagination from shared pattern
+ *  - EuiBasicTable built-in pagination
  *
  * ECharts visualizations follow the AlertsDashboard pattern:
  *  - Error Budget Burndown (full-width horizontal bar)
@@ -43,7 +43,6 @@ import {
   EuiButtonEmpty,
   EuiTitle,
 } from '@elastic/eui';
-import { TablePagination } from './table_pagination';
 import {
   SLI_TYPE_LABELS,
   formatPercentage,
@@ -115,10 +114,6 @@ const STATUS_HEALTH_COLORS: Record<string, string> = {
   ok: 'success',
   no_data: 'subdued',
 };
-
-// ============================================================================
-// Custom Pagination (same pattern as monitors_table / alerts_dashboard)
-// ============================================================================
 
 // ============================================================================
 // ExpandedRuleRow -- fetches full SLO and renders generated rules
@@ -365,12 +360,6 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
     statFilter,
   ]);
 
-  // Pagination
-  const paginatedSlos = useMemo(() => {
-    const start = pageIndex * pageSize;
-    return filteredSlos.slice(start, start + pageSize);
-  }, [filteredSlos, pageIndex, pageSize]);
-
   // Status summary
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { breached: 0, warning: 0, ok: 0, no_data: 0 };
@@ -412,13 +401,13 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
   // Expanded row map
   const itemIdToExpandedRowMap = useMemo(() => {
     const map: Record<string, React.ReactNode> = {};
-    for (const slo of paginatedSlos) {
+    for (const slo of filteredSlos) {
       if (expandedRowIds.has(slo.id)) {
         map[slo.id] = <ExpandedRuleRow sloId={slo.id} apiClient={apiClient} />;
       }
     }
     return map;
-  }, [paginatedSlos, expandedRowIds, apiClient]);
+  }, [filteredSlos, expandedRowIds, apiClient]);
 
   // Actions
   const handleDelete = useCallback(
@@ -921,7 +910,7 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                       icon={<EuiLoadingSpinner size="xl" />}
                       title={<h3>Loading SLOs...</h3>}
                     />
-                  ) : paginatedSlos.length === 0 ? (
+                  ) : filteredSlos.length === 0 ? (
                     <EuiEmptyPrompt
                       iconType="visGauge"
                       title={<h3>No SLOs found</h3>}
@@ -952,29 +941,26 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
                   ) : (
                     <>
                       <EuiBasicTable
-                        items={paginatedSlos}
+                        items={filteredSlos}
                         itemId="id"
                         columns={columns}
                         itemIdToExpandedRowMap={itemIdToExpandedRowMap}
                         isExpandable
                         hasActions
+                        pagination={{
+                          pageIndex,
+                          pageSize,
+                          totalItemCount: filteredSlos.length,
+                          pageSizeOptions: [10, 20, 50],
+                        }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable onChange criteria shape
+                        onChange={({ page }: any) => {
+                          if (page) {
+                            setPageIndex(page.index);
+                            setPageSize(page.size);
+                          }
+                        }}
                       />
-                      {filteredSlos.length > 0 && (
-                        <>
-                          <EuiSpacer size="m" />
-                          <TablePagination
-                            pageIndex={pageIndex}
-                            pageSize={pageSize}
-                            totalItemCount={filteredSlos.length}
-                            pageSizeOptions={[10, 20, 50]}
-                            onChangePage={setPageIndex}
-                            onChangePageSize={(size) => {
-                              setPageSize(size);
-                              setPageIndex(0);
-                            }}
-                          />
-                        </>
-                      )}
                     </>
                   )}
                 </div>

@@ -11,13 +11,21 @@ import { DatasourceService, Datasource, MultiBackendAlertService, OSMonitor } fr
 import { toHandlerResult } from './route_utils';
 import type { HandlerResult } from './route_utils';
 
+/** Strip auth credentials from a datasource before returning to the client. */
+function sanitizeDatasource(ds: Datasource): Omit<Datasource, 'auth' | 'tls'> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring to omit
+  const { auth, tls, ...safe } = ds;
+  return safe;
+}
+
 // ============================================================================
 // Datasource Handlers
 // ============================================================================
 
 export async function handleListDatasources(svc: DatasourceService): Promise<HandlerResult> {
   try {
-    return { status: 200, body: { datasources: await svc.list() } };
+    const datasources = await svc.list();
+    return { status: 200, body: { datasources: datasources.map(sanitizeDatasource) } };
   } catch (e: unknown) {
     return toHandlerResult(e);
   }
@@ -30,7 +38,7 @@ export async function handleGetDatasource(
   try {
     const ds = await svc.get(id);
     if (!ds) return { status: 404, body: { error: 'Datasource not found' } };
-    return { status: 200, body: ds };
+    return { status: 200, body: sanitizeDatasource(ds) };
   } catch (e: unknown) {
     return toHandlerResult(e);
   }
@@ -47,7 +55,7 @@ export async function handleCreateDatasource(
     return { status: 400, body: { error: 'type must be opensearch or prometheus' } };
   }
   try {
-    return { status: 201, body: await svc.create(input) };
+    return { status: 201, body: sanitizeDatasource(await svc.create(input)) };
   } catch (e: unknown) {
     return toHandlerResult(e);
   }
@@ -61,7 +69,7 @@ export async function handleUpdateDatasource(
   try {
     const ds = await svc.update(id, input);
     if (!ds) return { status: 404, body: { error: 'Datasource not found' } };
-    return { status: 200, body: ds };
+    return { status: 200, body: sanitizeDatasource(ds) };
   } catch (e: unknown) {
     return toHandlerResult(e);
   }
@@ -264,7 +272,7 @@ export async function handleGetUnifiedRules(
 }
 
 // ============================================================================
-// Workspace Discovery
+// Workspace Discovery (not wired to any route — UI no longer uses workspace discovery)
 // ============================================================================
 
 export async function handleListWorkspaces(

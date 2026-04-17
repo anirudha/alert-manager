@@ -13,13 +13,6 @@ updates:
       - dependency-name: "react-dom"
       - dependency-name: "@types/react"
       - dependency-name: "@types/react-dom"
-  - package-ecosystem: "npm"
-    directory: "/standalone"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

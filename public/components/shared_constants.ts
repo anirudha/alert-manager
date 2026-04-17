@@ -5,7 +5,7 @@
 
 /**
  * Shared color maps, formatting utilities, and style constants
- * used across alert-manager standalone components.
+ * used across alert-manager components.
  *
  * Centralising these here avoids drift between components that
  * previously each defined their own (slightly different) copies.

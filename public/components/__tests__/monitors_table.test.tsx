@@ -10,13 +10,6 @@ import { Datasource, UnifiedRule } from '../../../common/types';
 
 configure({ testIdAttribute: 'data-test-subj' });
 
-jest.mock('../table_pagination', () => ({
-  TablePagination: ({ total, page }: any) => (
-    <div data-test-subj="pagination">
-      page={page} total={total}
-    </div>
-  ),
-}));
 jest.mock('../monitor_detail_flyout', () => ({
   MonitorDetailFlyout: () => null,
 }));
@@ -108,8 +101,6 @@ const defaultProps = {
   onSilence: jest.fn(),
   onImport: jest.fn(),
   onCreateMonitor: jest.fn(),
-  workspaceOptions: [] as Datasource[],
-  loadingWorkspaces: false,
   selectedDsIds: ['ds-1'],
   onDatasourceChange: jest.fn(),
 };
@@ -176,11 +167,6 @@ describe('MonitorsTable', () => {
     render(<MonitorsTable {...defaultProps} loading={true} />);
     const table = document.querySelector('table');
     expect(table?.getAttribute('data-loading')).toBe('true');
-  });
-
-  it('renders pagination', () => {
-    render(<MonitorsTable {...defaultProps} />);
-    expect(document.querySelector('[data-test-subj="pagination"]')).toBeDefined();
   });
 
   it('renders with empty datasources', () => {

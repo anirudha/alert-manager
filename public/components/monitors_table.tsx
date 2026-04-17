@@ -7,7 +7,7 @@
  * Enhanced Monitors Table — search, filter, sort, column customization,
  * saved searches, bulk delete, and JSON export.
  */
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   EuiBasicTable,
   EuiHealth,
@@ -31,7 +31,6 @@ import {
   EuiListGroup,
   EuiListGroupItem,
 } from '@elastic/eui';
-import { TablePagination } from './table_pagination';
 import {
   UnifiedRule,
   UnifiedAlertSeverity,
@@ -107,9 +106,6 @@ interface MonitorsTableProps {
   onSilence?: (id: string) => void;
   onImport?: (configs: unknown[]) => void;
   onCreateMonitor?: (type: 'logs' | 'prometheus' | 'metrics' | 'slo') => void;
-  /** Workspace-scoped entries for Prometheus datasources */
-  workspaceOptions: Datasource[];
-  loadingWorkspaces: boolean;
   /** Currently selected datasource IDs */
   selectedDsIds: string[];
   /** Callback when datasource selection changes */
@@ -380,10 +376,6 @@ function useResizableColumns(
 }
 
 // ============================================================================
-// Custom Pagination — replaces OUI's broken <a href="#"> pagination buttons
-// ============================================================================
-
-// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -397,8 +389,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   onSilence,
   onImport,
   onCreateMonitor,
-  workspaceOptions,
-  loadingWorkspaces,
   selectedDsIds,
   onDatasourceChange,
 }) => {
@@ -427,27 +417,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
   const dsNameMap = useMemo(() => new Map(datasources.map((d) => [d.id, d.name])), [datasources]);
 
   // Build selectable datasource entries for the filter facet
-  const datasourceEntries = useMemo(() => {
-    const entries: Array<{ id: string; label: string }> = [];
-    for (const ds of datasources) {
-      if (ds.type !== 'prometheus') {
-        entries.push({ id: ds.id, label: ds.name });
-      }
-    }
-    for (const ws of workspaceOptions) {
-      const parent = datasources.find((d) => d.id === ws.parentDatasourceId);
-      const label = parent ? `${parent.name} / ${ws.workspaceName || ws.name}` : ws.name;
-      entries.push({ id: ws.id, label });
-    }
-    if (workspaceOptions.length === 0 && !loadingWorkspaces) {
-      for (const ds of datasources) {
-        if (ds.type === 'prometheus') {
-          entries.push({ id: ds.id, label: ds.name });
-        }
-      }
-    }
-    return entries;
-  }, [datasources, workspaceOptions, loadingWorkspaces]);
+  const datasourceEntries = useMemo(
+    () => datasources.map((ds) => ({ id: ds.id, label: ds.name })),
+    [datasources]
+  );
 
   const allSuggestions = useMemo(() => buildSuggestions(rules), [rules]);
   const labelKeys = useMemo(() => collectLabelKeys(rules), [rules]);
@@ -519,8 +492,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     setPageIndex(0);
   }, [filtered.length]);
 
-  // EuiBasicTable does NOT slice items internally — we must pass the correct page slice.
-  const paginatedRules = useMemo(() => {
+  // Items on the current page — used for select-all checkbox behavior.
+  const pageItems = useMemo(() => {
     const start = pageIndex * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, pageIndex, pageSize]);
@@ -546,8 +519,8 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
     setSelectedIds(next);
   };
   const toggleSelectAll = () => {
-    if (selectedIds.size === paginatedRules.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(paginatedRules.map((r) => r.id)));
+    if (selectedIds.size === pageItems.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(pageItems.map((r) => r.id)));
   };
 
   // Saved searches
@@ -615,7 +588,7 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
         name: (
           <input
             type="checkbox"
-            checked={paginatedRules.length > 0 && selectedIds.size === paginatedRules.length}
+            checked={pageItems.length > 0 && selectedIds.size === pageItems.length}
             onChange={toggleSelectAll}
             aria-label="Select all monitors"
           />
@@ -1444,9 +1417,15 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                   ) : (
                     <>
                       <EuiBasicTable
-                        items={paginatedRules}
+                        items={filtered}
                         columns={tableColumns}
                         loading={loading}
+                        pagination={{
+                          pageIndex,
+                          pageSize,
+                          totalItemCount: filtered.length,
+                          pageSizeOptions: [10, 20, 50],
+                        }}
                         sorting={{
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable sort field type
                           sort: { field: sortField as any, direction: sortDirection },
@@ -1454,6 +1433,10 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- EuiBasicTable onChange criteria shape
                         onChange={(criteria: any) => {
                           onTableChange(criteria);
+                          if (criteria.page) {
+                            setPageIndex(criteria.page.index);
+                            setPageSize(criteria.page.size);
+                          }
                         }}
                         rowProps={(item: UnifiedRule) => ({
                           style: selectedIds.has(item.id)
@@ -1461,19 +1444,6 @@ export const MonitorsTable: React.FC<MonitorsTableProps> = ({
                             : undefined,
                         })}
                       />
-                      {filtered.length > 0 && (
-                        <>
-                          <EuiSpacer size="m" />
-                          <TablePagination
-                            pageIndex={pageIndex}
-                            pageSize={pageSize}
-                            totalItemCount={filtered.length}
-                            pageSizeOptions={[10, 20, 50]}
-                            onChangePage={setPageIndex}
-                            onChangePageSize={setPageSize}
-                          />
-                        </>
-                      )}
                     </>
                   )}
                 </div>

@@ -22,7 +22,7 @@ jobs:
         run: npx prettier --check "**/*.{ts,tsx,js}" --ignore-path .gitignore
       - name: Check license headers
         run: |
-          MISSING=$(grep -rL "Copyright OpenSearch Contributors" --include="*.ts" --include="*.tsx" core/ server/ public/ common/ standalone/ | grep -v __mocks__ | grep -v node_modules | grep -v standalone/dist || true)
+          MISSING=$(grep -rL "Copyright OpenSearch Contributors" --include="*.ts" --include="*.tsx" server/ public/ common/ | grep -v __mocks__ | grep -v node_modules || true)
           if [ -n "$MISSING" ]; then
             echo "Missing license headers in:"
             echo "$MISSING"
@@ -67,8 +67,3 @@ jobs:
           path: coverage/
           retention-days: 14
 
-      - name: Build standalone
-        working-directory: standalone
-        run: |
-          npm install --legacy-peer-deps
-          npm run build

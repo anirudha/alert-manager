@@ -257,7 +257,9 @@ export class MultiBackendAlertService {
 
     if (allRules.length === 0 && warnings.length === datasources.length && datasources.length > 0) {
       throw new Error(
-        `All datasources failed: ${warnings.map((w) => `${w.datasourceName}: ${w.error}`).join('; ')}`
+        `All datasources failed: ${warnings
+          .map((w) => `${w.datasourceName}: ${w.error}`)
+          .join('; ')}`
       );
     }
 
@@ -311,7 +313,9 @@ export class MultiBackendAlertService {
       datasources.length > 0
     ) {
       throw new Error(
-        `All datasources failed: ${warnings.map((w) => `${w.datasourceName}: ${w.error}`).join('; ')}`
+        `All datasources failed: ${warnings
+          .map((w) => `${w.datasourceName}: ${w.error}`)
+          .join('; ')}`
       );
     }
 
@@ -421,7 +425,9 @@ export class MultiBackendAlertService {
       descriptionFallback = `Bucket aggregation monitor targeting ${bucketIndices}`;
     } else {
       const queryIndices = input && 'search' in input ? input.search.indices?.join(', ') : null;
-      descriptionFallback = `${summary.monitorType} monitor targeting ${queryIndices || 'unknown indices'}`;
+      descriptionFallback = `${summary.monitorType} monitor targeting ${
+        queryIndices || 'unknown indices'
+      }`;
     }
     const description = trigger?.actions?.[0]?.message_template?.source || descriptionFallback;
 
