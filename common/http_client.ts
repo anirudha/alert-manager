@@ -103,7 +103,9 @@ export class HttpClient {
 
         const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
         this.logger.warn(
-          `[HTTP] Retry ${attempt + 1}/${maxRetries} for ${opts.method} ${opts.url} after ${delay}ms`
+          `[HTTP] Retry ${attempt + 1}/${maxRetries} for ${opts.method} ${
+            opts.url
+          } after ${delay}ms`
         );
         await this.sleep(delay);
       }

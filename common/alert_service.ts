@@ -41,10 +41,7 @@ const DEFAULT_MAX_RESULTS = 5_000;
 
 /** Typed timeout error for reliable detection without string matching. */
 class TimeoutError extends Error {
-  constructor(
-    message: string,
-    public readonly timeoutMs: number
-  ) {
+  constructor(message: string, public readonly timeoutMs: number) {
     super(message);
     this.name = 'TimeoutError';
   }
@@ -257,7 +254,9 @@ export class MultiBackendAlertService {
 
     if (allRules.length === 0 && warnings.length === datasources.length && datasources.length > 0) {
       throw new Error(
-        `All datasources failed: ${warnings.map((w) => `${w.datasourceName}: ${w.error}`).join('; ')}`
+        `All datasources failed: ${warnings
+          .map((w) => `${w.datasourceName}: ${w.error}`)
+          .join('; ')}`
       );
     }
 
@@ -311,7 +310,9 @@ export class MultiBackendAlertService {
       datasources.length > 0
     ) {
       throw new Error(
-        `All datasources failed: ${warnings.map((w) => `${w.datasourceName}: ${w.error}`).join('; ')}`
+        `All datasources failed: ${warnings
+          .map((w) => `${w.datasourceName}: ${w.error}`)
+          .join('; ')}`
       );
     }
 
@@ -421,7 +422,9 @@ export class MultiBackendAlertService {
       descriptionFallback = `Bucket aggregation monitor targeting ${bucketIndices}`;
     } else {
       const queryIndices = input && 'search' in input ? input.search.indices?.join(', ') : null;
-      descriptionFallback = `${summary.monitorType} monitor targeting ${queryIndices || 'unknown indices'}`;
+      descriptionFallback = `${summary.monitorType} monitor targeting ${
+        queryIndices || 'unknown indices'
+      }`;
     }
     const description = trigger?.actions?.[0]?.message_template?.source || descriptionFallback;
 
@@ -1358,7 +1361,7 @@ function osMonitorToUnifiedRuleSummary(m: OSMonitor, dsId: string): UnifiedRuleS
     monitorType = 'infrastructure';
   } else {
     // query-level: derive from index patterns
-    const indices = input && 'search' in input ? (input.search.indices ?? []) : [];
+    const indices = input && 'search' in input ? input.search.indices ?? [] : [];
     if (indices.some((i) => i.startsWith('logs-') || i.startsWith('ss4o_logs'))) {
       monitorType = 'log';
     } else if (indices.some((i) => i.startsWith('otel-v1-apm') || i.startsWith('ss4o_traces'))) {

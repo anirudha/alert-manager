@@ -14,11 +14,12 @@ type Props = Record<string, unknown> & { children?: React.ReactNode; 'data-test-
 
 const stub =
   (name: string): React.FC<Props> =>
-  ({ children, 'data-test-subj': testSubj, ...rest }) => (
-    <div data-eui={name} data-test-subj={testSubj}>
-      {children}
-    </div>
-  );
+  ({ children, 'data-test-subj': testSubj, ...rest }) =>
+    (
+      <div data-eui={name} data-test-subj={testSubj}>
+        {children}
+      </div>
+    );
 
 // Specific components that need special HTML for role-based test queries
 export const EuiTab: React.FC<Props & { isSelected?: boolean; onClick?: () => void }> = ({

@@ -281,12 +281,12 @@ function generateBurnRateAlerts(slo: SloDefinition): GeneratedRule[] {
       i === 0
         ? 'Page'
         : i === 1
-          ? 'Ticket'
-          : i === 2
-            ? 'Log'
-            : i === 3
-              ? 'Monitor'
-              : `Tier${i + 1}`;
+        ? 'Ticket'
+        : i === 2
+        ? 'Log'
+        : i === 3
+        ? 'Monitor'
+        : `Tier${i + 1}`;
     const alertName = `SLO_BurnRate_${tierLabel}_${sanitized}_${hash}`;
 
     const expr =
@@ -348,7 +348,11 @@ function generateSliHealthAlert(slo: SloDefinition): GeneratedRule | null {
     },
     annotations: {
       summary: `SLI health degraded — error ratio exceeds error budget for ${slo.name}`,
-      description: `The current error ratio for ${slo.name} exceeds the error budget (burn rate > 1x) over the last 5 minutes. Target: ${formatTarget(slo.target)}.`,
+      description: `The current error ratio for ${
+        slo.name
+      } exceeds the error budget (burn rate > 1x) over the last 5 minutes. Target: ${formatTarget(
+        slo.target
+      )}.`,
     },
     description: `SLI health alert — fires when error ratio exceeds budget (for: 5m)`,
   };
@@ -390,8 +394,12 @@ function generateAttainmentAlert(slo: SloDefinition): GeneratedRule | null {
     for: '5m',
     labels,
     annotations: {
-      summary: `SLO attainment breached — below ${formatTarget(slo.target)} over ${windowDuration} window`,
-      description: `The ${windowDuration} rolling attainment for ${slo.name} has fallen below the ${formatTarget(slo.target)} target.`,
+      summary: `SLO attainment breached — below ${formatTarget(
+        slo.target
+      )} over ${windowDuration} window`,
+      description: `The ${windowDuration} rolling attainment for ${
+        slo.name
+      } has fallen below the ${formatTarget(slo.target)} target.`,
     },
     description: `Attainment breach alert — fires when SLO target not met over ${windowDuration} window`,
   };

@@ -152,8 +152,9 @@ export function validateMonitorForm(form: MonitorFormState): ValidationResult {
         annotationKeys.add(a.key);
       }
       if (a.value && a.value.length > MAX_LABEL_VALUE_LENGTH) {
-        errors[`annotations[${i}].value`] =
-          `Annotation value too long (max ${MAX_LABEL_VALUE_LENGTH} chars)`;
+        errors[
+          `annotations[${i}].value`
+        ] = `Annotation value too long (max ${MAX_LABEL_VALUE_LENGTH} chars)`;
       }
     }
   }

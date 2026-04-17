@@ -820,7 +820,9 @@ const RulePreviewSection = React.memo<{
     const labels = form.labels.filter((l) => l.key && l.value);
     const annotations = form.annotations.filter((a) => a.key && a.value);
     let out = `- alert: "${esc(form.monitorName || '<monitor-name>')}"\n`;
-    out += `  expr: "${esc(`${form.query || '<promql-expression>'} ${form.operator} ${form.thresholdValue}`)}"\n`;
+    out += `  expr: "${esc(
+      `${form.query || '<promql-expression>'} ${form.operator} ${form.thresholdValue}`
+    )}"\n`;
     out += `  for: ${form.forDuration}\n`;
     if (labels.length > 0) {
       out += `  labels:\n`;

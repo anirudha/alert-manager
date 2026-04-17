@@ -131,8 +131,8 @@ export async function handleImportMonitors(
         const errMsg = isAlertManagerError(e)
           ? e.message
           : e instanceof Error
-            ? e.message
-            : String(e);
+          ? e.message
+          : String(e);
         importResults.push({ index, success: false, errors: [errMsg] });
       }
     }
