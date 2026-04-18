@@ -13,8 +13,8 @@ import {
   MarkAreaComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { ResizableFlyout } from './resizable_flyout';
 import {
-  EuiFlyout,
   EuiFlyoutHeader,
   EuiFlyoutBody,
   EuiTitle,
@@ -247,7 +247,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
     : generateMockRecommendation(alert, metricLabel);
 
   return (
-    <EuiFlyout onClose={onClose} size="l" ownFocus aria-labelledby="alertDetailTitle">
+    <ResizableFlyout onClose={onClose} size="l" aria-labelledby="alertDetailTitle">
       {/* ---- Header with tabs ---- */}
       <EuiFlyoutHeader hasBorder style={{ paddingBottom: 0 }}>
         <EuiFlexGroup alignItems="baseline" gutterSize="m" responsive={false} wrap>
@@ -658,7 +658,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
           </>
         )}
       </EuiFlyoutBody>
-    </EuiFlyout>
+    </ResizableFlyout>
   );
 };
 

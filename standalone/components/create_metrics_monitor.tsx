@@ -30,7 +30,6 @@ import {
   EuiText,
   EuiBadge,
   EuiAccordion,
-  EuiFlyout,
   EuiFlyoutHeader,
   EuiFlyoutBody,
   EuiFlyoutFooter,
@@ -43,6 +42,7 @@ import {
   EuiIcon,
   EuiBetaBadge,
 } from '@opensearch-project/oui';
+import { ResizableFlyout } from './resizable_flyout';
 import { PromQLEditor } from './promql_editor';
 import { MetricBrowser } from './metric_browser';
 
@@ -844,7 +844,7 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
   const isValid = form.monitorName.trim() !== '' && form.query.trim() !== '';
 
   return (
-    <EuiFlyout onClose={onCancel} size="l" ownFocus aria-labelledby="createMetricsMonitorTitle">
+    <ResizableFlyout onClose={onCancel} size="l" aria-labelledby="createMetricsMonitorTitle">
       <EuiFlyoutHeader hasBorder>
         <EuiTitle size="m"><h2 id="createMetricsMonitorTitle">Create Metrics Monitor</h2></EuiTitle>
         <EuiSpacer size="s" />
@@ -911,6 +911,6 @@ export const CreateMetricsMonitor: React.FC<CreateMetricsMonitorProps> = ({ onCa
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiFlyoutFooter>
-    </EuiFlyout>
+    </ResizableFlyout>
   );
 };

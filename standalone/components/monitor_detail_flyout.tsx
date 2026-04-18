@@ -3,8 +3,8 @@
  * configuration, behavior, and impact with quick actions.
  */
 import React, { useState } from 'react';
+import { ResizableFlyout } from './resizable_flyout';
 import {
-  EuiFlyout,
   EuiFlyoutHeader,
   EuiFlyoutBody,
   EuiFlyoutFooter,
@@ -190,7 +190,7 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
 
   return (
     <>
-      <EuiFlyout onClose={onClose} size="m" ownFocus aria-labelledby="monitorDetailTitle">
+      <ResizableFlyout onClose={onClose} size="m" aria-labelledby="monitorDetailTitle">
         <EuiFlyoutHeader hasBorder>
           <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false}>
             <EuiFlexItem>
@@ -396,7 +396,7 @@ export const MonitorDetailFlyout: React.FC<MonitorDetailFlyoutProps> = ({
             </EuiFlexItem>
           </EuiFlexGroup>
         </EuiFlyoutFooter>
-      </EuiFlyout>
+      </ResizableFlyout>
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (

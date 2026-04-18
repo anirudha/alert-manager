@@ -30,7 +30,6 @@ import {
   EuiText,
   EuiBetaBadge,
   EuiAccordion,
-  EuiFlyout,
   EuiFlyoutHeader,
   EuiFlyoutBody,
   EuiFlyoutFooter,
@@ -41,6 +40,7 @@ import {
   EuiPopover,
   EuiToolTip,
 } from '@opensearch-project/oui';
+import { ResizableFlyout } from './resizable_flyout';
 
 echarts.use([BarChart, GridComponent, TooltipComponent, MarkLineComponent, CanvasRenderer]);
 
@@ -854,7 +854,7 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
   const isValid = form.monitorName.trim() !== '' && form.query.trim() !== '';
 
   return (
-    <EuiFlyout onClose={onCancel} size="l" ownFocus aria-labelledby="createLogsMonitorTitle">
+    <ResizableFlyout onClose={onCancel} size="l" aria-labelledby="createLogsMonitorTitle">
       <EuiFlyoutHeader hasBorder>
         <EuiTitle size="m"><h2 id="createLogsMonitorTitle">Create Logs Monitor</h2></EuiTitle>
         <EuiSpacer size="s" />
@@ -896,6 +896,6 @@ export const CreateLogsMonitor: React.FC<CreateLogsMonitorProps> = ({ onCancel, 
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiFlyoutFooter>
-    </EuiFlyout>
+    </ResizableFlyout>
   );
 };

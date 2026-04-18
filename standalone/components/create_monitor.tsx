@@ -25,12 +25,12 @@ import {
   EuiCallOut,
   EuiTabs,
   EuiTab,
-  EuiFlyout,
   EuiFlyoutHeader,
   EuiFlyoutBody,
   EuiFlyoutFooter,
   EuiTitle,
 } from '@opensearch-project/oui';
+import { ResizableFlyout } from './resizable_flyout';
 import { PromQLEditor, validatePromQL } from './promql_editor';
 import { MetricBrowser } from './metric_browser';
 import { Datasource, UnifiedAlertSeverity } from '../../core';
@@ -939,7 +939,7 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({ onSave, onBatchSav
   }
 
   return (
-    <EuiFlyout onClose={onCancel} size="l" ownFocus aria-labelledby="createMonitorFlyoutTitle">
+    <ResizableFlyout onClose={onCancel} size="l" aria-labelledby="createMonitorFlyoutTitle">
       <EuiFlyoutHeader hasBorder>
         <EuiTitle size="m">
           <h2 id="createMonitorFlyoutTitle">
@@ -1053,6 +1053,6 @@ export const CreateMonitor: React.FC<CreateMonitorProps> = ({ onSave, onBatchSav
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiFlyoutFooter>
-    </EuiFlyout>
+    </ResizableFlyout>
   );
 };

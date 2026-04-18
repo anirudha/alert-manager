@@ -14,7 +14,6 @@ import {
   EuiFieldText,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiFlyout,
   EuiFlyoutBody,
   EuiFlyoutFooter,
   EuiFlyoutHeader,
@@ -29,6 +28,7 @@ import {
   EuiFieldNumber,
   EuiDatePicker,
 } from '@opensearch-project/oui';
+import { ResizableFlyout } from './resizable_flyout';
 import { AlarmsApiClient } from './alarms_page';
 
 interface SuppressionRuleItem {
@@ -215,7 +215,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
       )}
 
       {showFlyout && (
-        <EuiFlyout onClose={() => setShowFlyout(false)} size="s" ownFocus>
+        <ResizableFlyout onClose={() => setShowFlyout(false)} size="s">
           <EuiFlyoutHeader hasBorder>
             <EuiTitle size="m"><h2>{editingRule ? 'Edit' : 'Create'} Suppression Rule</h2></EuiTitle>
           </EuiFlyoutHeader>
@@ -285,7 +285,7 @@ export const SuppressionRulesPanel: React.FC<SuppressionRulesPanelProps> = ({ ap
               <EuiFlexItem grow={false}><EuiButton fill onClick={handleSave} isDisabled={!formName}>{editingRule ? 'Update' : 'Create'}</EuiButton></EuiFlexItem>
             </EuiFlexGroup>
           </EuiFlyoutFooter>
-        </EuiFlyout>
+        </ResizableFlyout>
       )}
 
       {deleteId && (
