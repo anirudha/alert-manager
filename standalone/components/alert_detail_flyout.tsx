@@ -250,15 +250,20 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
     <EuiFlyout onClose={onClose} size="l" ownFocus aria-labelledby="alertDetailTitle">
       {/* ---- Header with tabs ---- */}
       <EuiFlyoutHeader hasBorder style={{ paddingBottom: 0 }}>
-        <EuiTitle size="m"><h2 id="alertDetailTitle">{alert.name}</h2></EuiTitle>
+        <EuiFlexGroup alignItems="baseline" gutterSize="m" responsive={false} wrap>
+          <EuiFlexItem grow={false}>
+            <EuiTitle size="m"><h2 id="alertDetailTitle">{alert.name}</h2></EuiTitle>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiHealth color={STATE_COLORS[alert.state] || 'subdued'}>
+              In alarm since {startFormatted} ({duration})
+            </EuiHealth>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+        <EuiSpacer size="s" />
         <EuiFlexGroup alignItems="center" justifyContent="spaceBetween" responsive={false} wrap>
           <EuiFlexItem grow={false}>
             <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
-              <EuiFlexItem grow={false}>
-                <EuiHealth color={STATE_COLORS[alert.state] || 'subdued'}>
-                  In alarm since {startFormatted} ({duration})
-                </EuiHealth>
-              </EuiFlexItem>
               {Object.entries(labels).slice(0, 4).map(([k, v]) => (
                 <EuiFlexItem grow={false} key={k}>
                   <EuiBadge color="hollow">{k}: {v}</EuiBadge>
